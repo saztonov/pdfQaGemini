@@ -10,7 +10,7 @@ from PySide6.QtCore import Signal, Qt, QEvent, QSettings, QTimer
 from PySide6.QtGui import QColor, QBrush, QIcon
 from qasync import asyncSlot
 from app.services.supabase_repo import SupabaseRepo
-from app.models.schemas import TreeNode
+from app.models.schemas import TreeNode, FileType, FILE_TYPE_ICONS, FILE_TYPE_COLORS
 from app.ui.tree_delegates import VersionHighlightDelegate
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ class LeftProjectsPanel(QWidget):
     
     # Signals
     addToContextRequested = Signal(list)  # list[str] document_node_ids
+    addFilesToContextRequested = Signal(list)  # list[dict] file_info (id, r2_key, file_name, file_type, mime_type, node_id)
     
     def __init__(self, supabase_repo: Optional[SupabaseRepo] = None, r2_client=None, toast_manager=None):
         super().__init__()
@@ -58,6 +59,8 @@ class LeftProjectsPanel(QWidget):
         self._node_cache: dict[str, TreeNode] = {}  # node_id -> TreeNode
         self._project_count = 0
         self._expanded_nodes: set = set()  # Set of expanded node IDs
+        self._restoring_state = False  # Flag to prevent double-saving during restore
+        self._adding_to_context = False  # Lock to prevent parallel calls
         
         self._setup_ui()
         self._connect_signals()
@@ -242,7 +245,28 @@ class LeftProjectsPanel(QWidget):
     def _on_selection_changed(self):
         """Handle selection change"""
         selected = self.tree.selectedItems()
-        self.btn_add_context.setEnabled(len(selected) > 0)
+        # Check if any selected item is a real node OR a file/crops_folder
+        has_addable_items = False
+        for item in selected:
+            item_type = item.data(0, Qt.UserRole + 3)
+            
+            # Files and crops folders can be added
+            if item_type in ("file", "crops_folder"):
+                has_addable_items = True
+                break
+            
+            # Real nodes can be added
+            if item_type not in ("file", "crops_folder", "files_folder"):
+                node_id = item.data(0, Qt.UserRole)
+                if node_id:
+                    try:
+                        from uuid import UUID
+                        UUID(node_id)
+                        has_addable_items = True
+                        break
+                    except (ValueError, TypeError):
+                        continue
+        self.btn_add_context.setEnabled(has_addable_items)
     
     def _on_collapse_all(self):
         """Collapse all tree items"""
@@ -300,9 +324,10 @@ class LeftProjectsPanel(QWidget):
         if not node_id:
             return
         
-        # Save expanded state
-        self._expanded_nodes.add(str(node_id))
-        self._save_expanded_state()
+        # Save expanded state (unless we're restoring)
+        if not self._restoring_state:
+            self._expanded_nodes.add(str(node_id))
+            self._save_expanded_state()
         
         # Check if already loaded
         if item.childCount() > 0:
@@ -316,7 +341,7 @@ class LeftProjectsPanel(QWidget):
     def _on_item_collapsed(self, item: QTreeWidgetItem):
         """Handle tree item collapse"""
         node_id = item.data(0, Qt.UserRole)
-        if node_id:
+        if node_id and not self._restoring_state:
             self._expanded_nodes.discard(str(node_id))
             self._save_expanded_state()
     
@@ -357,8 +382,8 @@ class LeftProjectsPanel(QWidget):
             if self.toast_manager:
                 self.toast_manager.success(f"Загружено {len(roots)} корневых узлов")
             
-            # Restore expanded state with delay
-            QTimer.singleShot(100, self._restore_expanded_state)
+            # Restore expanded state asynchronously
+            await self._restore_expanded_state()
         
         except Exception as e:
             logger.error(f"ОШИБКА ЗАГРУЗКИ: {e}", exc_info=True)
@@ -379,124 +404,72 @@ class LeftProjectsPanel(QWidget):
             parent_node = self._node_cache.get(parent_id)
             
             if parent_node and parent_node.node_type == "document":
-                # Check files on R2 for document
-                if not self.r2_client:
-                    no_r2_item = QTreeWidgetItem()
-                    no_r2_item.setText(0, "R2 не настроен")
-                    no_r2_item.setForeground(0, QBrush(QColor("#666")))
-                    parent_item.addChild(no_r2_item)
+                # Fetch files from node_files table
+                node_files = await self.supabase_repo.fetch_node_files_single(parent_id)
+                
+                if not node_files:
+                    no_files_item = QTreeWidgetItem()
+                    no_files_item.setText(0, "Нет файлов")
+                    no_files_item.setForeground(0, QBrush(QColor("#666")))
+                    parent_item.addChild(no_files_item)
                     return
                 
-                # Get r2_key from document attributes
-                r2_key = parent_node.attributes.get("r2_key", "")
-                if not r2_key:
-                    no_key_item = QTreeWidgetItem()
-                    no_key_item.setText(0, "r2_key не найден")
-                    no_key_item.setForeground(0, QBrush(QColor("#666")))
-                    parent_item.addChild(no_key_item)
-                    return
+                # Separate files by type
+                crops = []
+                main_files = []
                 
-                # Get base path (folder containing PDF)
-                # Example: "qa_docs/uuid/document.pdf" -> "qa_docs/uuid/"
-                from pathlib import PurePosixPath
-                base_path = str(PurePosixPath(r2_key).parent)
-                
-                # List all files in base folder
-                all_objects = await self.r2_client.list_objects(f"{base_path}/")
-                
-                # Separate crops and other files
-                crops_objects = []
-                ocr_file = None
-                result_file = None
-                annotation_file = None
-                
-                for obj in all_objects:
-                    obj_key = obj.get("Key", "")
-                    obj_name = PurePosixPath(obj_key).name
-                    
-                    # Skip the PDF itself
-                    if obj_key == r2_key:
+                for nf in node_files:
+                    # Skip PDF (don't duplicate)
+                    if nf.file_type == FileType.PDF.value:
                         continue
                     
-                    # Check if it's in crops folder
-                    if "/crops/" in obj_key:
-                        crops_objects.append(obj)
-                    # Check for specific file patterns
-                    elif obj_name.endswith("_ocr.html") or obj_name == "ocr.html":
-                        ocr_file = obj
-                    elif obj_name.endswith("_result.json") or obj_name == "result.json":
-                        result_file = obj
-                    elif obj_name.endswith("_annotation.json") or obj_name == "annotation.json":
-                        annotation_file = obj
+                    if nf.file_type == FileType.CROP.value:
+                        crops.append(nf)
+                    else:
+                        main_files.append(nf)
                 
-                # Add crops folder if any files
-                if crops_objects:
+                # Add main files directly under document (annotation, ocr_html, result_json)
+                for nf in sorted(main_files, key=lambda f: f.file_type):
+                    try:
+                        ft = FileType(nf.file_type)
+                        icon = FILE_TYPE_ICONS.get(ft, "📄")
+                        color = FILE_TYPE_COLORS.get(ft, "#FFFFFF")
+                    except ValueError:
+                        icon = "📄"
+                        color = "#FFFFFF"
+                    
+                    file_item = QTreeWidgetItem()
+                    file_item.setText(0, f"{icon} {nf.file_name}")
+                    file_item.setForeground(0, QBrush(QColor(color)))
+                    file_item.setData(0, Qt.UserRole, str(nf.id))
+                    file_item.setData(0, Qt.UserRole + 3, "file")
+                    file_item.setData(0, Qt.UserRole + 4, nf.r2_key)  # r2_key for download
+                    file_item.setData(0, Qt.UserRole + 5, nf.file_type)
+                    parent_item.addChild(file_item)
+                
+                # Add crops folder if any
+                if crops:
                     crops_item = QTreeWidgetItem()
-                    crops_item.setText(0, f"📁 crops ({len(crops_objects)})")
-                    crops_item.setForeground(0, QBrush(QColor("#32CD32")))
-                    crops_item.setData(0, Qt.UserRole, None)  # Virtual node
+                    crops_item.setText(0, f"✂️ Кропы ({len(crops)})")
+                    crops_item.setForeground(0, QBrush(QColor("#9370DB")))
+                    crops_item.setData(0, Qt.UserRole, None)
                     crops_item.setData(0, Qt.UserRole + 3, "crops_folder")
                     parent_item.addChild(crops_item)
                     
-                    # Add crop files as children
-                    for obj in sorted(crops_objects, key=lambda o: o.get("Key", "")):
-                        crop_key = obj.get("Key", "")
-                        crop_name = PurePosixPath(crop_key).name
-                        
+                    # Add crop files
+                    for nf in sorted(crops, key=lambda f: f.file_name):
                         crop_item = QTreeWidgetItem()
-                        crop_item.setText(0, f"🖼️ {crop_name}")
+                        crop_item.setText(0, f"🖼️ {nf.file_name}")
                         crop_item.setForeground(0, QBrush(QColor("#9370DB")))
-                        crop_item.setData(0, Qt.UserRole, crop_key)  # Store r2_key
+                        crop_item.setData(0, Qt.UserRole, str(nf.id))
                         crop_item.setData(0, Qt.UserRole + 3, "file")
-                        crop_item.setData(0, Qt.UserRole + 4, crop_key)
+                        crop_item.setData(0, Qt.UserRole + 4, nf.r2_key)
+                        crop_item.setData(0, Qt.UserRole + 5, FileType.CROP.value)
                         crops_item.addChild(crop_item)
-                
-                # Add annotation.json
-                if annotation_file:
-                    ann_key = annotation_file.get("Key", "")
-                    ann_name = PurePosixPath(ann_key).name
-                    ann_item = QTreeWidgetItem()
-                    ann_item.setText(0, f"📋 {ann_name}")
-                    ann_item.setForeground(0, QBrush(QColor("#FF69B4")))
-                    ann_item.setData(0, Qt.UserRole, ann_key)
-                    ann_item.setData(0, Qt.UserRole + 3, "file")
-                    ann_item.setData(0, Qt.UserRole + 4, ann_key)
-                    parent_item.addChild(ann_item)
-                
-                # Add ocr.html
-                if ocr_file:
-                    ocr_key = ocr_file.get("Key", "")
-                    ocr_name = PurePosixPath(ocr_key).name
-                    ocr_item = QTreeWidgetItem()
-                    ocr_item.setText(0, f"📝 {ocr_name}")
-                    ocr_item.setForeground(0, QBrush(QColor("#FFD700")))
-                    ocr_item.setData(0, Qt.UserRole, ocr_key)
-                    ocr_item.setData(0, Qt.UserRole + 3, "file")
-                    ocr_item.setData(0, Qt.UserRole + 4, ocr_key)
-                    parent_item.addChild(ocr_item)
-                
-                # Add result.json
-                if result_file:
-                    result_key = result_file.get("Key", "")
-                    result_name = PurePosixPath(result_key).name
-                    result_item = QTreeWidgetItem()
-                    result_item.setText(0, f"📊 {result_name}")
-                    result_item.setForeground(0, QBrush(QColor("#32CD32")))
-                    result_item.setData(0, Qt.UserRole, result_key)
-                    result_item.setData(0, Qt.UserRole + 3, "file")
-                    result_item.setData(0, Qt.UserRole + 4, result_key)
-                    parent_item.addChild(result_item)
-                
-                # If no files at all, show message
-                if not crops_objects and not ocr_file and not result_file and not annotation_file:
-                    no_files_item = QTreeWidgetItem()
-                    no_files_item.setText(0, "Нет файлов на R2")
-                    no_files_item.setForeground(0, QBrush(QColor("#666")))
-                    parent_item.addChild(no_files_item)
             else:
                 # Load child nodes for non-document nodes
                 children = await self.supabase_repo.fetch_children(
-                    None,
+                    "default",
                     parent_id
                 )
                 
@@ -568,6 +541,19 @@ class LeftProjectsPanel(QWidget):
     
     async def add_selected_to_context(self):
         """Add selected nodes to context (with descendants)"""
+        # Prevent parallel calls
+        if self._adding_to_context:
+            logger.info("add_selected_to_context уже выполняется, пропуск")
+            return
+        
+        self._adding_to_context = True
+        try:
+            await self._add_selected_to_context_impl()
+        finally:
+            self._adding_to_context = False
+    
+    async def _add_selected_to_context_impl(self):
+        """Internal implementation"""
         logger.info("=== ДОБАВЛЕНИЕ В КОНТЕКСТ ===")
         logger.info(f"self.supabase_repo: {self.supabase_repo is not None}")
         
@@ -583,52 +569,185 @@ class LeftProjectsPanel(QWidget):
                 self.toast_manager.warning("Нет выбранных узлов")
             return
         
-        # Collect selected node IDs
+        # Separate nodes and files
         selected_node_ids = []
+        selected_files_info = []
+        
         for item in selected_items:
+            item_type = item.data(0, Qt.UserRole + 3)
+            
+            # Handle files
+            if item_type == "file":
+                file_id = item.data(0, Qt.UserRole)
+                r2_key = item.data(0, Qt.UserRole + 4)
+                file_type = item.data(0, Qt.UserRole + 5)
+                
+                if file_id and r2_key:
+                    # Get node_id from parent (should be document)
+                    parent_item = item.parent()
+                    node_id = None
+                    if parent_item:
+                        # Check if parent is crops_folder
+                        parent_type = parent_item.data(0, Qt.UserRole + 3)
+                        if parent_type == "crops_folder":
+                            # Go up one more level to document
+                            doc_item = parent_item.parent()
+                            if doc_item:
+                                node_id = doc_item.data(0, Qt.UserRole)
+                        else:
+                            # Parent is document
+                            node_id = parent_item.data(0, Qt.UserRole)
+                    
+                    # Extract file name from item text (remove icon)
+                    file_name = item.text(0)
+                    for icon in ["📄", "📋", "📝", "📊", "🖼️"]:
+                        file_name = file_name.replace(icon, "").strip()
+                    
+                    # Determine mime_type from file_type
+                    mime_type = self._get_mime_type_for_file_type(file_type)
+                    
+                    selected_files_info.append({
+                        "id": file_id,
+                        "r2_key": r2_key,
+                        "file_name": file_name,
+                        "file_type": file_type,
+                        "mime_type": mime_type,
+                        "node_id": node_id,
+                    })
+                continue
+            
+            # Handle crops_folder - collect all crop files inside
+            if item_type == "crops_folder":
+                for i in range(item.childCount()):
+                    child = item.child(i)
+                    child_type = child.data(0, Qt.UserRole + 3)
+                    
+                    if child_type == "file":
+                        file_id = child.data(0, Qt.UserRole)
+                        r2_key = child.data(0, Qt.UserRole + 4)
+                        file_type = child.data(0, Qt.UserRole + 5)
+                        
+                        if file_id and r2_key:
+                            # Get node_id from crops_folder parent (document)
+                            parent_item = item.parent()
+                            node_id = parent_item.data(0, Qt.UserRole) if parent_item else None
+                            
+                            file_name = child.text(0)
+                            for icon in ["📄", "📋", "📝", "📊", "🖼️"]:
+                                file_name = file_name.replace(icon, "").strip()
+                            
+                            mime_type = self._get_mime_type_for_file_type(file_type)
+                            
+                            selected_files_info.append({
+                                "id": file_id,
+                                "r2_key": r2_key,
+                                "file_name": file_name,
+                                "file_type": file_type,
+                                "mime_type": mime_type,
+                                "node_id": node_id,
+                            })
+                continue
+            
+            # Handle regular nodes
             node_id = item.data(0, Qt.UserRole)
             if node_id:
-                selected_node_ids.append(node_id)
+                # Validate UUID format
+                try:
+                    from uuid import UUID
+                    UUID(node_id)
+                    selected_node_ids.append(node_id)
+                except (ValueError, TypeError):
+                    continue
         
+        # Emit files signal if any files selected
+        if selected_files_info:
+            logger.info(f"Emit addFilesToContextRequested с {len(selected_files_info)} файлами")
+            self.addFilesToContextRequested.emit(selected_files_info)
+        
+        # Process nodes if any nodes selected
         if not selected_node_ids:
+            if not selected_files_info:
+                if self.toast_manager:
+                    self.toast_manager.warning("Выберите проекты/разделы/документы или файлы")
             return
+        
+        logger.info(f"Выбрано узлов: {len(selected_node_ids)}, IDs: {selected_node_ids}")
         
         if self.toast_manager:
             self.toast_manager.info(f"Поиск документов в {len(selected_node_ids)} узлах...")
         
         try:
+            # Get client_id from first cached node
+            client_id = None
+            for nid in selected_node_ids:
+                cached = self._node_cache.get(nid)
+                if cached:
+                    logger.info(f"  Узел {nid}: type={cached.node_type}, name={cached.name}, client_id={cached.client_id}")
+                    if not client_id:
+                        client_id = cached.client_id
+            
+            if not client_id:
+                logger.error("Не удалось определить client_id из кеша")
+                if self.toast_manager:
+                    self.toast_manager.error("Не удалось определить client_id")
+                return
+            
             # Get descendant documents
+            logger.info(f"Вызов get_descendant_documents(client_id='{client_id}', root_ids={selected_node_ids})")
             documents = await self.supabase_repo.get_descendant_documents(
-                None,
+                client_id,
                 selected_node_ids,
                 node_types=["document"]
             )
             
+            logger.info(f"RPC вернул {len(documents)} документов")
+            for doc in documents[:5]:  # First 5 for brevity
+                logger.info(f"  doc: id={doc.id}, name={doc.name}, type={doc.node_type}")
+            
             document_ids = [str(doc.id) for doc in documents]
             
             if not document_ids:
+                logger.warning("Документы не найдены в RPC ответе")
                 if self.toast_manager:
                     self.toast_manager.warning("Документы не найдены")
                 return
             
             # Emit signal
+            logger.info(f"Emit addToContextRequested с {len(document_ids)} документами")
             self.addToContextRequested.emit(document_ids)
-            
-            if self.toast_manager:
-                self.toast_manager.success(f"Найдено {len(document_ids)} документов")
         
         except Exception as e:
+            logger.error(f"Ошибка get_descendant_documents: {e}", exc_info=True)
             if self.toast_manager:
-                self.toast_manager.error(f"Ошибка поиска документов: {e}")
+                self.toast_manager.error(f"Ошибка: {e}")
     
     def get_selected_node_ids(self) -> list[str]:
-        """Get selected node IDs"""
+        """Get selected node IDs (only valid tree nodes, not files/folders)"""
+        from uuid import UUID
         selected = []
         for item in self.tree.selectedItems():
+            item_type = item.data(0, Qt.UserRole + 3)
+            if item_type in ("file", "crops_folder", "files_folder"):
+                continue
             node_id = item.data(0, Qt.UserRole)
             if node_id:
-                selected.append(node_id)
+                try:
+                    UUID(node_id)
+                    selected.append(node_id)
+                except (ValueError, TypeError):
+                    continue
         return selected
+    
+    def _get_mime_type_for_file_type(self, file_type: str) -> str:
+        """Get MIME type for file type"""
+        mime_map = {
+            "pdf": "application/pdf",
+            "annotation": "application/json",
+            "ocr_html": "text/html",
+            "result_json": "application/json",
+            "crop": "image/png",
+        }
+        return mime_map.get(file_type, "application/octet-stream")
     
     def refresh(self):
         """Refresh tree (convenience method)"""
@@ -657,25 +776,51 @@ class LeftProjectsPanel(QWidget):
             logger.debug(f"Failed to load expanded state: {e}")
             self._expanded_nodes = set()
     
-    def _restore_expanded_state(self):
-        """Restore expanded state of tree"""
+    async def _restore_expanded_state(self):
+        """Restore expanded state of tree with async loading"""
         if not self._expanded_nodes:
             return
         
-        def expand_recursive(item: QTreeWidgetItem):
-            node_id = item.data(0, Qt.UserRole)
-            if node_id and str(node_id) in self._expanded_nodes:
-                # Expand this node
+        logger.debug(f"Restoring expanded state for {len(self._expanded_nodes)} nodes")
+        
+        # Set flag to prevent saving during restore
+        self._restoring_state = True
+        
+        try:
+            async def expand_recursive(item: QTreeWidgetItem):
+                """Recursively expand item and load children if needed"""
+                node_id = item.data(0, Qt.UserRole)
+                if not node_id or str(node_id) not in self._expanded_nodes:
+                    return
+                
+                # Check if children need to be loaded
+                needs_loading = False
+                if item.childCount() > 0:
+                    first_child = item.child(0)
+                    # If first child is placeholder, need to load
+                    if first_child.data(0, Qt.UserRole) is None:
+                        needs_loading = True
+                
+                # Load children if needed
+                if needs_loading:
+                    await self._load_children(item, str(node_id))
+                
+                # Expand this item
                 item.setExpanded(True)
-                # Process children
+                
+                # Recursively process children
                 for i in range(item.childCount()):
-                    expand_recursive(item.child(i))
+                    await expand_recursive(item.child(i))
+            
+            # Process all top-level items
+            for i in range(self.tree.topLevelItemCount()):
+                await expand_recursive(self.tree.topLevelItem(i))
+            
+            logger.debug(f"Restored expanded state complete")
         
-        # Process all top-level items
-        for i in range(self.tree.topLevelItemCount()):
-            expand_recursive(self.tree.topLevelItem(i))
-        
-        logger.debug(f"Restored expanded state for {len(self._expanded_nodes)} nodes")
+        finally:
+            # Always reset flag
+            self._restoring_state = False
     
     def eventFilter(self, obj, event):
         """Handle events for tree widget"""

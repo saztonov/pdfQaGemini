@@ -1,8 +1,37 @@
 """Pydantic schemas"""
 from datetime import datetime
+from enum import Enum
 from typing import Optional, Any, Literal
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
+
+
+class FileType(str, Enum):
+    """Типы файлов в node_files"""
+    PDF = "pdf"                 # Исходный PDF
+    ANNOTATION = "annotation"   # Разметка блоков ({name}_annotation.json)
+    OCR_HTML = "ocr_html"       # HTML результат ({name}_ocr.html)
+    RESULT_JSON = "result_json" # Полный результат ({name}_result.json)
+    CROP = "crop"               # Кропы изображений (в папке crops/)
+
+
+# Иконки для типов файлов
+FILE_TYPE_ICONS = {
+    FileType.PDF: "📄",
+    FileType.ANNOTATION: "📋",
+    FileType.OCR_HTML: "📝",
+    FileType.RESULT_JSON: "📊",
+    FileType.CROP: "🖼️",
+}
+
+# Цвета для типов файлов
+FILE_TYPE_COLORS = {
+    FileType.PDF: "#FFFFFF",
+    FileType.ANNOTATION: "#FF69B4",
+    FileType.OCR_HTML: "#FFD700",
+    FileType.RESULT_JSON: "#32CD32",
+    FileType.CROP: "#9370DB",
+}
 
 
 # Tree entities

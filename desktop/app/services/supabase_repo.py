@@ -78,13 +78,20 @@ class SupabaseRepo:
         def _sync_fetch():
             client = self._get_client()
             params = {
+                "p_client_id": client_id or "default",
                 "p_root_ids": root_ids,
             }
             if node_types:
                 params["p_node_types"] = node_types
             
+            logger.info(f"RPC qa_get_descendants: params={params}")
             response = client.rpc("qa_get_descendants", params).execute()
-            return [TreeNode(**row) for row in response.data]
+            logger.info(f"RPC qa_get_descendants: returned {len(response.data)} rows")
+            if response.data:
+                logger.info(f"  First row: {response.data[0]}")
+            # RPC doesn't return client_id, add it manually
+            cid = client_id or "default"
+            return [TreeNode(**{**row, "client_id": cid}) for row in response.data]
         
         return await asyncio.to_thread(_sync_fetch)
     
@@ -285,6 +292,64 @@ class SupabaseRepo:
             ).execute()
         
         await asyncio.to_thread(_sync_attach)
+    
+    # Context files (для восстановления состояния контекста)
+    
+    async def qa_save_context_file(
+        self,
+        conversation_id: str,
+        node_file_id: str,
+        gemini_name: Optional[str] = None,
+        gemini_uri: Optional[str] = None,
+        status: str = "local",
+    ) -> dict:
+        """Сохранить файл контекста с его статусом"""
+        def _sync_save():
+            client = self._get_client()
+            data = {
+                "conversation_id": conversation_id,
+                "node_file_id": node_file_id,
+                "gemini_name": gemini_name,
+                "gemini_uri": gemini_uri,
+                "status": status,
+                "uploaded_at": datetime.utcnow().isoformat() if status == "uploaded" else None,
+            }
+            response = (
+                client.table("qa_conversation_context_files")
+                .upsert(data, on_conflict="conversation_id,node_file_id")
+                .execute()
+            )
+            return response.data[0]
+        
+        return await asyncio.to_thread(_sync_save)
+    
+    async def qa_load_context_files(self, conversation_id: str) -> list[dict]:
+        """Загрузить все файлы контекста для диалога"""
+        def _sync_load():
+            client = self._get_client()
+            response = (
+                client.table("qa_conversation_context_files")
+                .select("*, node_files(*)")
+                .eq("conversation_id", conversation_id)
+                .execute()
+            )
+            return response.data
+        
+        return await asyncio.to_thread(_sync_load)
+    
+    async def qa_delete_context_file(
+        self,
+        conversation_id: str,
+        node_file_id: str
+    ) -> None:
+        """Удалить файл из контекста"""
+        def _sync_delete():
+            client = self._get_client()
+            client.table("qa_conversation_context_files").delete().eq(
+                "conversation_id", conversation_id
+            ).eq("node_file_id", node_file_id).execute()
+        
+        await asyncio.to_thread(_sync_delete)
     
     # Artifacts
     

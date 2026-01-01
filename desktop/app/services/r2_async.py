@@ -71,31 +71,47 @@ class R2AsyncClient:
         Download file to cache with streaming.
         Returns cached file path.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Generate cache key from URL if not provided
         if cache_key is None:
             cache_key = hashlib.sha256(url.encode()).hexdigest()
         
+        logger.info(f"R2AsyncClient.download_to_cache: url={url}, cache_key={cache_key}")
+        
         # Check cache first
         cached_path = self.cache.get_path(cache_key)
         if cached_path:
+            logger.info(f"  - Файл найден в кэше: {cached_path}")
             return cached_path
+        
+        logger.info(f"  - Файл не в кэше, скачивание...")
         
         # Download with semaphore
         async with self._download_semaphore:
             client = self._get_http_client()
             
-            # Stream download
-            chunks = []
-            async with client.stream("GET", url) as response:
-                response.raise_for_status()
+            try:
+                # Stream download
+                chunks = []
+                async with client.stream("GET", url) as response:
+                    response.raise_for_status()
+                    logger.info(f"  - HTTP статус: {response.status_code}")
+                    
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        chunks.append(chunk)
                 
-                async for chunk in response.aiter_bytes(chunk_size=8192):
-                    chunks.append(chunk)
+                data = b"".join(chunks)
+                logger.info(f"  - Скачано {len(data)} байт")
             
-            data = b"".join(chunks)
+            except Exception as e:
+                logger.error(f"  - ✗ Ошибка скачивания: {e}", exc_info=True)
+                raise
         
         # Cache
         cached_path = self.cache.put(cache_key, data)
+        logger.info(f"  - ✓ Файл сохранен в кэш: {cached_path}")
         return cached_path
     
     async def upload_bytes(

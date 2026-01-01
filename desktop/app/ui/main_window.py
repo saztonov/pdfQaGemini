@@ -91,6 +91,7 @@ class MainWindow(QMainWindow):
         self.right_panel = RightContextPanel(
             supabase_repo=self.supabase_repo,
             gemini_client=self.gemini_client,
+            r2_client=self.r2_client,
             toast_manager=self.toast_manager
         )
         
@@ -160,6 +161,7 @@ class MainWindow(QMainWindow):
         """Connect panel signals"""
         if self.left_panel:
             self.left_panel.addToContextRequested.connect(self._on_nodes_add_context)
+            self.left_panel.addFilesToContextRequested.connect(self._on_files_add_context)
         
         if self.right_panel:
             self.right_panel.uploadContextItemsRequested.connect(self._on_upload_context_items)
@@ -265,12 +267,17 @@ class MainWindow(QMainWindow):
             
             if self.right_panel:
                 logger.info("Установка сервисов для right_panel...")
-                self.right_panel.set_services(self.supabase_repo, self.gemini_client, self.toast_manager)
+                self.right_panel.set_services(self.supabase_repo, self.gemini_client, self.r2_client, self.toast_manager)
                 logger.info("right_panel сервисы установлены")
             
             # Create or load conversation
             logger.info("Создание/загрузка диалога...")
             await self._ensure_conversation()
+            
+            # Set conversation_id in right panel and load context
+            if self.right_panel and self.current_conversation_id:
+                self.right_panel.conversation_id = str(self.current_conversation_id)
+                await self.right_panel.load_context_from_db()
             
             logger.info("Включение действий...")
             self._enable_actions()
@@ -295,6 +302,13 @@ class MainWindow(QMainWindow):
                     title="Новый чат",
                 )
                 self.current_conversation_id = conv.id
+                
+                # Set conversation_id in right panel
+                if self.right_panel:
+                    self.right_panel.conversation_id = str(self.current_conversation_id)
+                    # Load context from DB
+                    await self.right_panel.load_context_from_db()
+                
                 self.toast_manager.info(f"Создан новый диалог: {conv.id}")
             except Exception as e:
                 self.toast_manager.error(f"Ошибка создания разговора: {e}")
@@ -320,14 +334,11 @@ class MainWindow(QMainWindow):
         await self.left_panel.load_roots()
         self.toast_manager.success("Дерево обновлено")
     
-    def _on_add_to_context(self):
-        """Add selected nodes to context"""
+    @asyncSlot()
+    async def _on_add_to_context(self):
+        """Add selected nodes to context (delegates to left panel)"""
         if self.left_panel:
-            node_ids = self.left_panel.get_selected_node_ids()
-            if node_ids:
-                self._on_nodes_add_context(node_ids)
-            else:
-                self.toast_manager.warning("Нет выбранных узлов")
+            await self.left_panel.add_selected_to_context()
     
     def _on_refresh_gemini(self):
         """Refresh Gemini Files list"""
@@ -346,34 +357,81 @@ class MainWindow(QMainWindow):
     
     # Signal handlers
     
-    def _on_nodes_add_context(self, node_ids: list[str]):
+    @asyncSlot(list)
+    async def _on_nodes_add_context(self, node_ids: list[str]):
         """Handle add nodes to context"""
-        self.toast_manager.info(f"Добавление {len(node_ids)} узлов в контекст...")
+        if not node_ids:
+            return
         
-        # Add to context
+        # Add to local context
+        new_count = 0
         for node_id in node_ids:
             if node_id not in self.context_node_ids:
                 self.context_node_ids.append(node_id)
+                new_count += 1
+        
+        # Save to database
+        if self.supabase_repo and self.current_conversation_id:
+            try:
+                await self.supabase_repo.qa_add_nodes(
+                    str(self.current_conversation_id),
+                    node_ids
+                )
+            except Exception as e:
+                logger.error(f"Ошибка сохранения узлов в БД: {e}")
+                self.toast_manager.error(f"Ошибка сохранения: {e}")
+                return
         
         # Update right panel
         if self.right_panel:
             self.right_panel.set_context_node_ids(self.context_node_ids)
+            # Auto-load files
+            await self.right_panel.load_node_files()
+        else:
+            self.toast_manager.success(f"В контекст добавлено {len(node_ids)} документов")
+    
+    @asyncSlot(list)
+    async def _on_files_add_context(self, files_info: list[dict]):
+        """Handle add files to context"""
+        if not files_info:
+            return
         
-            self.toast_manager.success(f"Добавлено {len(node_ids)} узлов в контекст. Нажмите 'Загрузить файлы узлов' для загрузки.")
+        logger.info(f"Добавление {len(files_info)} файлов напрямую в контекст")
+        
+        # Add files directly to right panel
+        if self.right_panel:
+            await self.right_panel.add_files_to_context(files_info)
+        else:
+            self.toast_manager.success(f"Добавлено {len(files_info)} файлов в контекст")
     
     @asyncSlot(list)
     async def _on_upload_context_items(self, item_ids: list):
         """Handle upload context items to Gemini"""
+        logger.info(f"=== НАЧАЛО ЗАГРУЗКИ В GEMINI ===")
+        logger.info(f"Количество выбранных элементов: {len(item_ids)}")
+        logger.info(f"IDs: {item_ids}")
+        
         if not self.gemini_client or not self.r2_client:
+            logger.error("Сервисы не инициализированы")
             self.toast_manager.error("Сервисы не инициализированы")
             return
         
+        if not self.right_panel:
+            logger.error("RightPanel не инициализирован")
+            self.toast_manager.error("Панель контекста не инициализирована")
+            return
+        
+        logger.info(f"Всего элементов в контексте: {len(self.right_panel.context_items)}")
+        
         self.toast_manager.info(f"Загрузка {len(item_ids)} файлов в Gemini...")
         
-        try:
-            uploaded_count = 0
-            
-            for item_id in item_ids:
+        uploaded_count = 0
+        failed_count = 0
+        
+        for idx, item_id in enumerate(item_ids, 1):
+            try:
+                logger.info(f"--- Обработка файла {idx}/{len(item_ids)}: {item_id} ---")
+                
                 # Get context item
                 context_item = None
                 for item in self.right_panel.context_items:
@@ -381,19 +439,35 @@ class MainWindow(QMainWindow):
                         context_item = item
                         break
                 
-                if not context_item or not context_item.r2_key:
+                if not context_item:
+                    logger.warning(f"Элемент {item_id} не найден в контексте, пропуск")
+                    failed_count += 1
+                    continue
+                
+                logger.info(f"Найден элемент: title={context_item.title}, r2_key={context_item.r2_key}, mime={context_item.mime_type}")
+                
+                if not context_item.r2_key:
+                    logger.warning(f"Элемент {item_id} не имеет r2_key, пропуск")
+                    failed_count += 1
                     continue
                 
                 # Download from R2 to cache
                 url = self.r2_client.build_public_url(context_item.r2_key)
+                logger.info(f"Скачивание из R2: url={url}")
+                
                 cached_path = await self.r2_client.download_to_cache(url, item_id)
+                logger.info(f"Файл скачан в кэш: {cached_path}, существует={cached_path.exists()}, размер={cached_path.stat().st_size if cached_path.exists() else 0} байт")
                 
                 # Upload to Gemini
+                logger.info(f"Загрузка в Gemini: mime_type={context_item.mime_type}, display_name={context_item.title}")
+                
                 result = await self.gemini_client.upload_file(
                     cached_path,
                     mime_type=context_item.mime_type,
                     display_name=context_item.title,
                 )
+                
+                logger.info(f"Gemini результат: name={result.get('name')}, uri={result.get('uri')}")
                 
                 # Update context item
                 gemini_name = result["name"]
@@ -405,6 +479,20 @@ class MainWindow(QMainWindow):
                         "uploaded",
                         gemini_name
                     )
+                    logger.info(f"Статус элемента обновлен: uploaded, gemini_name={gemini_name}")
+                
+                # Save to DB
+                if self.supabase_repo and self.current_conversation_id and context_item.node_file_id:
+                    try:
+                        await self.supabase_repo.qa_save_context_file(
+                            str(self.current_conversation_id),
+                            str(context_item.node_file_id),
+                            gemini_name=gemini_name,
+                            gemini_uri=gemini_uri,
+                            status="uploaded",
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка сохранения статуса в БД: {e}")
                 
                 # Add to attached files
                 self.attached_gemini_files.append({
@@ -414,11 +502,19 @@ class MainWindow(QMainWindow):
                 })
                 
                 uploaded_count += 1
+                logger.info(f"✓ Файл {idx}/{len(item_ids)} успешно загружен")
             
-            self.toast_manager.success(f"Загружено {uploaded_count} файлов в Gemini")
+            except Exception as e:
+                logger.error(f"✗ Ошибка загрузки файла {item_id}: {e}", exc_info=True)
+                failed_count += 1
+                self.toast_manager.error(f"Ошибка файла {idx}: {e}")
         
-        except Exception as e:
-            self.toast_manager.error(f"Ошибка загрузки: {e}")
+        logger.info(f"=== ЗАВЕРШЕНИЕ ЗАГРУЗКИ: успешно={uploaded_count}, ошибок={failed_count} ===")
+        
+        if uploaded_count > 0:
+            self.toast_manager.success(f"Загружено {uploaded_count} файлов в Gemini")
+        if failed_count > 0:
+            self.toast_manager.warning(f"Не удалось загрузить {failed_count} файлов")
     
     @asyncSlot(str)
     async def _on_ask_model(self, user_text: str):

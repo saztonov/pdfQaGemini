@@ -60,34 +60,74 @@ class GeminiClient:
         Upload file to Gemini Files API.
         Returns dict with: name, uri, mime_type
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         def _sync_upload():
             client = self._get_client()
             try:
+                logger.info(f"GeminiClient.upload_file: начало загрузки файла {path}")
+                logger.info(f"  - path exists: {path.exists()}")
+                logger.info(f"  - mime_type (входной): {mime_type}")
+                logger.info(f"  - display_name: {display_name}")
+                
                 # Auto-detect mime_type if not provided
                 if mime_type is None:
                     import mimetypes
                     detected_type, _ = mimetypes.guess_type(str(path))
                     mime_type_final = detected_type or "application/octet-stream"
+                    logger.info(f"  - mime_type авто-определен: {mime_type_final}")
                 else:
                     mime_type_final = mime_type
+                    logger.info(f"  - mime_type используется переданный: {mime_type_final}")
+                
+                # Gemini может не поддерживать text/html напрямую, конвертируем в text/plain
+                if mime_type_final == "text/html":
+                    logger.warning(f"  - text/html конвертирован в text/plain для совместимости с Gemini")
+                    mime_type_final = "text/plain"
+                
+                # Очистка display_name от эмодзи (может вызвать проблемы в API)
+                final_display_name = display_name or path.name
+                # Удаляем эмодзи используя regex
+                import re
+                emoji_pattern = re.compile(
+                    "["
+                    "\U0001F600-\U0001F64F"  # emoticons
+                    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+                    "\U0001F680-\U0001F6FF"  # transport & map symbols
+                    "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                    "\U00002702-\U000027B0"
+                    "\U000024C2-\U0001F251"
+                    "]+", 
+                    flags=re.UNICODE
+                )
+                final_display_name = emoji_pattern.sub('', final_display_name).strip()
+                if final_display_name != (display_name or path.name):
+                    logger.info(f"  - display_name очищен от эмодзи: '{display_name or path.name}' -> '{final_display_name}'")
                 
                 # Upload
+                logger.info(f"  - Вызов client.files.upload()...")
                 uploaded_file = client.files.upload(
-                    path=str(path),
-                    config=types.UploadFileConfig(
-                        mime_type=mime_type_final,
-                        display_name=display_name or path.name,
-                    )
+                    file=str(path),
+                    config={
+                        'mime_type': mime_type_final,
+                        'display_name': final_display_name,
+                    }
                 )
                 
-                return {
+                result = {
                     "name": uploaded_file.name,
                     "uri": uploaded_file.uri,
                     "mime_type": uploaded_file.mime_type,
                     "display_name": getattr(uploaded_file, "display_name", None),
                     "size_bytes": getattr(uploaded_file, "size_bytes", None),
                 }
+                
+                logger.info(f"  - ✓ Файл успешно загружен: name={result['name']}")
+                return result
+                
             except Exception as e:
+                logger.error(f"  - ✗ Ошибка загрузки файла в Gemini: {e}", exc_info=True)
                 raise ServiceError(f"Failed to upload file to Gemini: {e}")
         
         return await asyncio.to_thread(_sync_upload)
@@ -172,9 +212,7 @@ class GeminiClient:
                 config = types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=schema,
-                    thinking_config=types.ThinkingConfig(
-                        thinking_mode=thinking_level  # "low" or "high"
-                    ) if thinking_level else None,
+                    thinking_config=types.ThinkingConfig() if thinking_level else None,
                 )
                 
                 # Generate

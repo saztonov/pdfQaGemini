@@ -8,7 +8,7 @@ from PySide6.QtCore import Signal, Qt
 from qasync import asyncSlot
 from app.services.supabase_repo import SupabaseRepo
 from app.services.gemini_client import GeminiClient
-from app.models.schemas import ContextItem, NodeFile
+from app.models.schemas import ContextItem, NodeFile, FileType, FILE_TYPE_ICONS
 
 
 class RightContextPanel(QWidget):
@@ -23,14 +23,17 @@ class RightContextPanel(QWidget):
         self,
         supabase_repo: Optional[SupabaseRepo] = None,
         gemini_client: Optional[GeminiClient] = None,
+        r2_client=None,
         toast_manager=None
     ):
         super().__init__()
         self.supabase_repo = supabase_repo
         self.gemini_client = gemini_client
+        self.r2_client = r2_client
         self.toast_manager = toast_manager
         
         # State
+        self.conversation_id: Optional[str] = None
         self.context_items: list[ContextItem] = []
         self.context_node_files: dict[str, NodeFile] = {}  # file_id -> NodeFile
         self.gemini_files: list[dict] = []
@@ -135,10 +138,11 @@ class RightContextPanel(QWidget):
         self.context_table.itemSelectionChanged.connect(self._on_context_selection_changed)
         self.gemini_table.itemSelectionChanged.connect(self._on_gemini_selection_changed)
     
-    def set_services(self, supabase_repo: SupabaseRepo, gemini_client: GeminiClient, toast_manager):
+    def set_services(self, supabase_repo: SupabaseRepo, gemini_client: GeminiClient, r2_client, toast_manager):
         """Set service dependencies"""
         self.supabase_repo = supabase_repo
         self.gemini_client = gemini_client
+        self.r2_client = r2_client
         self.toast_manager = toast_manager
     
     def _on_context_selection_changed(self):
@@ -181,7 +185,7 @@ class RightContextPanel(QWidget):
         self.context_node_ids = node_ids
     
     async def load_node_files(self):
-        """Load node files for current context nodes"""
+        """Load node files for current context nodes from node_files table"""
         if not self.supabase_repo:
             if self.toast_manager:
                 self.toast_manager.error("Репозиторий Supabase не инициализирован")
@@ -196,6 +200,7 @@ class RightContextPanel(QWidget):
             self.toast_manager.info(f"Загрузка файлов для {len(self.context_node_ids)} узлов...")
         
         try:
+            # Load all files from node_files table
             node_files = await self.supabase_repo.fetch_node_files(self.context_node_ids)
             
             # Update state
@@ -203,12 +208,20 @@ class RightContextPanel(QWidget):
             for nf in node_files:
                 self.context_node_files[str(nf.id)] = nf
             
-            # Create context items
+            # Create context items from node_files
             self.context_items.clear()
             for nf in node_files:
+                # Get icon for file type
+                try:
+                    ft = FileType(nf.file_type)
+                    icon = FILE_TYPE_ICONS.get(ft, "📄")
+                except ValueError:
+                    icon = "📄"
+                
                 item = ContextItem(
                     id=str(nf.id),
-                    title=nf.file_name,
+                    title=f"{icon} {nf.file_name}",
+                    node_id=nf.node_id,
                     node_file_id=nf.id,
                     r2_key=nf.r2_key,
                     mime_type=nf.mime_type,
@@ -220,9 +233,11 @@ class RightContextPanel(QWidget):
             self._update_context_table()
             
             if self.toast_manager:
-                self.toast_manager.success(f"Загружено {len(node_files)} файлов")
+                self.toast_manager.success(f"Загружено {len(self.context_items)} файлов")
         
         except Exception as e:
+            import logging
+            logging.error(f"Ошибка load_node_files: {e}", exc_info=True)
             if self.toast_manager:
                 self.toast_manager.error(f"Ошибка загрузки файлов: {e}")
     
@@ -236,10 +251,14 @@ class RightContextPanel(QWidget):
             
             self.context_table.setItem(row, 0, QTableWidgetItem(item.title))
             
-            # Get file type from node_file if available
+            # Get file type from node_file
             node_file = self.context_node_files.get(item.id)
-            file_type = node_file.file_type if node_file else ""
-            file_name = node_file.file_name if node_file else ""
+            if node_file:
+                file_type = node_file.file_type
+                file_name = node_file.file_name
+            else:
+                file_type = ""
+                file_name = ""
             
             self.context_table.setItem(row, 1, QTableWidgetItem(file_type))
             self.context_table.setItem(row, 2, QTableWidgetItem(file_name))
@@ -253,13 +272,22 @@ class RightContextPanel(QWidget):
     
     async def upload_selected_to_gemini(self):
         """Upload selected context items to Gemini"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("=== RightContextPanel.upload_selected_to_gemini вызван ===")
+        
         if not self.gemini_client:
+            logger.error("gemini_client не инициализирован")
             if self.toast_manager:
                 self.toast_manager.error("Клиент Gemini не инициализирован")
             return
         
         selected_rows = set(item.row() for item in self.context_table.selectedItems())
+        logger.info(f"Выбрано строк: {len(selected_rows)}")
+        
         if not selected_rows:
+            logger.warning("Нет выбранных файлов")
             if self.toast_manager:
                 self.toast_manager.warning("Нет выбранных файлов")
             return
@@ -267,13 +295,17 @@ class RightContextPanel(QWidget):
         selected_ids = []
         for row in selected_rows:
             item_id = self.context_table.item(row, 0).data(Qt.UserRole)
+            logger.info(f"  - Строка {row}: item_id={item_id}")
             if item_id:
                 selected_ids.append(item_id)
+        
+        logger.info(f"Собрано IDs для загрузки: {selected_ids}")
         
         if self.toast_manager:
             self.toast_manager.info(f"Загрузка {len(selected_ids)} файлов в Gemini...")
         
         # Emit signal for MainWindow to handle actual upload
+        logger.info("Emit сигнала uploadContextItemsRequested")
         self.uploadContextItemsRequested.emit(selected_ids)
     
     def detach_selected(self):
@@ -399,3 +431,115 @@ class RightContextPanel(QWidget):
     def get_context_items(self) -> list[ContextItem]:
         """Get all context items"""
         return self.context_items
+    
+    async def add_files_to_context(self, files_info: list[dict]):
+        """Add files directly to context (without loading from DB)
+        
+        Args:
+            files_info: list of dicts with keys: id, r2_key, file_name, file_type, mime_type, node_id
+        """
+        if not files_info:
+            return
+        
+        from app.models.schemas import FILE_TYPE_ICONS, FileType
+        
+        added_count = 0
+        for file_info in files_info:
+            file_id = str(file_info["id"])
+            
+            # Skip if already in context
+            if any(item.id == file_id for item in self.context_items):
+                continue
+            
+            # Get icon for file type
+            try:
+                ft = FileType(file_info["file_type"])
+                icon = FILE_TYPE_ICONS.get(ft, "📄")
+            except (ValueError, KeyError):
+                icon = "📄"
+            
+            # Create context item
+            item = ContextItem(
+                id=file_id,
+                title=f"{icon} {file_info['file_name']}",
+                node_id=file_info.get("node_id"),
+                node_file_id=file_info["id"],
+                r2_key=file_info["r2_key"],
+                mime_type=file_info["mime_type"],
+                status="local",
+            )
+            self.context_items.append(item)
+            added_count += 1
+            
+            # Save to DB
+            if self.supabase_repo and self.conversation_id:
+                try:
+                    await self.supabase_repo.qa_save_context_file(
+                        self.conversation_id,
+                        file_id,
+                        status="local",
+                    )
+                except Exception as e:
+                    import logging
+                    logging.error(f"Ошибка сохранения контекста в БД: {e}")
+        
+        # Update table
+        self._update_context_table()
+        
+        if self.toast_manager and added_count > 0:
+            self.toast_manager.success(f"Добавлено {added_count} файлов в контекст")
+    
+    async def load_context_from_db(self):
+        """Загрузить контекст из БД"""
+        if not self.supabase_repo or not self.conversation_id:
+            return
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            context_files = await self.supabase_repo.qa_load_context_files(self.conversation_id)
+            
+            from app.models.schemas import FILE_TYPE_ICONS, FileType
+            
+            for cf in context_files:
+                node_file = cf.get("node_files")
+                if not node_file:
+                    continue
+                
+                file_id = str(node_file["id"])
+                
+                # Skip if already in context
+                if any(item.id == file_id for item in self.context_items):
+                    continue
+                
+                # Get icon
+                try:
+                    ft = FileType(node_file["file_type"])
+                    icon = FILE_TYPE_ICONS.get(ft, "📄")
+                except (ValueError, KeyError):
+                    icon = "📄"
+                
+                # Create context item with restored state
+                item = ContextItem(
+                    id=file_id,
+                    title=f"{icon} {node_file['file_name']}",
+                    node_id=node_file.get("node_id"),
+                    node_file_id=node_file["id"],
+                    r2_key=node_file["r2_key"],
+                    mime_type=node_file["mime_type"],
+                    status=cf.get("status", "local"),
+                    gemini_name=cf.get("gemini_name"),
+                    gemini_uri=cf.get("gemini_uri"),
+                )
+                self.context_items.append(item)
+            
+            self._update_context_table()
+            
+            if self.toast_manager and context_files:
+                self.toast_manager.success(f"Восстановлено {len(context_files)} файлов контекста")
+        
+        except Exception as e:
+            logger.error(f"Ошибка загрузки контекста из БД: {e}", exc_info=True)
+            if self.toast_manager:
+                self.toast_manager.error(f"Ошибка загрузки контекста: {e}")
