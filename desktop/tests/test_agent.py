@@ -47,7 +47,8 @@ class TestAgent:
         result = await agent.ask(
             conversation_id=conv_id,
             user_text="What is this?",
-            file_uris=["https://example.com/file1"],
+            file_refs=[{"uri": "https://example.com/file1", "mime_type": "application/pdf"}],
+            model="gemini-2.5-flash",
         )
         
         assert isinstance(result, ModelReply)
@@ -71,7 +72,7 @@ class TestAgent:
         await agent.ask(
             conversation_id=conv_id,
             user_text="Question",
-            file_uris=[],
+            file_refs=[],
             model="gemini-pro",
             thinking_level="high",
         )
@@ -101,7 +102,7 @@ class TestAgent:
                 conversation_id=conv_id,
                 role="assistant",
                 content="Answer",
-                meta={"model": "gemini-3-flash-preview"},
+                meta={"model": "gemini-3-flash"},
                 created_at=datetime.utcnow()
             )
         ]

@@ -140,7 +140,7 @@ class TestGeminiClient:
         }
         
         result = await gemini_client.generate_structured(
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash",
             system_prompt="You are a helpful assistant",
             user_text="Give me a result",
             file_uris=["https://example.com/file1"],
@@ -157,7 +157,7 @@ class TestGeminiClient:
         
         with pytest.raises(ServiceError) as exc:
             await gemini_client.generate_structured(
-                model="gemini-3-flash-preview",
+                model="gemini-3-flash",
                 system_prompt="Test",
                 user_text="Test",
                 file_uris=[],
@@ -174,7 +174,7 @@ class TestGeminiClient:
         mock_genai_client.models.generate_content.return_value = mock_response
         
         result = await gemini_client.generate_simple(
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash",
             prompt="Hello, how are you?",
             file_uris=None,
         )
@@ -189,7 +189,7 @@ class TestGeminiClient:
         mock_genai_client.models.generate_content.return_value = mock_response
         
         result = await gemini_client.generate_simple(
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash",
             prompt="Analyze this document",
             file_uris=["https://example.com/file1", "https://example.com/file2"],
         )
@@ -203,7 +203,7 @@ class TestGeminiClient:
         
         with pytest.raises(ServiceError) as exc:
             await gemini_client.generate_simple(
-                model="gemini-3-flash-preview",
+                model="gemini-3-flash",
                 prompt="Test",
             )
         

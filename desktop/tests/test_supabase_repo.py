@@ -124,7 +124,6 @@ class TestConversations:
             "id": conv_id,
             "client_id": "test",
             "title": "Test Chat",
-            "model_default": "gemini-3-flash-preview",
             "created_at": now,
             "updated_at": now,
         }
@@ -134,7 +133,7 @@ class TestConversations:
         
         mock_client.table.return_value.insert.return_value.execute.return_value = mock_response
         
-        result = await repo.qa_create_conversation("test", "Test Chat")
+        result = await repo.qa_create_conversation("Test Chat")
         
         assert isinstance(result, Conversation)
         assert result.title == "Test Chat"

@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         
         if self.chat_panel:
             self.chat_panel.askModelRequested.connect(self._on_ask_model)
+            self.chat_panel.btn_refresh_models.clicked.connect(self._on_refresh_models)
     
     # Toolbar handlers
     
@@ -254,7 +255,6 @@ class MainWindow(QMainWindow):
                 self.gemini_client,
                 self.supabase_repo,
                 trace_store=self.trace_store,
-                default_model=config["model_default"]
             )
             logger.info("Agent создан успешно")
             
@@ -278,6 +278,8 @@ class MainWindow(QMainWindow):
             if self.right_panel and self.current_conversation_id:
                 self.right_panel.conversation_id = str(self.current_conversation_id)
                 await self.right_panel.load_context_from_db()
+                # Restore attached_gemini_files from loaded context
+                self._sync_attached_gemini_files()
             
             logger.info("Включение действий...")
             self._enable_actions()
@@ -286,6 +288,9 @@ class MainWindow(QMainWindow):
             logger.info("Автоматическая загрузка дерева...")
             if self.left_panel:
                 await self.left_panel.load_roots()
+            
+            # Load available models
+            await self._load_gemini_models()
             
             logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
             self.toast_manager.success("Подключено успешно")
@@ -308,10 +313,26 @@ class MainWindow(QMainWindow):
                     self.right_panel.conversation_id = str(self.current_conversation_id)
                     # Load context from DB
                     await self.right_panel.load_context_from_db()
+                    # Restore attached_gemini_files from loaded context
+                    self._sync_attached_gemini_files()
                 
                 self.toast_manager.info(f"Создан новый диалог: {conv.id}")
             except Exception as e:
                 self.toast_manager.error(f"Ошибка создания разговора: {e}")
+    
+    def _sync_attached_gemini_files(self):
+        """Sync attached_gemini_files from right_panel context items"""
+        self.attached_gemini_files.clear()
+        if self.right_panel:
+            for item in self.right_panel.context_items:
+                if item.gemini_uri and item.gemini_name:
+                    self.attached_gemini_files.append({
+                        "gemini_name": item.gemini_name,
+                        "gemini_uri": item.gemini_uri,
+                        "context_item_id": item.id,
+                        "mime_type": item.mime_type,
+                    })
+        logger.info(f"Синхронизировано {len(self.attached_gemini_files)} файлов Gemini")
     
     def _enable_actions(self):
         """Enable actions after connect"""
@@ -354,6 +375,41 @@ class MainWindow(QMainWindow):
         self.inspector_window.show()
         self.inspector_window.raise_()
         self.inspector_window.activateWindow()
+    
+    @asyncSlot()
+    async def _on_refresh_models(self):
+        """Refresh Gemini models list"""
+        await self._load_gemini_models()
+    
+    async def _load_gemini_models(self):
+        """Load available Gemini models"""
+        logger.info("=== ЗАГРУЗКА МОДЕЛЕЙ GEMINI ===")
+        if not self.gemini_client:
+            logger.warning("gemini_client не инициализирован")
+            return
+        
+        try:
+            self.toast_manager.info("Загрузка списка моделей...")
+            models = await self.gemini_client.list_models()
+            
+            logger.info(f"Получено моделей от API: {len(models) if models else 0}")
+            if models:
+                for i, m in enumerate(models[:5]):
+                    logger.info(f"  [{i}] name={m.get('name')}, display={m.get('display_name')}")
+                if len(models) > 5:
+                    logger.info(f"  ... и ещё {len(models) - 5} моделей")
+            
+            if self.chat_panel and models:
+                logger.info(f"Вызов chat_panel.set_models с {len(models)} моделями")
+                self.chat_panel.set_models(models)
+                self.toast_manager.success(f"Загружено {len(models)} моделей")
+            elif not models:
+                logger.warning("Список моделей пуст")
+                self.toast_manager.warning("Нет доступных моделей")
+        
+        except Exception as e:
+            logger.error(f"Ошибка загрузки моделей: {e}", exc_info=True)
+            self.toast_manager.error(f"Ошибка загрузки моделей: {e}")
     
     # Signal handlers
     
@@ -499,6 +555,7 @@ class MainWindow(QMainWindow):
                     "gemini_name": gemini_name,
                     "gemini_uri": gemini_uri,
                     "context_item_id": item_id,
+                    "mime_type": context_item.mime_type,
                 })
                 
                 uploaded_count += 1
@@ -516,9 +573,13 @@ class MainWindow(QMainWindow):
         if failed_count > 0:
             self.toast_manager.warning(f"Не удалось загрузить {failed_count} файлов")
     
-    @asyncSlot(str)
-    async def _on_ask_model(self, user_text: str):
+    @asyncSlot(str, str)
+    async def _on_ask_model(self, user_text: str, model_name: str):
         """Handle ask model request"""
+        logger.info(f"=== _on_ask_model ===")
+        logger.info(f"  user_text: {user_text[:50]}...")
+        logger.info(f"  model_name (raw): {model_name}")
+        
         if not user_text.strip():
             self.toast_manager.warning("Пустое сообщение")
             return
@@ -536,23 +597,48 @@ class MainWindow(QMainWindow):
             self.chat_panel.set_input_enabled(False)
             self.chat_panel.add_user_message(user_text)
         
-        self.toast_manager.info("Отправка запроса модели...")
+        self.toast_manager.info(f"Отправка запроса модели {model_name}...")
         
         try:
-            # Collect file URIs from attached gemini files
-            file_uris = [gf["gemini_uri"] for gf in self.attached_gemini_files]
+            # Collect file refs from attached gemini files (with mime_type)
+            file_refs = []
+            logger.info(f"  attached_gemini_files: {len(self.attached_gemini_files)}")
+            for gf in self.attached_gemini_files:
+                file_refs.append({
+                    "uri": gf["gemini_uri"],
+                    "mime_type": gf.get("mime_type", "application/pdf"),
+                })
             
-            # Ask agent
+            # If no attached files, use files from Gemini Files tab
+            if not file_refs and self.right_panel and self.right_panel.gemini_files:
+                logger.info(f"  Используем gemini_files из right_panel: {len(self.right_panel.gemini_files)}")
+                for gf in self.right_panel.gemini_files:
+                    uri = gf.get("uri")
+                    if uri:
+                        file_refs.append({
+                            "uri": uri,
+                            "mime_type": gf.get("mime_type", "application/octet-stream"),
+                        })
+                        logger.info(f"    file: uri={uri}, mime={gf.get('mime_type')}")
+                if file_refs:
+                    self.toast_manager.info(f"Используется {len(file_refs)} файлов из Gemini Files")
+            
+            # Warn if still no files
+            if not file_refs:
+                self.toast_manager.warning("Внимание: нет загруженных файлов в Gemini. Модель будет отвечать без контекста документов.")
+            
+            # Ask agent with selected model
             reply = await self.agent.ask(
                 conversation_id=self.current_conversation_id,
                 user_text=user_text,
-                file_uris=file_uris,
+                file_refs=file_refs,
+                model=model_name,
             )
             
             # Display assistant response
             if self.chat_panel:
                 meta = {
-                    "model": self.agent.default_model,
+                    "model": model_name,
                     "thinking_level": "low",
                     "is_final": reply.is_final,
                     "actions": [
@@ -762,20 +848,36 @@ class MainWindow(QMainWindow):
                         )
                         self.chat_panel.set_input_enabled(False)
                     
-                    # Include ROI in file_uris for next request
-                    file_uris = [gf["gemini_uri"] for gf in self.attached_gemini_files]
-                    file_uris.append(gemini_uri)
+                    # Include ROI in file_refs for next request
+                    file_refs = []
+                    for gf in self.attached_gemini_files:
+                        file_refs.append({
+                            "uri": gf["gemini_uri"],
+                            "mime_type": gf.get("mime_type", "application/pdf"),
+                        })
+                    
+                    # Add ROI image
+                    file_refs.append({
+                        "uri": gemini_uri,
+                        "mime_type": "image/png",
+                    })
+                    
+                    # Get current model from chat panel
+                    current_model = self.chat_panel.model_combo.currentData() if self.chat_panel else None
+                    if not current_model:
+                        current_model = "gemini-2.5-flash"  # fallback
                     
                     reply = await self.agent.ask(
                         conversation_id=self.current_conversation_id,
                         user_text=roi_context,
-                        file_uris=file_uris,
+                        file_refs=file_refs,
+                        model=current_model,
                     )
                     
                     # Display response
                     if self.chat_panel:
                         meta = {
-                            "model": self.agent.default_model,
+                            "model": current_model,
                             "thinking_level": "low",
                             "is_final": reply.is_final,
                             "actions": [

@@ -1,10 +1,13 @@
 """Gemini API client"""
 import asyncio
+import logging
 from pathlib import Path
 from typing import Optional
 from google import genai
 from google.genai import types
 from app.utils.errors import ServiceError
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
@@ -19,6 +22,46 @@ class GeminiClient:
         if self._client is None:
             self._client = genai.Client(api_key=self.api_key)
         return self._client
+    
+    async def list_models(self) -> list[dict]:
+        """
+        List available Gemini models.
+        Returns list of dicts with: name, display_name, description
+        """
+        def _sync_list():
+            client = self._get_client()
+            try:
+                logger.info("Запрос списка моделей от Gemini API...")
+                models = client.models.list()
+                result = []
+                total_count = 0
+                
+                for model in models:
+                    total_count += 1
+                    name = getattr(model, "name", "")
+                    
+                    # Debug first 5 models
+                    if total_count <= 5:
+                        logger.info(f"Model {total_count}: name={name}")
+                    
+                    # Filter: include models with "gemini" in name (text generation models)
+                    if "gemini" in name.lower():
+                        result.append({
+                            "name": name,
+                            "display_name": getattr(model, "display_name", name),
+                            "description": getattr(model, "description", ""),
+                        })
+                
+                logger.info(f"Всего моделей: {total_count}, gemini-моделей: {len(result)}")
+                # Log all gemini model names
+                for m in result:
+                    logger.info(f"  -> {m['name']}")
+                return result
+            except Exception as e:
+                logger.error(f"Ошибка list_models: {e}", exc_info=True)
+                raise ServiceError(f"Failed to list models: {e}")
+        
+        return await asyncio.to_thread(_sync_list)
     
     async def list_files(self) -> list[dict]:
         """
@@ -81,9 +124,16 @@ class GeminiClient:
                     mime_type_final = mime_type
                     logger.info(f"  - mime_type используется переданный: {mime_type_final}")
                 
-                # Gemini может не поддерживать text/html напрямую, конвертируем в text/plain
-                if mime_type_final == "text/html":
-                    logger.warning(f"  - text/html конвертирован в text/plain для совместимости с Gemini")
+                # Текстовые форматы, которые безопаснее грузить как text/plain
+                text_like_ext = {".json", ".html", ".htm", ".csv", ".md", ".xml"}
+                text_like_mime = {"text/html", "application/json", "text/csv", "application/xml"}
+                
+                suffix = path.suffix.lower()
+                
+                if mime_type_final in text_like_mime or suffix in text_like_ext:
+                    logger.warning(
+                        f"  - mime '{mime_type_final}' ({suffix}) приведён к text/plain для совместимости с Gemini"
+                    )
                     mime_type_final = "text/plain"
                 
                 # Очистка display_name от эмодзи (может вызвать проблемы в API)
@@ -148,7 +198,7 @@ class GeminiClient:
         model: str,
         system_prompt: str,
         user_text: str,
-        file_uris: list[str],
+        file_refs: list[dict],
         schema: dict,
         thinking_level: str = "low",
     ) -> dict:
@@ -156,78 +206,118 @@ class GeminiClient:
         Generate structured output using JSON schema.
         
         Args:
-            model: Model name (e.g. "gemini-3-flash-preview")
+            model: Model name (e.g. "gemini-3-flash")
             system_prompt: System instructions
             user_text: User message text
-            file_uris: List of Gemini file URIs to include
+            file_refs: List of dicts with 'uri' and 'mime_type' keys
             schema: JSON schema for structured output
-            thinking_level: "low" or "high" for reasoning depth
+            thinking_level: "low", "medium", or "high" for reasoning depth
         
         Returns:
             Parsed JSON dict matching schema
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         def _sync_generate():
             client = self._get_client()
             try:
-                # Build contents
-                contents = []
+                # Build contents - files FIRST, then text (per documentation)
+                # Per docs: contents=[myfile, prompt] - file objects + text
+                contents_list = []
                 
-                # System prompt (as user role with marker)
-                if system_prompt:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part(text=f"[SYSTEM]\n{system_prompt}")],
-                        )
-                    )
+                # Add file objects first (get them via files.get API)
+                for file_ref in file_refs:
+                    uri = file_ref.get("uri", "")
+                    mime_type = file_ref.get("mime_type", "application/octet-stream")
+                    if uri:
+                        # Extract file name from URI
+                        # e.g. https://generativelanguage.googleapis.com/v1beta/files/xxx -> files/xxx
+                        file_name = uri
+                        if "/files/" in uri:
+                            file_name = "files/" + uri.split("/files/")[-1]
+                        
+                        logger.info(f"Getting file: uri={uri}, name={file_name}")
+                        try:
+                            # Get file object from API
+                            file_obj = client.files.get(name=file_name)
+                            file_uri = getattr(file_obj, 'uri', None) or uri
+                            file_mime = getattr(file_obj, 'mime_type', None) or mime_type or "application/octet-stream"
+                            logger.info(f"  File retrieved: name={file_obj.name}, uri={file_uri}, mime={file_mime}, state={getattr(file_obj, 'state', 'unknown')}")
+                            
+                            # Если файл загружен как application/json - приведём к text/plain
+                            if file_mime == "application/json":
+                                logger.warning(f"  application/json -> text/plain для совместимости")
+                                file_mime = "text/plain"
+                            
+                            # Use Part.from_uri with correct mime from file object
+                            contents_list.append(
+                                types.Part.from_uri(
+                                    file_uri=file_uri,
+                                    mime_type=file_mime,
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(f"  Failed to get file {file_name}: {e}")
                 
-                # User message with files
-                user_parts = []
-                
-                # Add file URIs
-                for file_uri in file_uris:
-                    # Extract mime_type from URI or default
-                    # Gemini Files API URIs typically: https://generativelanguage.googleapis.com/v1beta/files/...
-                    # We need to infer or use generic
-                    user_parts.append(
-                        types.Part.from_uri(
-                            file_uri=file_uri,
-                            mime_type="application/pdf",  # Default, adjust as needed
-                        )
-                    )
-                
-                # Add user text
+                # Add user text after files
                 if user_text:
-                    user_parts.append(types.Part(text=user_text))
+                    contents_list.append(user_text)
                 
-                if user_parts:
-                    contents.append(
-                        types.Content(
-                            role="user",
-                            parts=user_parts,
-                        )
-                    )
+                # Contents is just a list of files + text
+                contents = contents_list
                 
                 # Generation config
+                # thinking_config only for models that support it (gemini-2.5+)
+                logger.info(f"=== generate_structured ===")
+                logger.info(f"  model (input): {model}")
+                logger.info(f"  files count: {len(file_refs)}")
+                logger.info(f"  user_text len: {len(user_text)}")
+                
+                # Config with response_json_schema (correct parameter name per docs)
+                logger.info(f"  Building config for model: {model}")
                 config = types.GenerateContentConfig(
+                    system_instruction=system_prompt if system_prompt else None,
                     response_mime_type="application/json",
-                    response_schema=schema,
-                    thinking_config=types.ThinkingConfig() if thinking_level else None,
+                    response_json_schema=schema,
                 )
+                logger.info(f"  Using config with response_json_schema")
                 
+                # Remove 'models/' prefix if present - SDK adds it automatically
+                model_id = model
+                if model_id.startswith("models/"):
+                    model_id = model_id[7:]  # Remove 'models/' prefix
+                
+                logger.info(f"Sending request: model_id={model_id}, files={len(file_refs)}, text_len={len(user_text)}")
+                
+                def _call(m: str):
+                    return client.models.generate_content(
+                        model=m,
+                        contents=contents,
+                        config=config,
+                    )
+
                 # Generate
-                response = client.models.generate_content(
-                    model=model,
-                    contents=contents,
-                    config=config,
-                )
-                
-                # Parse JSON response
+                response = _call(model_id)
+
+                # Prefer SDK parsed output when response_schema is used
+                parsed = getattr(response, "parsed", None)
+                if parsed is not None:
+                    if isinstance(parsed, dict):
+                        return parsed
+                    # Pydantic model / typed object
+                    if hasattr(parsed, "model_dump"):
+                        return parsed.model_dump()
+                    return dict(parsed)
+
+                # Fallback: parse JSON from text
                 import json
-                result_text = response.text
+                result_text = getattr(response, "text", "") or ""
+                logger.info(f"Response received: {len(result_text)} chars")
                 return json.loads(result_text)
                 
             except Exception as e:
+                logger.error(f"Generate error: {e}", exc_info=True)
                 raise ServiceError(f"Failed to generate structured content: {e}")
         
         return await asyncio.to_thread(_sync_generate)
@@ -258,23 +348,48 @@ class GeminiClient:
                 # Add files if any
                 if file_uris:
                     for file_uri in file_uris:
-                        parts.append(
-                            types.Part.from_uri(
-                                file_uri=file_uri,
-                                mime_type="application/pdf",
+                        # Extract file name and get actual mime from API
+                        file_name = file_uri
+                        if "/files/" in file_uri:
+                            file_name = "files/" + file_uri.split("/files/")[-1]
+                        try:
+                            file_obj = client.files.get(name=file_name)
+                            file_mime = getattr(file_obj, 'mime_type', None) or "application/octet-stream"
+                            actual_uri = getattr(file_obj, 'uri', None) or file_uri
+                            # Fix json mime
+                            if file_mime == "application/json":
+                                file_mime = "text/plain"
+                            parts.append(
+                                types.Part.from_uri(
+                                    file_uri=actual_uri,
+                                    mime_type=file_mime,
+                                )
                             )
-                        )
+                        except Exception:
+                            # Fallback - use URI as-is with generic mime
+                            parts.append(
+                                types.Part.from_uri(
+                                    file_uri=file_uri,
+                                    mime_type="application/octet-stream",
+                                )
+                            )
                 
                 # Add prompt
                 parts.append(types.Part(text=prompt))
                 
+                # Remove 'models/' prefix if present
+                model_id = model
+                if model_id.startswith("models/"):
+                    model_id = model_id[7:]
+                
                 # Generate
-                response = client.models.generate_content(
-                    model=model,
-                    contents=[
-                        types.Content(role="user", parts=parts)
-                    ],
-                )
+                def _call(m: str):
+                    return client.models.generate_content(
+                        model=m,
+                        contents=[types.Content(role="user", parts=parts)],
+                    )
+
+                response = _call(model_id)
                 
                 return response.text
                 

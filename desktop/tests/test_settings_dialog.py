@@ -36,9 +36,9 @@ class TestSettingsDialog:
         assert settings_dialog.client_id_edit is not None
         assert settings_dialog.supabase_url_edit is not None
     
-    def test_default_model(self, settings_dialog):
-        """Test default model value"""
-        assert "gemini" in settings_dialog.model_edit.text().lower()
+    def test_cache_dir_default(self, settings_dialog):
+        """Test cache dir default value"""
+        assert "./cache" in settings_dialog.cache_dir_edit.placeholderText()
     
     def test_save_settings(self, settings_dialog):
         """Test saving settings"""
@@ -82,9 +82,8 @@ class TestSettingsDialog:
         
         config = SettingsDialog.get_settings()
         
-        assert config["client_id"] == ""
-        assert config["model_default"] == "gemini-3-flash-preview"
         assert config["cache_size_mb"] == 500
+        assert config["cache_dir"] == "./cache"
     
     def test_is_configured_false(self):
         """Test is_configured returns False when not configured"""

@@ -1,4 +1,5 @@
 """Agent logic - orchestrates Gemini interactions"""
+import logging
 from typing import Optional
 from uuid import UUID
 import time
@@ -6,6 +7,8 @@ from app.services.gemini_client import GeminiClient
 from app.services.supabase_repo import SupabaseRepo
 from app.services.trace import TraceStore, ModelTrace
 from app.models.schemas import ModelReply, ModelAction
+
+logger = logging.getLogger(__name__)
 
 
 # JSON Schema for ModelReply
@@ -27,7 +30,15 @@ MODEL_REPLY_SCHEMA = {
                     },
                     "payload": {
                         "type": "object",
-                        "description": "Данные действия (context_item_id, r2_key, image_ref, hint_text и т.д.)"
+                        "description": "Данные действия (context_item_id, r2_key, image_ref, hint_text и т.д.)",
+                        "properties": {
+                            "context_item_id": {"type": "string"},
+                            "r2_key": {"type": "string"},
+                            "image_ref": {"type": "string"},
+                            "hint_text": {"type": "string"},
+                            "page": {"type": "integer"},
+                            "text": {"type": "string"}
+                        }
                     },
                     "note": {
                         "type": "string",
@@ -35,27 +46,29 @@ MODEL_REPLY_SCHEMA = {
                     }
                 },
                 "required": ["type", "payload"]
-            },
-            "default": []
+            }
         },
         "is_final": {
             "type": "boolean",
-            "description": "Является ли ответ финальным",
-            "default": False
+            "description": "Является ли ответ финальным"
         }
     },
     "required": ["assistant_text"]
 }
 
 
-SYSTEM_PROMPT = """Ты — помощник для работы с PDF-документами через Gemini API.
+SYSTEM_PROMPT = """Ты — помощник для анализа PDF-документов.
+
+КРИТИЧЕСКИ ВАЖНО: Отвечай СТРОГО на основе прикреплённых файлов в контексте. Используй ТОЛЬКО информацию из загруженных документов. Если файлы отсутствуют или не содержат ответа — сообщи об этом. ЗАПРЕЩЕНО использовать внешние знания или выдумывать информацию.
 
 Правила:
 - Отвечай кратко и по делу на русском языке.
-- Используй прикреплённые файлы для ответа.
+- ОБЯЗАТЕЛЬНО цитируй конкретные места из документов для подтверждения ответа.
+- Если нет прикреплённых файлов — верни: "Документы не загружены в контекст. Загрузите файлы в Gemini Files."
+- Если информации недостаточно — укажи: "В загруженных документах нет информации по этому вопросу."
 - Если нужно показать изображение — верни action "open_image" с context_item_id или r2_key.
-- Если нужен ROI (region of interest) — верни action "request_roi" с описанием области.
-- Когда закончишь — установи is_final=true или добавь action "final".
+- Если нужен ROI — верни action "request_roi" с описанием области.
+- Когда ответ готов — установи is_final=true или добавь action "final".
 
 Формат ответа: JSON с полями assistant_text, actions[], is_final.
 """
@@ -69,19 +82,17 @@ class Agent:
         gemini_client: GeminiClient,
         supabase_repo: SupabaseRepo,
         trace_store: Optional[TraceStore] = None,
-        default_model: str = "gemini-3-flash-preview",
     ):
         self.gemini_client = gemini_client
         self.supabase_repo = supabase_repo
         self.trace_store = trace_store
-        self.default_model = default_model
     
     async def ask(
         self,
         conversation_id: UUID,
         user_text: str,
-        file_uris: list[str],
-        model: Optional[str] = None,
+        file_refs: list[dict],
+        model: str,
         thinking_level: str = "low",
     ) -> ModelReply:
         """
@@ -90,14 +101,18 @@ class Agent:
         Args:
             conversation_id: Conversation UUID
             user_text: User question
-            file_uris: List of Gemini file URIs to include
-            model: Model name (defaults to self.default_model)
+            file_refs: List of dicts with 'uri' and 'mime_type' keys
+            model: Model name (required)
             thinking_level: "low" or "high"
         
         Returns:
             ModelReply with assistant text and actions
         """
-        model = model or self.default_model
+        logger.info(f"=== Agent.ask ===")
+        logger.info(f"  model: {model}")
+        logger.info(f"  file_refs count: {len(file_refs)}")
+        for i, fr in enumerate(file_refs[:3]):
+            logger.info(f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}")
         
         # Create trace
         trace = ModelTrace(
@@ -106,7 +121,7 @@ class Agent:
             thinking_level=thinking_level,
             system_prompt=SYSTEM_PROMPT,
             user_text=user_text,
-            input_files=[{"uri": uri} for uri in file_uris],
+            input_files=file_refs,
         )
         
         start_time = time.perf_counter()
@@ -118,17 +133,17 @@ class Agent:
                 role="user",
                 content=user_text,
                 meta={
-                    "file_uris": file_uris,
+                    "file_refs": file_refs,
                     "model": model,
                 }
             )
             
-            # Generate structured response
+            # Generate structured response with files
             result_dict = await self.gemini_client.generate_structured(
                 model=model,
                 system_prompt=SYSTEM_PROMPT,
                 user_text=user_text,
-                file_uris=file_uris,
+                file_refs=file_refs,
                 schema=MODEL_REPLY_SCHEMA,
                 thinking_level=thinking_level,
             )
@@ -156,7 +171,7 @@ class Agent:
                 meta={
                     "model": model,
                     "thinking_level": thinking_level,
-                    "file_uris": file_uris,
+                    "file_refs": file_refs,
                     "actions": trace.parsed_actions,
                     "is_final": reply.is_final,
                     "trace_id": trace.id,

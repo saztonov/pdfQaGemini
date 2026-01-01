@@ -143,7 +143,6 @@ class SupabaseRepo:
     async def qa_create_conversation(
         self,
         title: str = "",
-        model_default: str = "gemini-3-flash-preview"
     ) -> Conversation:
         """Create new conversation"""
         def _sync_create():
@@ -153,7 +152,6 @@ class SupabaseRepo:
                 "id": str(uuid4()),
                 "client_id": "default",
                 "title": title,
-                "model_default": model_default,
                 "created_at": now,
                 "updated_at": now,
             }

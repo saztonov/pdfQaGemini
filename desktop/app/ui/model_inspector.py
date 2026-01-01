@@ -4,10 +4,10 @@ import json
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QListWidget, QListWidgetItem, QPushButton,
-    QTextEdit, QLabel, QGroupBox, QScrollArea
+    QPlainTextEdit, QLabel, QTabWidget, QFrame
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
 from app.services.trace import TraceStore, ModelTrace
 
 
@@ -20,7 +20,7 @@ class ModelInspectorWindow(QMainWindow):
         self.current_trace: Optional[ModelTrace] = None
         
         self.setWindowTitle("Инспектор модели")
-        self.resize(1400, 900)
+        self.resize(1200, 800)
         
         self._setup_ui()
         self._setup_refresh_timer()
@@ -31,112 +31,159 @@ class ModelInspectorWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         
-        layout = QVBoxLayout(central)
+        layout = QHBoxLayout(central)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        
+        # Left panel: Trace list
+        left_panel = self._create_left_panel()
+        layout.addWidget(left_panel, 1)
+        
+        # Right panel: Tabs with details
+        right_panel = self._create_right_panel()
+        layout.addWidget(right_panel, 3)
+    
+    def _create_left_panel(self) -> QWidget:
+        """Create left panel with trace list"""
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(5)
+        
+        # Header
+        header = QHBoxLayout()
+        self.trace_count_label = QLabel("Запросов: 0")
+        self.trace_count_label.setStyleSheet("font-weight: bold;")
+        header.addWidget(self.trace_count_label)
+        header.addStretch()
+        layout.addLayout(header)
+        
+        # Trace list
+        self.trace_list = QListWidget()
+        self.trace_list.setStyleSheet("""
+            QListWidget {
+                background-color: #1E1E1E;
+                color: #D4D4D4;
+                border: 1px solid #3C3C3C;
+                font-family: Consolas, monospace;
+                font-size: 11px;
+            }
+            QListWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #2D2D2D;
+            }
+            QListWidget::item:selected {
+                background-color: #094771;
+            }
+            QListWidget::item:hover {
+                background-color: #2A2D2E;
+            }
+        """)
+        self.trace_list.itemClicked.connect(self._on_trace_selected)
+        layout.addWidget(self.trace_list)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("⟳ Обновить")
+        self.btn_refresh.clicked.connect(self._refresh_list)
+        self.btn_clear = QPushButton("🗑 Очистить")
+        self.btn_clear.clicked.connect(self._clear_traces)
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addWidget(self.btn_clear)
+        layout.addLayout(btn_layout)
+        
+        return panel
+    
+    def _create_right_panel(self) -> QWidget:
+        """Create right panel with tabs"""
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
         
-        # Toolbar
-        toolbar = self._create_toolbar()
-        layout.addLayout(toolbar)
+        # Tab widget
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #3C3C3C;
+                background-color: #1E1E1E;
+            }
+            QTabBar::tab {
+                background-color: #2D2D2D;
+                color: #D4D4D4;
+                padding: 8px 16px;
+                border: 1px solid #3C3C3C;
+                border-bottom: none;
+            }
+            QTabBar::tab:selected {
+                background-color: #1E1E1E;
+                border-bottom: 2px solid #007ACC;
+            }
+        """)
         
-        # Splitter: List | Details
-        splitter = QSplitter(Qt.Horizontal)
+        # Overview tab
+        self.overview_text = self._create_text_area()
+        self.tabs.addTab(self.overview_text, "📊 Обзор")
         
-        # Left: Trace list
-        self.trace_list = QListWidget()
-        self.trace_list.itemClicked.connect(self._on_trace_selected)
-        splitter.addWidget(self.trace_list)
+        # Request tab
+        self.request_text = self._create_text_area()
+        self.tabs.addTab(self.request_text, "📤 Запрос")
         
-        # Right: Trace details
-        details_widget = self._create_details_panel()
-        splitter.addWidget(details_widget)
+        # Response tab
+        self.response_text = self._create_text_area()
+        self.tabs.addTab(self.response_text, "📥 Ответ")
         
-        splitter.setSizes([400, 1000])
-        layout.addWidget(splitter)
-    
-    def _create_toolbar(self) -> QHBoxLayout:
-        """Create toolbar with buttons"""
-        toolbar = QHBoxLayout()
+        # Errors tab
+        self.errors_text = self._create_text_area(error=True)
+        self.tabs.addTab(self.errors_text, "⚠️ Ошибки")
         
-        self.btn_refresh = QPushButton("Обновить")
-        self.btn_refresh.clicked.connect(self._refresh_list)
-        
-        self.btn_clear = QPushButton("Очистить всё")
-        self.btn_clear.clicked.connect(self._clear_traces)
-        
-        self.trace_count_label = QLabel("Трассировок: 0")
-        
-        toolbar.addWidget(self.btn_refresh)
-        toolbar.addWidget(self.btn_clear)
-        toolbar.addWidget(self.trace_count_label)
-        toolbar.addStretch()
-        
-        return toolbar
-    
-    def _create_details_panel(self) -> QWidget:
-        """Create details panel with collapsible sections"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        # Scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setAlignment(Qt.AlignTop)
-        
-        # Sections
-        self.overview_text = self._create_section("Обзор", scroll_layout)
-        self.prompt_text = self._create_section("Системный промпт", scroll_layout)
-        self.input_text = self._create_section("Ввод пользователя", scroll_layout)
-        self.files_text = self._create_section("Входные файлы", scroll_layout)
-        self.response_text = self._create_section("Ответ JSON", scroll_layout)
-        self.actions_text = self._create_section("Разобранные действия", scroll_layout)
-        self.errors_text = self._create_section("Ошибки", scroll_layout, error=True)
-        
-        scroll.setWidget(scroll_content)
-        layout.addWidget(scroll)
+        layout.addWidget(self.tabs)
         
         # Copy buttons
-        button_layout = QHBoxLayout()
-        
-        self.btn_copy_request = QPushButton("Копировать запрос JSON")
+        btn_layout = QHBoxLayout()
+        self.btn_copy_request = QPushButton("📋 Копировать запрос")
         self.btn_copy_request.clicked.connect(self._copy_request_json)
         self.btn_copy_request.setEnabled(False)
         
-        self.btn_copy_response = QPushButton("Копировать ответ JSON")
+        self.btn_copy_response = QPushButton("📋 Копировать ответ")
         self.btn_copy_response.clicked.connect(self._copy_response_json)
         self.btn_copy_response.setEnabled(False)
         
-        button_layout.addWidget(self.btn_copy_request)
-        button_layout.addWidget(self.btn_copy_response)
-        button_layout.addStretch()
+        btn_layout.addWidget(self.btn_copy_request)
+        btn_layout.addWidget(self.btn_copy_response)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
         
-        layout.addLayout(button_layout)
-        
-        return widget
+        return panel
     
-    def _create_section(self, title: str, parent_layout: QVBoxLayout, error: bool = False) -> QTextEdit:
-        """Create collapsible section"""
-        group = QGroupBox(title)
-        group_layout = QVBoxLayout(group)
-        
-        text_edit = QTextEdit()
+    def _create_text_area(self, error: bool = False) -> QPlainTextEdit:
+        """Create styled text area"""
+        text_edit = QPlainTextEdit()
         text_edit.setReadOnly(True)
-        text_edit.setMaximumHeight(150)
         
-        # Monospace font
-        font = QFont("Courier New", 9)
+        font = QFont("Consolas", 11)
+        font.setStyleHint(QFont.Monospace)
         text_edit.setFont(font)
         
         if error:
-            text_edit.setStyleSheet("QTextEdit { background-color: #FFEBEE; }")
+            text_edit.setStyleSheet("""
+                QPlainTextEdit {
+                    background-color: #2D1B1B;
+                    color: #F48771;
+                    border: none;
+                    padding: 10px;
+                }
+            """)
         else:
-            text_edit.setStyleSheet("QTextEdit { background-color: #F5F5F5; }")
-        
-        group_layout.addWidget(text_edit)
-        parent_layout.addWidget(group)
+            text_edit.setStyleSheet("""
+                QPlainTextEdit {
+                    background-color: #1E1E1E;
+                    color: #D4D4D4;
+                    border: none;
+                    padding: 10px;
+                }
+            """)
         
         return text_edit
     
@@ -144,7 +191,7 @@ class ModelInspectorWindow(QMainWindow):
         """Setup auto-refresh timer"""
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self._refresh_list)
-        self.refresh_timer.start(2000)  # Refresh every 2 seconds
+        self.refresh_timer.start(3000)
     
     def _refresh_list(self):
         """Refresh trace list"""
@@ -156,24 +203,27 @@ class ModelInspectorWindow(QMainWindow):
         traces = self.trace_store.list()
         
         for trace in traces:
-            # Format: [12:34:56] model | 1234ms | final ✓
             time_str = trace.ts.strftime("%H:%M:%S")
-            latency_str = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "?"
-            final_str = "✓" if trace.is_final else ""
-            error_str = "❌" if trace.errors else ""
+            latency_str = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "—"
+            files_count = len(trace.input_files)
             
-            item_text = f"[{time_str}] {trace.model} | {latency_str} {final_str} {error_str}"
+            status = "✓" if trace.is_final else "○"
+            if trace.errors:
+                status = "✗"
+            
+            item_text = f"[{time_str}] {status} {latency_str} | {files_count} файл(ов)"
             
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, trace.id)
             
             if trace.errors:
-                item.setForeground(Qt.red)
+                item.setForeground(QColor("#F48771"))
+            elif trace.is_final:
+                item.setForeground(QColor("#89D185"))
             
             self.trace_list.addItem(item)
         
-        # Update count
-        self.trace_count_label.setText(f"Трассировок: {len(traces)}")
+        self.trace_count_label.setText(f"Запросов: {len(traces)}")
         
         # Restore selection
         if current_id:
@@ -194,56 +244,72 @@ class ModelInspectorWindow(QMainWindow):
         self.current_trace = trace
         self._display_trace(trace)
         
-        # Enable copy buttons
         self.btn_copy_request.setEnabled(True)
         self.btn_copy_response.setEnabled(bool(trace.response_json))
+        
+        # Switch to errors tab if there are errors
+        if trace.errors:
+            self.tabs.setCurrentIndex(3)
     
     def _display_trace(self, trace: ModelTrace):
         """Display trace details"""
         # Overview
-        overview = f"""Модель: {trace.model}
-Уровень мышления: {trace.thinking_level}
-ID диалога: {trace.conversation_id}
-ID трассировки: {trace.id}
-Время: {trace.ts.isoformat()}
-Задержка: {trace.latency_ms:.2f}мс
-Финальный: {trace.is_final}
-Количество входных файлов: {len(trace.input_files)}
+        overview = f"""═══════════════════════════════════════════════════════════
+                      ОБЗОР ЗАПРОСА
+═══════════════════════════════════════════════════════════
+
+📌 Модель:           {trace.model}
+🧠 Уровень мышления: {trace.thinking_level}
+⏱️ Задержка:         {trace.latency_ms:.2f} мс
+✅ Финальный:        {"Да" if trace.is_final else "Нет"}
+📁 Входных файлов:   {len(trace.input_files)}
+
+═══════════════════════════════════════════════════════════
+                    ИДЕНТИФИКАТОРЫ
+═══════════════════════════════════════════════════════════
+
+🆔 ID диалога:     {trace.conversation_id}
+🔖 ID трассировки: {trace.id}
+🕐 Время:          {trace.ts.isoformat()}
+
+═══════════════════════════════════════════════════════════
+                    ВХОДНЫЕ ФАЙЛЫ
+═══════════════════════════════════════════════════════════
+
 """
+        if trace.input_files:
+            for i, f in enumerate(trace.input_files, 1):
+                uri = f.get("uri", "—")
+                mime = f.get("mime_type", "—")
+                overview += f"  {i}. {mime}\n     {uri}\n\n"
+        else:
+            overview += "  (нет файлов)\n"
+        
         self.overview_text.setPlainText(overview)
         
-        # System Prompt
-        self.prompt_text.setPlainText(trace.system_prompt)
+        # Request
+        request_data = {
+            "model": trace.model,
+            "system_prompt": trace.system_prompt,
+            "user_text": trace.user_text,
+            "file_refs": trace.input_files,
+            "thinking_level": trace.thinking_level,
+        }
+        request_text = json.dumps(request_data, indent=2, ensure_ascii=False)
+        self.request_text.setPlainText(request_text)
         
-        # User Input
-        self.input_text.setPlainText(trace.user_text)
-        
-        # Input Files
-        if trace.input_files:
-            files_text = json.dumps(trace.input_files, indent=2)
-        else:
-            files_text = "Нет файлов"
-        self.files_text.setPlainText(files_text)
-        
-        # Response JSON
+        # Response
         if trace.response_json:
             response_text = json.dumps(trace.response_json, indent=2, ensure_ascii=False)
         else:
-            response_text = "Нет ответа"
+            response_text = "(нет ответа)"
         self.response_text.setPlainText(response_text)
-        
-        # Parsed Actions
-        if trace.parsed_actions:
-            actions_text = json.dumps(trace.parsed_actions, indent=2, ensure_ascii=False)
-        else:
-            actions_text = "Нет действий"
-        self.actions_text.setPlainText(actions_text)
         
         # Errors
         if trace.errors:
-            errors_text = "\n".join(trace.errors)
+            errors_text = "\n\n".join(trace.errors)
         else:
-            errors_text = "Нет ошибок"
+            errors_text = "✓ Ошибок нет"
         self.errors_text.setPlainText(errors_text)
     
     def _copy_request_json(self):
@@ -255,7 +321,7 @@ ID трассировки: {trace.id}
             "model": self.current_trace.model,
             "system_prompt": self.current_trace.system_prompt,
             "user_text": self.current_trace.user_text,
-            "file_uris": [f["uri"] for f in self.current_trace.input_files],
+            "file_refs": self.current_trace.input_files,
             "thinking_level": self.current_trace.thinking_level,
         }
         
@@ -282,13 +348,10 @@ ID трассировки: {trace.id}
         self.current_trace = None
         self._refresh_list()
         
-        # Clear details
-        for text_edit in [
-            self.overview_text, self.prompt_text, self.input_text,
-            self.files_text, self.response_text, self.actions_text,
-            self.errors_text
-        ]:
-            text_edit.clear()
+        self.overview_text.clear()
+        self.request_text.clear()
+        self.response_text.clear()
+        self.errors_text.clear()
         
         self.btn_copy_request.setEnabled(False)
         self.btn_copy_response.setEnabled(False)

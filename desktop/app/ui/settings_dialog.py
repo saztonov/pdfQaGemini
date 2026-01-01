@@ -58,10 +58,6 @@ class SettingsDialog(QDialog):
         group = QGroupBox("Общие настройки")
         form = QFormLayout(group)
         
-        self.model_edit = QLineEdit()
-        self.model_edit.setPlaceholderText("gemini-3-flash-preview")
-        form.addRow("Модель по умолчанию:", self.model_edit)
-        
         self.cache_dir_edit = QLineEdit()
         self.cache_dir_edit.setPlaceholderText("./cache")
         form.addRow("Папка кэша:", self.cache_dir_edit)
@@ -169,9 +165,6 @@ class SettingsDialog(QDialog):
     def _load_settings(self):
         """Load settings from QSettings"""
         # General
-        self.model_edit.setText(
-            self.settings.value("general/model_default", "gemini-3-flash-preview")
-        )
         self.cache_dir_edit.setText(self.settings.value("general/cache_dir", "./cache"))
         self.cache_size_edit.setText(self.settings.value("general/cache_size_mb", "500"))
         
@@ -192,7 +185,6 @@ class SettingsDialog(QDialog):
     def _save_settings(self):
         """Save settings to QSettings"""
         # General
-        self.settings.setValue("general/model_default", self.model_edit.text().strip())
         self.settings.setValue("general/cache_dir", self.cache_dir_edit.text().strip())
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
         
@@ -222,7 +214,6 @@ class SettingsDialog(QDialog):
         r2_endpoint = f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
         
         return {
-            "model_default": settings.value("general/model_default", "gemini-3-flash-preview"),
             "cache_dir": settings.value("general/cache_dir", "./cache"),
             "cache_size_mb": int(settings.value("general/cache_size_mb", "500")),
             "supabase_url": settings.value("supabase/url", ""),

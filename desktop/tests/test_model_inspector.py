@@ -24,7 +24,7 @@ def trace_store():
     for i in range(3):
         trace = ModelTrace(
             conversation_id=uuid4(),
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash",
             thinking_level="low",
             system_prompt="You are a helpful assistant",
             user_text=f"Question {i}",

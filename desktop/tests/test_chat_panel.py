@@ -53,7 +53,7 @@ class TestChatPanel:
     def test_add_assistant_message_with_meta(self, panel):
         """Test adding assistant message with metadata"""
         meta = {
-            "model": "gemini-3-flash-preview",
+            "model": "gemini-3-flash",
             "thinking_level": "low",
             "is_final": True,
             "actions": [{"type": "answer"}]
@@ -62,7 +62,7 @@ class TestChatPanel:
         
         html = panel.chat_history.toHtml()
         assert "Answer" in html
-        assert "gemini-3-flash-preview" in html
+        assert "gemini-3-flash" in html
         assert "Финальный" in html
     
     def test_add_system_message(self, panel):

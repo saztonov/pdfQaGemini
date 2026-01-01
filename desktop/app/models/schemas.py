@@ -70,7 +70,7 @@ class Conversation(BaseModel):
     id: UUID
     client_id: str
     title: str = ""
-    model_default: str = "gemini-3-flash-preview"
+    model_default: Optional[str] = None  # deprecated, loaded from API
     created_at: datetime
     updated_at: datetime
     

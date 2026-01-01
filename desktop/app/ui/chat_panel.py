@@ -1,18 +1,21 @@
 """Center panel - Chat"""
+import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel
+    QLineEdit, QPushButton, QLabel, QComboBox
 )
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QTextCursor, QColor
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class ChatPanel(QWidget):
     """Chat panel with message history and input"""
     
     # Signals
-    askModelRequested = Signal(str)  # user_text
+    askModelRequested = Signal(str, str)  # user_text, model_name
     
     def __init__(self):
         super().__init__()
@@ -43,6 +46,45 @@ class ChatPanel(QWidget):
             }
         """)
         layout.addWidget(self.chat_history, 1)
+        
+        # Model selector
+        model_layout = QHBoxLayout()
+        model_layout.setSpacing(5)
+        
+        model_label = QLabel("Модель:")
+        model_label.setFixedWidth(60)
+        
+        self.model_combo = QComboBox()
+        self.model_combo.setPlaceholderText("Загрузка моделей...")
+        self.model_combo.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+        """)
+        
+        self.btn_refresh_models = QPushButton("↻")
+        self.btn_refresh_models.setToolTip("Обновить список моделей")
+        self.btn_refresh_models.setFixedWidth(30)
+        self.btn_refresh_models.setStyleSheet("""
+            QPushButton {
+                padding: 5px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #f0f0f0;
+            }
+        """)
+        
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.model_combo, 1)
+        model_layout.addWidget(self.btn_refresh_models)
+        
+        layout.addLayout(model_layout)
         
         # Input area
         input_layout = QHBoxLayout()
@@ -107,11 +149,42 @@ class ChatPanel(QWidget):
         if not text:
             return
         
-        # Emit signal
-        self.askModelRequested.emit(text)
+        # Get selected model
+        model_name = self.model_combo.currentData()
+        logger.info(f"_on_send: model_name from combo = {model_name}")
+        logger.info(f"_on_send: currentIndex = {self.model_combo.currentIndex()}, currentText = {self.model_combo.currentText()}")
+        if not model_name:
+            logger.warning("No model selected!")
+            return  # No model selected
+        
+        # Emit signal with model
+        self.askModelRequested.emit(text, model_name)
         
         # Clear input
         self.input_field.clear()
+    
+    def set_models(self, models: list[dict]):
+        """Set available models list"""
+        logger.info(f"set_models вызван с {len(models)} моделями")
+        current = self.model_combo.currentData()
+        self.model_combo.clear()
+        
+        added = 0
+        for model in models:
+            name = model.get("name", "")
+            display = model.get("display_name", name)
+            if name:
+                self.model_combo.addItem(display, name)
+                added += 1
+        
+        logger.info(f"Добавлено {added} моделей в комбобокс, всего items: {self.model_combo.count()}")
+        
+        # Restore selection
+        if current:
+            idx = self.model_combo.findData(current)
+            if idx >= 0:
+                self.model_combo.setCurrentIndex(idx)
+                logger.info(f"Восстановлен выбор: {current}")
     
     def add_user_message(self, text: str):
         """Add user message to chat"""

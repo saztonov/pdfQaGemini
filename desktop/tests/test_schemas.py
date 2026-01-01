@@ -65,12 +65,11 @@ class TestConversation:
             id=uuid4(),
             client_id="client1",
             title="Test Chat",
-            model_default="gemini-3-flash-preview",
             created_at=now,
             updated_at=now
         )
         assert conv.title == "Test Chat"
-        assert conv.model_default == "gemini-3-flash-preview"
+        assert conv.model_default is None  # deprecated field
     
     def test_default_title(self):
         now = datetime.now(timezone.utc)
