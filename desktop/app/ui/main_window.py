@@ -40,7 +40,6 @@ class MainWindow(QMainWindow):
         self.toast_manager = ToastManager(self)
         
         # Application state
-        self.current_client_id: Optional[str] = None
         self.current_conversation_id: Optional[UUID] = None
         self.context_node_ids: list[str] = []
         self.context_items: list[ContextItem] = []
@@ -65,8 +64,8 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._connect_signals()
         
-        # Check configuration after event loop starts (delay)
-        QTimer.singleShot(500, lambda: asyncio.create_task(self._check_configuration()))
+        # Auto-connect after event loop starts
+        QTimer.singleShot(500, lambda: asyncio.create_task(self._auto_connect()))
     
     def _setup_ui(self):
         """Initialize UI components"""
@@ -171,15 +170,14 @@ class MainWindow(QMainWindow):
     
     # Toolbar handlers
     
-    async def _check_configuration(self):
-        """Check if application is configured on startup"""
-        # Small delay to let UI initialize
+    async def _auto_connect(self):
+        """Auto-connect on startup"""
         await asyncio.sleep(0.5)
         
         if not SettingsDialog.is_configured():
             self.toast_manager.warning("⚙️ Приложение не настроено. Откройте 'Настройки'.")
-            # Optionally auto-open settings
-            # self._on_open_settings()
+        else:
+            await self._on_connect()
     
     def _on_open_settings(self):
         """Open settings dialog"""
@@ -204,9 +202,8 @@ class MainWindow(QMainWindow):
         try:
             # Get config from QSettings
             config = SettingsDialog.get_settings()
-            logger.info(f"Конфигурация загружена: client_id={config['client_id']}, supabase_url={config['supabase_url'][:30]}...")
+            logger.info(f"Конфигурация загружена: supabase_url={config['supabase_url'][:30]}...")
             
-            client_id = config["client_id"]
             supabase_url = config["supabase_url"]
             supabase_key = config["supabase_key"]
             gemini_api_key = config["gemini_api_key"]
@@ -259,16 +256,11 @@ class MainWindow(QMainWindow):
             )
             logger.info("Agent создан успешно")
             
-            # Set client ID
-            self.current_client_id = client_id
-            logger.info(f"client_id установлен: {client_id}")
-            
             # Update panels with services
             logger.info("Обновление панелей с сервисами...")
             if self.left_panel:
                 logger.info("Установка сервисов для left_panel...")
-                self.left_panel.set_services(self.supabase_repo, self.toast_manager)
-                self.left_panel.client_input.setText(client_id)
+                self.left_panel.set_services(self.supabase_repo, self.r2_client, self.toast_manager)
                 logger.info(f"left_panel.supabase_repo установлен: {self.left_panel.supabase_repo is not None}")
             
             if self.right_panel:
@@ -283,6 +275,11 @@ class MainWindow(QMainWindow):
             logger.info("Включение действий...")
             self._enable_actions()
             
+            # Auto-load tree
+            logger.info("Автоматическая загрузка дерева...")
+            if self.left_panel:
+                await self.left_panel.load_roots()
+            
             logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
             self.toast_manager.success("Подключено успешно")
         
@@ -292,10 +289,9 @@ class MainWindow(QMainWindow):
     
     async def _ensure_conversation(self):
         """Ensure conversation exists"""
-        if not self.current_conversation_id and self.supabase_repo and self.current_client_id:
+        if not self.current_conversation_id and self.supabase_repo:
             try:
                 conv = await self.supabase_repo.qa_create_conversation(
-                    client_id=self.current_client_id,
                     title="Новый чат",
                 )
                 self.current_conversation_id = conv.id
@@ -315,19 +311,13 @@ class MainWindow(QMainWindow):
         logger.info("=== ОБНОВЛЕНИЕ ДЕРЕВА ===")
         self.toast_manager.info("Обновление дерева...")
         
-        if not self.current_client_id:
-            logger.warning("current_client_id не установлен")
-            self.toast_manager.error("Client ID не установлен. Нажмите 'Подключиться'")
-            return
-        
         if not self.left_panel:
             logger.error("left_panel не существует")
             return
         
-        logger.info(f"Загрузка корневых узлов для client_id={self.current_client_id}")
         logger.info(f"left_panel.supabase_repo установлен: {self.left_panel.supabase_repo is not None}")
         
-        await self.left_panel.load_roots(self.current_client_id)
+        await self.left_panel.load_roots()
         self.toast_manager.success("Дерево обновлено")
     
     def _on_add_to_context(self):

@@ -29,9 +29,9 @@ class SupabaseRepo:
     
     # Tree operations
     
-    async def fetch_roots(self, client_id: str) -> list[TreeNode]:
+    async def fetch_roots(self) -> list[TreeNode]:
         """Fetch root tree nodes"""
-        logger.info(f"fetch_roots вызван для client_id={client_id}")
+        logger.info(f"fetch_roots вызван")
         
         def _sync_fetch():
             logger.info("_sync_fetch: получение клиента...")
@@ -40,7 +40,6 @@ class SupabaseRepo:
             response = (
                 client.table("tree_nodes")
                 .select("*")
-                .eq("client_id", client_id)
                 .is_("parent_id", "null")
                 .order("sort_order")
                 .order("name")
@@ -60,7 +59,6 @@ class SupabaseRepo:
             response = (
                 client.table("tree_nodes")
                 .select("*")
-                .eq("client_id", client_id)
                 .eq("parent_id", parent_id)
                 .order("sort_order")
                 .order("name")
@@ -80,7 +78,6 @@ class SupabaseRepo:
         def _sync_fetch():
             client = self._get_client()
             params = {
-                "p_client_id": client_id,
                 "p_root_ids": root_ids,
             }
             if node_types:
@@ -119,11 +116,25 @@ class SupabaseRepo:
             all_files.extend(result)
         return all_files
     
+    async def fetch_node_files_single(self, node_id: str) -> list[NodeFile]:
+        """Fetch files for single node"""
+        def _sync_fetch():
+            client = self._get_client()
+            response = (
+                client.table("node_files")
+                .select("*")
+                .eq("node_id", node_id)
+                .order("file_type")
+                .execute()
+            )
+            return [NodeFile(**row) for row in response.data]
+        
+        return await asyncio.to_thread(_sync_fetch)
+    
     # QA Conversations
     
     async def qa_create_conversation(
         self,
-        client_id: str,
         title: str = "",
         model_default: str = "gemini-3-flash-preview"
     ) -> Conversation:
@@ -133,7 +144,7 @@ class SupabaseRepo:
             now = datetime.utcnow().isoformat()
             data = {
                 "id": str(uuid4()),
-                "client_id": client_id,
+                "client_id": "default",
                 "title": title,
                 "model_default": model_default,
                 "created_at": now,
@@ -218,7 +229,6 @@ class SupabaseRepo:
     
     async def qa_upsert_gemini_file(
         self,
-        client_id: str,
         gemini_name: str,
         gemini_uri: str,
         display_name: str,
@@ -234,7 +244,7 @@ class SupabaseRepo:
             client = self._get_client()
             now = datetime.utcnow().isoformat()
             data = {
-                "client_id": client_id,
+                "client_id": "default",
                 "gemini_name": gemini_name,
                 "gemini_uri": gemini_uri,
                 "display_name": display_name,

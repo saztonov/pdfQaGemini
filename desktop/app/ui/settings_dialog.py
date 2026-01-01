@@ -58,19 +58,6 @@ class SettingsDialog(QDialog):
         group = QGroupBox("Общие настройки")
         form = QFormLayout(group)
         
-        self.client_id_edit = QLineEdit()
-        self.client_id_edit.setPlaceholderText("например: user@example.com или company_name")
-        form.addRow("Client ID:", self.client_id_edit)
-        
-        # Info label
-        info = QLabel(
-            "ℹ️ Уникальный идентификатор для разделения данных. "
-            "Используйте email, имя компании или любой уникальный ID."
-        )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        form.addRow(info)
-        
         self.model_edit = QLineEdit()
         self.model_edit.setPlaceholderText("gemini-3-flash-preview")
         form.addRow("Модель по умолчанию:", self.model_edit)
@@ -182,7 +169,6 @@ class SettingsDialog(QDialog):
     def _load_settings(self):
         """Load settings from QSettings"""
         # General
-        self.client_id_edit.setText(self.settings.value("general/client_id", ""))
         self.model_edit.setText(
             self.settings.value("general/model_default", "gemini-3-flash-preview")
         )
@@ -206,7 +192,6 @@ class SettingsDialog(QDialog):
     def _save_settings(self):
         """Save settings to QSettings"""
         # General
-        self.settings.setValue("general/client_id", self.client_id_edit.text().strip())
         self.settings.setValue("general/model_default", self.model_edit.text().strip())
         self.settings.setValue("general/cache_dir", self.cache_dir_edit.text().strip())
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
@@ -237,7 +222,6 @@ class SettingsDialog(QDialog):
         r2_endpoint = f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
         
         return {
-            "client_id": settings.value("general/client_id", ""),
             "model_default": settings.value("general/model_default", "gemini-3-flash-preview"),
             "cache_dir": settings.value("general/cache_dir", "./cache"),
             "cache_size_mb": int(settings.value("general/cache_size_mb", "500")),
@@ -260,7 +244,6 @@ class SettingsDialog(QDialog):
             settings["supabase_url"],
             settings["supabase_key"],
             settings["gemini_api_key"],
-            settings["client_id"],
         ]
         
         return all(required)

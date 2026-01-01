@@ -153,6 +153,33 @@ class R2AsyncClient:
             response.raise_for_status()
             return response.content
     
+    async def list_objects(self, prefix: str) -> list[dict]:
+        """
+        List objects in R2 by prefix.
+        Returns list of dicts with 'Key', 'Size', 'LastModified'
+        """
+        def _sync_list():
+            s3 = self._get_s3_client()
+            response = s3.list_objects_v2(
+                Bucket=self.bucket,
+                Prefix=prefix,
+            )
+            return response.get("Contents", [])
+        
+        return await asyncio.to_thread(_sync_list)
+    
+    async def object_exists(self, r2_key: str) -> bool:
+        """Check if object exists in R2"""
+        def _sync_check():
+            s3 = self._get_s3_client()
+            try:
+                s3.head_object(Bucket=self.bucket, Key=r2_key)
+                return True
+            except:
+                return False
+        
+        return await asyncio.to_thread(_sync_check)
+    
     async def close(self):
         """Cleanup resources"""
         if self._http_client:

@@ -12,7 +12,7 @@ class TreeNode(BaseModel):
     client_id: str
     node_type: str
     name: str
-    code: str
+    code: Optional[str] = None
     version: int
     status: str
     attributes: dict[str, Any] = Field(default_factory=dict)
