@@ -1,6 +1,5 @@
 """Center panel - Chat"""
 import logging
-import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QPushButton, QComboBox, QFrame, QTextBrowser
@@ -9,6 +8,7 @@ from PySide6.QtCore import Signal, Qt, Slot, QUrl
 from PySide6.QtGui import QTextCursor, QKeyEvent
 from datetime import datetime
 from app.models.schemas import MODEL_THINKING_LEVELS, MODEL_DEFAULT_THINKING, DEFAULT_MODEL
+from app.ui.message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,6 @@ class PromptInput(QTextEdit):
         new_height = max(self.MIN_HEIGHT, min(doc_height, self.MAX_HEIGHT))
         self.setFixedHeight(new_height)
         
-        # Show scrollbar only when exceeding max height
         if doc_height > self.MAX_HEIGHT:
             self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         else:
@@ -56,8 +55,8 @@ class ChatPanel(QWidget):
         super().__init__()
         self._current_thought_block_id: str | None = None
         self._current_answer_block_id: str | None = None
-        self._messages: list[dict] = []  # Store messages for re-rendering
-        self._collapsed_thoughts: set[int] = set()  # Track collapsed thought indices
+        self._messages: list[dict] = []
+        self._renderer = MessageRenderer()
         self._setup_ui()
     
     def _setup_ui(self):
@@ -66,7 +65,7 @@ class ChatPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
         
-        # Chat history (read-only browser with link support)
+        # Chat history
         self.chat_history = QTextBrowser()
         self.chat_history.setReadOnly(True)
         self.chat_history.setOpenLinks(False)
@@ -84,7 +83,7 @@ class ChatPanel(QWidget):
         """)
         layout.addWidget(self.chat_history, 1)
         
-        # ========== Gemini-style Input Block ==========
+        # Input Block
         self.input_container = QFrame()
         self.input_container.setStyleSheet("""
             QFrame {
@@ -114,7 +113,7 @@ class ChatPanel(QWidget):
         """)
         input_main_layout.addWidget(self.input_field)
         
-        # Bottom toolbar: [Model v] [Thinking v] [Send]
+        # Bottom toolbar
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(8)
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
@@ -151,16 +150,9 @@ class ChatPanel(QWidget):
                 font-size: 13px;
                 font-weight: 500;
             }
-            QPushButton:hover {
-                background-color: #5a9cf5;
-            }
-            QPushButton:pressed {
-                background-color: #3367d6;
-            }
-            QPushButton:disabled {
-                background-color: #404040;
-                color: #666;
-            }
+            QPushButton:hover { background-color: #5a9cf5; }
+            QPushButton:pressed { background-color: #3367d6; }
+            QPushButton:disabled { background-color: #404040; color: #666; }
         """)
         
         toolbar_layout.addWidget(self.btn_send)
@@ -169,7 +161,6 @@ class ChatPanel(QWidget):
         
         layout.addWidget(self.input_container)
         
-        # Welcome message
         self._show_welcome()
     
     def _combo_style(self) -> str:
@@ -182,13 +173,8 @@ class ChatPanel(QWidget):
                 padding: 4px 8px;
                 font-size: 12px;
             }
-            QComboBox:hover {
-                background-color: #505050;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-            }
+            QComboBox:hover { background-color: #505050; }
+            QComboBox::drop-down { border: none; width: 20px; }
             QComboBox::down-arrow {
                 image: none;
                 border-left: 4px solid transparent;
@@ -221,10 +207,7 @@ class ChatPanel(QWidget):
         if url_str.startswith("toggle_thought:"):
             try:
                 idx = int(url_str.split(":")[1])
-                if idx in self._collapsed_thoughts:
-                    self._collapsed_thoughts.discard(idx)
-                else:
-                    self._collapsed_thoughts.add(idx)
+                self._renderer.toggle_thought(idx)
                 self._rerender_messages()
             except ValueError:
                 pass
@@ -233,109 +216,11 @@ class ChatPanel(QWidget):
         """Re-render all messages"""
         html_parts = []
         for i, msg in enumerate(self._messages):
-            html_parts.append(self._render_message(msg, i))
+            html_parts.append(self._renderer.render_message(msg, i))
         self.chat_history.setHtml("".join(html_parts))
-        # Scroll to bottom
         cursor = self.chat_history.textCursor()
         cursor.movePosition(QTextCursor.End)
         self.chat_history.setTextCursor(cursor)
-    
-    def _render_message(self, msg: dict, index: int) -> str:
-        """Render a single message to HTML"""
-        role = msg.get("role")
-        content = msg.get("content", "")
-        timestamp = msg.get("timestamp", "")
-        meta = msg.get("meta", {})
-        thinking = msg.get("thinking", "")
-        
-        if role == "user":
-            return f"""
-                <div style="margin: 12px 0; padding: 12px 16px; background-color: #2d4a6d; border-radius: 16px;">
-                    <div style="font-weight: bold; color: #7cb3ff; margin-bottom: 6px; font-size: 12px;">
-                        Вы <span style="color: #888; font-weight: normal;">{timestamp}</span>
-                    </div>
-                    <div style="color: #e0e0e0; font-size: 14px; line-height: 1.5;">{self._escape_html(content)}</div>
-                </div>
-            """
-        elif role == "thinking":
-            is_collapsed = index in self._collapsed_thoughts
-            arrow = "▶" if is_collapsed else "▼"
-            content_html = "" if is_collapsed else f"""<div style="color: #aaa; font-style: italic; font-size: 13px; line-height: 1.4; margin-top: 8px;">{self._format_markdown(content)}</div>"""
-            return f"""
-                <div style="margin: 8px 0; padding: 10px 14px; background-color: #3d3d2d; border-radius: 12px; border-left: 3px solid #8bc34a;">
-                    <a href="toggle_thought:{index}" style="text-decoration: none; color: #8bc34a; font-size: 12px; cursor: pointer;">
-                        {arrow} 💭 Размышления
-                    </a>
-                    {content_html}
-                </div>
-            """
-        elif role == "assistant":
-            meta_html = self._render_meta(meta)
-            return f"""
-                <div style="margin: 12px 0; padding: 12px 16px; background-color: #ffffff; border-radius: 16px;">
-                    <div style="font-weight: bold; color: #2e7d32; margin-bottom: 6px; font-size: 12px;">
-                        Gemini <span style="color: #888; font-weight: normal;">{timestamp}</span>
-                    </div>
-                    <div style="color: #1a1a1a; font-size: 14px; line-height: 1.5;">{self._format_markdown(content)}</div>
-                    {meta_html}
-                </div>
-            """
-        elif role == "system":
-            level = msg.get("level", "info")
-            colors = {
-                "info": ("#4285f4", "#1e3a5f"),
-                "success": ("#8bc34a", "#2d3d1e"),
-                "warning": ("#ffc107", "#3d3d1e"),
-                "error": ("#f44336", "#3d1e1e"),
-            }
-            text_color, bg_color = colors.get(level, colors["info"])
-            return f"""
-                <div style="margin: 8px 0; padding: 8px 12px; background-color: {bg_color}; border-radius: 8px;">
-                    <div style="font-size: 12px; color: {text_color};">
-                        <span style="font-weight: bold;">Система</span> 
-                        <span style="color: #888; font-size: 11px;">{timestamp}</span>
-                    </div>
-                    <div style="color: #ccc; font-size: 13px; margin-top: 4px;">{self._escape_html(content)}</div>
-                </div>
-            """
-        elif role == "thinking_progress":
-            return f"""
-                <div style="margin: 8px 0; padding: 10px 14px; background-color: #3d3d2d; border-radius: 12px; border-left: 3px solid #ffc107;">
-                    <div style="font-size: 12px; color: #ffc107; margin-bottom: 4px;">
-                        💭 Размышляю... <span style="color: #888;">{timestamp}</span>
-                    </div>
-                </div>
-            """
-        return ""
-    
-    def _render_meta(self, meta: dict) -> str:
-        """Render meta info"""
-        if not meta:
-            return ""
-        model = meta.get("model", "")
-        thinking = meta.get("thinking_level", "")
-        meta_parts = []
-        if model:
-            short_model = model.replace("gemini-3-", "").replace("-preview", "").title()
-            meta_parts.append(short_model)
-        if thinking:
-            meta_parts.append(thinking.title())
-        if meta_parts:
-            return f"""<div style="font-size: 11px; color: #666; margin-top: 8px;">{' · '.join(meta_parts)}</div>"""
-        return ""
-    
-    def _format_markdown(self, text: str) -> str:
-        """Format markdown to HTML"""
-        text = self._escape_html(text)
-        # Bold: **text**
-        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-        # Italic: *text*
-        text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
-        # Inline code: `code`
-        text = re.sub(r'`([^`]+)`', r'<code style="background-color: #f0f0f0; padding: 2px 4px; border-radius: 3px; color: #333;">\1</code>', text)
-        # Links: [text](url)
-        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" style="color: #1a73e8;">\1</a>', text)
-        return text
     
     def _on_send(self):
         """Handle send button click"""
@@ -343,7 +228,6 @@ class ChatPanel(QWidget):
         if not text:
             return
         
-        # Get selected model
         model_name = self.model_combo.currentData()
         thinking_level = self.thinking_combo.currentData() or "medium"
         
@@ -352,10 +236,7 @@ class ChatPanel(QWidget):
             logger.warning("No model selected!")
             return
         
-        # Emit signal with model and thinking level
         self.askModelRequested.emit(text, model_name, thinking_level)
-        
-        # Clear input
         self.input_field.clear()
     
     def _on_model_changed(self, index: int):
@@ -374,7 +255,6 @@ class ChatPanel(QWidget):
         for level in levels:
             self.thinking_combo.addItem(level_display.get(level, level), level)
         
-        # Set default
         default_idx = self.thinking_combo.findData(default)
         if default_idx >= 0:
             self.thinking_combo.setCurrentIndex(default_idx)
@@ -398,25 +278,21 @@ class ChatPanel(QWidget):
         
         self.model_combo.blockSignals(False)
         
-        # Restore or select default model (gemini-3-flash-preview)
         if current:
             idx = self.model_combo.findData(current)
             if idx >= 0:
                 self.model_combo.setCurrentIndex(idx)
             else:
-                # Select default
                 default_idx = self.model_combo.findData(DEFAULT_MODEL)
                 if default_idx >= 0:
                     self.model_combo.setCurrentIndex(default_idx)
         else:
-            # Select default model
             default_idx = self.model_combo.findData(DEFAULT_MODEL)
             if default_idx >= 0:
                 self.model_combo.setCurrentIndex(default_idx)
             elif self.model_combo.count() > 0:
                 self.model_combo.setCurrentIndex(0)
         
-        # Trigger thinking level update
         self._on_model_changed(self.model_combo.currentIndex())
     
     def add_user_message(self, text: str):
@@ -447,7 +323,6 @@ class ChatPanel(QWidget):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._current_thought_block_id = f"thought_{timestamp.replace(':', '')}"
         self._thought_text = ""
-        # Add progress indicator
         self._messages.append({
             "role": "thinking_progress",
             "content": "",
@@ -467,14 +342,12 @@ class ChatPanel(QWidget):
         text = getattr(self, '_thought_text', '')
         timestamp = datetime.now().strftime("%H:%M:%S")
         
-        # Remove progress indicator
         if self._messages and self._messages[-1].get("role") == "thinking_progress":
             self._messages.pop()
         
         if text:
-            # Add collapsible thinking block (collapsed by default)
             idx = len(self._messages)
-            self._collapsed_thoughts.add(idx)  # Start collapsed
+            self._renderer._collapsed_thoughts.add(idx)
             self._messages.append({
                 "role": "thinking",
                 "content": text,
@@ -514,21 +387,10 @@ class ChatPanel(QWidget):
         })
         self._rerender_messages()
     
-    def _escape_html(self, text: str) -> str:
-        """Escape HTML special characters"""
-        return (
-            text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;")
-            .replace("\n", "<br>")
-        )
-    
     def clear_chat(self):
         """Clear chat history"""
         self._messages.clear()
-        self._collapsed_thoughts.clear()
+        self._renderer._collapsed_thoughts.clear()
         self.chat_history.clear()
         self._show_welcome()
     
@@ -540,7 +402,7 @@ class ChatPanel(QWidget):
     def load_history(self, messages: list[dict]):
         """Load message history"""
         self._messages.clear()
-        self._collapsed_thoughts.clear()
+        self._renderer._collapsed_thoughts.clear()
         
         for msg in messages:
             role = msg.get("role")
@@ -554,7 +416,7 @@ class ChatPanel(QWidget):
                 self._messages.append({"role": "assistant", "content": content, "timestamp": timestamp, "meta": meta})
             elif role == "thinking":
                 idx = len(self._messages)
-                self._collapsed_thoughts.add(idx)
+                self._renderer._collapsed_thoughts.add(idx)
                 self._messages.append({"role": "thinking", "content": content, "timestamp": timestamp})
             elif role == "system":
                 self._messages.append({"role": "system", "content": content, "timestamp": timestamp, "level": msg.get("level", "info")})
