@@ -169,7 +169,6 @@ class MainWindow(QMainWindow):
         
         if self.chat_panel:
             self.chat_panel.askModelRequested.connect(self._on_ask_model)
-            self.chat_panel.btn_refresh_models.clicked.connect(self._on_refresh_models)
     
     # Toolbar handlers
     
@@ -376,11 +375,6 @@ class MainWindow(QMainWindow):
         self.inspector_window.raise_()
         self.inspector_window.activateWindow()
     
-    @asyncSlot()
-    async def _on_refresh_models(self):
-        """Refresh Gemini models list"""
-        await self._load_gemini_models()
-    
     async def _load_gemini_models(self):
         """Load available Gemini models"""
         logger.info("=== ЗАГРУЗКА МОДЕЛЕЙ GEMINI ===")
@@ -573,12 +567,13 @@ class MainWindow(QMainWindow):
         if failed_count > 0:
             self.toast_manager.warning(f"Не удалось загрузить {failed_count} файлов")
     
-    @asyncSlot(str, str)
-    async def _on_ask_model(self, user_text: str, model_name: str):
-        """Handle ask model request"""
+    @asyncSlot(str, str, str)
+    async def _on_ask_model(self, user_text: str, model_name: str, thinking_level: str):
+        """Handle ask model request with streaming thoughts"""
         logger.info(f"=== _on_ask_model ===")
         logger.info(f"  user_text: {user_text[:50]}...")
-        logger.info(f"  model_name (raw): {model_name}")
+        logger.info(f"  model_name: {model_name}")
+        logger.info(f"  thinking_level: {thinking_level}")
         
         if not user_text.strip():
             self.toast_manager.warning("Пустое сообщение")
@@ -597,7 +592,7 @@ class MainWindow(QMainWindow):
             self.chat_panel.set_input_enabled(False)
             self.chat_panel.add_user_message(user_text)
         
-        self.toast_manager.info(f"Отправка запроса модели {model_name}...")
+        self.toast_manager.info(f"Отправка запроса модели {model_name} (thinking: {thinking_level})...")
         
         try:
             # Collect file refs from attached gemini files (with mime_type)
@@ -619,7 +614,6 @@ class MainWindow(QMainWindow):
                             "uri": uri,
                             "mime_type": gf.get("mime_type", "application/octet-stream"),
                         })
-                        logger.info(f"    file: uri={uri}, mime={gf.get('mime_type')}")
                 if file_refs:
                     self.toast_manager.info(f"Используется {len(file_refs)} файлов из Gemini Files")
             
@@ -627,33 +621,56 @@ class MainWindow(QMainWindow):
             if not file_refs:
                 self.toast_manager.warning("Внимание: нет загруженных файлов в Gemini. Модель будет отвечать без контекста документов.")
             
-            # Ask agent with selected model
-            reply = await self.agent.ask(
+            # Start streaming with thoughts display
+            has_thoughts = False
+            full_answer = ""
+            
+            if self.chat_panel:
+                self.chat_panel.start_thinking_block()
+            
+            async for chunk in self.agent.ask_stream(
                 conversation_id=self.current_conversation_id,
                 user_text=user_text,
                 file_refs=file_refs,
                 model=model_name,
-            )
+                thinking_level=thinking_level,
+            ):
+                chunk_type = chunk.get("type", "")
+                content = chunk.get("content", "")
+                
+                if chunk_type == "thought":
+                    has_thoughts = True
+                    if self.chat_panel:
+                        self.chat_panel.append_thought_chunk(content)
+                
+                elif chunk_type == "text":
+                    full_answer += content
+                    if self.chat_panel:
+                        self.chat_panel.append_answer_chunk(content)
+                
+                elif chunk_type == "done":
+                    break
+                
+                elif chunk_type == "error":
+                    raise Exception(content)
             
-            # Display assistant response
+            # Finish streaming blocks
             if self.chat_panel:
+                if has_thoughts:
+                    self.chat_panel.finish_thinking_block()
+                
+                # Show final answer
                 meta = {
                     "model": model_name,
-                    "thinking_level": "low",
-                    "is_final": reply.is_final,
-                    "actions": [
-                        {"type": a.type, "payload": a.payload, "note": a.note}
-                        for a in reply.actions
-                    ]
+                    "thinking_level": thinking_level,
+                    "is_final": True,
                 }
-                self.chat_panel.add_assistant_message(reply.assistant_text, meta)
-                
-                # Process actions
-                await self._process_model_actions(reply.actions)
+                self.chat_panel.add_assistant_message(full_answer, meta)
             
             self.toast_manager.success("Ответ получен")
         
         except Exception as e:
+            logger.error(f"Ошибка запроса: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка запроса: {e}")
             if self.chat_panel:
                 self.chat_panel.add_system_message(f"Ошибка: {e}", "error")

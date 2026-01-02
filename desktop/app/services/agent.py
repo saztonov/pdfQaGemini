@@ -1,6 +1,6 @@
 """Agent logic - orchestrates Gemini interactions"""
 import logging
-from typing import Optional
+from typing import Optional, AsyncIterator
 from uuid import UUID
 import time
 from app.services.gemini_client import GeminiClient
@@ -208,3 +208,86 @@ class Agent:
             }
             for msg in messages
         ]
+    
+    async def ask_stream(
+        self,
+        conversation_id: UUID,
+        user_text: str,
+        file_refs: list[dict],
+        model: str,
+        thinking_level: str = "medium",
+    ) -> AsyncIterator[dict]:
+        """
+        Ask question with streaming response including thoughts.
+        
+        Yields dicts with:
+            - type: "thought" | "text" | "done" | "error"
+            - content: str
+        
+        Args:
+            conversation_id: Conversation UUID
+            user_text: User question
+            file_refs: List of dicts with 'uri' and 'mime_type'
+            model: Model name
+            thinking_level: "low", "medium", or "high"
+        """
+        logger.info(f"=== Agent.ask_stream ===")
+        logger.info(f"  model: {model}, thinking: {thinking_level}")
+        logger.info(f"  file_refs count: {len(file_refs)}")
+        
+        start_time = time.perf_counter()
+        
+        # Save user message
+        await self.supabase_repo.qa_add_message(
+            conversation_id=str(conversation_id),
+            role="user",
+            content=user_text,
+            meta={
+                "file_refs": file_refs,
+                "model": model,
+                "thinking_level": thinking_level,
+            }
+        )
+        
+        full_thought = ""
+        full_answer = ""
+        
+        try:
+            async for chunk in self.gemini_client.generate_stream_with_thoughts(
+                model=model,
+                system_prompt=SYSTEM_PROMPT,
+                user_text=user_text,
+                file_refs=file_refs,
+                thinking_level=thinking_level,
+            ):
+                chunk_type = chunk.get("type", "")
+                content = chunk.get("content", "")
+                
+                if chunk_type == "thought":
+                    full_thought += content
+                    yield {"type": "thought", "content": content}
+                elif chunk_type == "text":
+                    full_answer += content
+                    yield {"type": "text", "content": content}
+            
+            # Calculate latency
+            latency_ms = (time.perf_counter() - start_time) * 1000
+            
+            # Save assistant message
+            await self.supabase_repo.qa_add_message(
+                conversation_id=str(conversation_id),
+                role="assistant",
+                content=full_answer,
+                meta={
+                    "model": model,
+                    "thinking_level": thinking_level,
+                    "thought_summary": full_thought[:500] if full_thought else None,
+                    "latency_ms": latency_ms,
+                }
+            )
+            
+            yield {"type": "done", "content": full_answer}
+            
+        except Exception as e:
+            logger.error(f"ask_stream error: {e}", exc_info=True)
+            yield {"type": "error", "content": str(e)}

@@ -2,10 +2,11 @@
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, AsyncIterator
 from google import genai
 from google.genai import types
 from app.utils.errors import ServiceError
+from app.models.schemas import AVAILABLE_MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -26,42 +27,10 @@ class GeminiClient:
     async def list_models(self) -> list[dict]:
         """
         List available Gemini models.
-        Returns list of dicts with: name, display_name, description
+        Returns only supported models: gemini-3-pro-preview, gemini-3-flash-preview
         """
-        def _sync_list():
-            client = self._get_client()
-            try:
-                logger.info("Запрос списка моделей от Gemini API...")
-                models = client.models.list()
-                result = []
-                total_count = 0
-                
-                for model in models:
-                    total_count += 1
-                    name = getattr(model, "name", "")
-                    
-                    # Debug first 5 models
-                    if total_count <= 5:
-                        logger.info(f"Model {total_count}: name={name}")
-                    
-                    # Filter: include models with "gemini" in name (text generation models)
-                    if "gemini" in name.lower():
-                        result.append({
-                            "name": name,
-                            "display_name": getattr(model, "display_name", name),
-                            "description": getattr(model, "description", ""),
-                        })
-                
-                logger.info(f"Всего моделей: {total_count}, gemini-моделей: {len(result)}")
-                # Log all gemini model names
-                for m in result:
-                    logger.info(f"  -> {m['name']}")
-                return result
-            except Exception as e:
-                logger.error(f"Ошибка list_models: {e}", exc_info=True)
-                raise ServiceError(f"Failed to list models: {e}")
-        
-        return await asyncio.to_thread(_sync_list)
+        logger.info("Возвращаем фиксированный список моделей Gemini 3")
+        return AVAILABLE_MODELS.copy()
     
     async def list_files(self) -> list[dict]:
         """
@@ -267,21 +236,24 @@ class GeminiClient:
                 # Contents is just a list of files + text
                 contents = contents_list
                 
-                # Generation config
-                # thinking_config only for models that support it (gemini-2.5+)
+                # Generation config with thinking
                 logger.info(f"=== generate_structured ===")
                 logger.info(f"  model (input): {model}")
+                logger.info(f"  thinking_level: {thinking_level}")
                 logger.info(f"  files count: {len(file_refs)}")
                 logger.info(f"  user_text len: {len(user_text)}")
                 
-                # Config with response_json_schema (correct parameter name per docs)
+                # Config with response_json_schema and thinking
                 logger.info(f"  Building config for model: {model}")
                 config = types.GenerateContentConfig(
                     system_instruction=system_prompt if system_prompt else None,
                     response_mime_type="application/json",
                     response_json_schema=schema,
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level=thinking_level,
+                    ),
                 )
-                logger.info(f"  Using config with response_json_schema")
+                logger.info(f"  Using config with response_json_schema and thinking_level={thinking_level}")
                 
                 # Remove 'models/' prefix if present - SDK adds it automatically
                 model_id = model
@@ -397,3 +369,121 @@ class GeminiClient:
                 raise ServiceError(f"Failed to generate content: {e}")
         
         return await asyncio.to_thread(_sync_generate)
+    
+    async def generate_stream_with_thoughts(
+        self,
+        model: str,
+        system_prompt: str,
+        user_text: str,
+        file_refs: list[dict],
+        thinking_level: str = "medium",
+    ) -> AsyncIterator[dict]:
+        """
+        Generate content with streaming and thought summaries.
+        
+        Yields dicts with:
+            - type: "thought" | "text" | "done"
+            - content: str (text chunk)
+            - finished: bool (for thought - whether thought is complete)
+        
+        Args:
+            model: Model name
+            system_prompt: System instructions
+            user_text: User message
+            file_refs: List of dicts with 'uri' and 'mime_type'
+            thinking_level: "low", "medium", or "high"
+        """
+        import queue
+        import threading
+        
+        result_queue: queue.Queue = queue.Queue()
+        
+        def _sync_stream():
+            client = self._get_client()
+            try:
+                # Build contents
+                contents_list = []
+                
+                for file_ref in file_refs:
+                    uri = file_ref.get("uri", "")
+                    mime_type = file_ref.get("mime_type", "application/octet-stream")
+                    if uri:
+                        file_name = uri
+                        if "/files/" in uri:
+                            file_name = "files/" + uri.split("/files/")[-1]
+                        try:
+                            file_obj = client.files.get(name=file_name)
+                            file_uri = getattr(file_obj, 'uri', None) or uri
+                            file_mime = getattr(file_obj, 'mime_type', None) or mime_type
+                            if file_mime == "application/json":
+                                file_mime = "text/plain"
+                            contents_list.append(
+                                types.Part.from_uri(file_uri=file_uri, mime_type=file_mime)
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to get file {file_name}: {e}")
+                
+                if user_text:
+                    contents_list.append(user_text)
+                
+                # Config with thinking and include_thoughts
+                config = types.GenerateContentConfig(
+                    system_instruction=system_prompt if system_prompt else None,
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level=thinking_level,
+                        include_thoughts=True,
+                    ),
+                )
+                
+                model_id = model
+                if model_id.startswith("models/"):
+                    model_id = model_id[7:]
+                
+                logger.info(f"Streaming with thoughts: model={model_id}, thinking_level={thinking_level}")
+                
+                # Stream
+                for chunk in client.models.generate_content_stream(
+                    model=model_id,
+                    contents=contents_list,
+                    config=config,
+                ):
+                    if not chunk.candidates:
+                        continue
+                    
+                    for part in chunk.candidates[0].content.parts:
+                        if not part.text:
+                            continue
+                        
+                        if part.thought:
+                            result_queue.put({
+                                "type": "thought",
+                                "content": part.text,
+                                "finished": False,
+                            })
+                        else:
+                            result_queue.put({
+                                "type": "text",
+                                "content": part.text,
+                            })
+                
+                result_queue.put({"type": "done"})
+                
+            except Exception as e:
+                logger.error(f"Stream error: {e}", exc_info=True)
+                result_queue.put({"type": "error", "content": str(e)})
+        
+        # Start thread
+        thread = threading.Thread(target=_sync_stream, daemon=True)
+        thread.start()
+        
+        # Yield results
+        while True:
+            try:
+                item = await asyncio.to_thread(result_queue.get, timeout=60)
+                if item["type"] == "done":
+                    break
+                if item["type"] == "error":
+                    raise ServiceError(item["content"])
+                yield item
+            except Exception:
+                break

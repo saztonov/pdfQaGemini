@@ -2,7 +2,7 @@
 from enum import Enum
 from typing import Optional
 from PySide6.QtWidgets import QLabel, QGraphicsOpacityEffect, QWidget
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, Property
 from PySide6.QtGui import QFont
 
 
@@ -19,19 +19,23 @@ class ToastWidget(QLabel):
     
     STYLES = {
         ToastType.INFO: {
-            "bg": "rgba(33, 150, 243, 230)",
+            "bg": "rgba(46, 125, 50, 235)",
+            "border": "#66bb6a",
             "icon": "ℹ"
         },
         ToastType.SUCCESS: {
-            "bg": "rgba(76, 175, 80, 230)",
+            "bg": "rgba(46, 125, 50, 235)",
+            "border": "#66bb6a",
             "icon": "✓"
         },
         ToastType.WARNING: {
-            "bg": "rgba(255, 152, 0, 230)",
+            "bg": "rgba(56, 142, 60, 235)",
+            "border": "#81c784",
             "icon": "⚠"
         },
         ToastType.ERROR: {
-            "bg": "rgba(244, 67, 54, 230)",
+            "bg": "rgba(67, 160, 71, 235)",
+            "border": "#a5d6a7",
             "icon": "✕"
         }
     }
@@ -40,19 +44,22 @@ class ToastWidget(QLabel):
         super().__init__(parent)
         self.duration = duration
         self.toast_type = toast_type
+        self._target_y = 0
         
         # Style
         style_info = self.STYLES[toast_type]
         icon = style_info["icon"]
         bg_color = style_info["bg"]
+        border_color = style_info["border"]
         
         self.setText(f"{icon}  {message}")
         self.setStyleSheet(f"""
             QLabel {{
                 background-color: {bg_color};
                 color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
+                padding: 14px 22px;
+                border-radius: 10px;
+                border: 2px solid {border_color};
                 font-size: 13px;
                 font-weight: 500;
             }}
@@ -66,6 +73,7 @@ class ToastWidget(QLabel):
         # Font
         font = QFont()
         font.setPixelSize(13)
+        font.setWeight(QFont.Medium)
         self.setFont(font)
         
         # Opacity effect
@@ -73,18 +81,36 @@ class ToastWidget(QLabel):
         self.setGraphicsEffect(self.opacity_effect)
         
         # Size
-        self.setMinimumWidth(250)
-        self.setMaximumWidth(400)
-        self.setWordWrap(False)
+        self.setMinimumWidth(280)
+        self.setMaximumWidth(420)
+        self.setWordWrap(True)
         self.adjustSize()
+        
+        # Animation for position
+        self._y_anim = None
+    
+    def set_target_y(self, y: int):
+        """Set target Y position with animation"""
+        self._target_y = y
+        current_pos = self.pos()
+        
+        if self._y_anim:
+            self._y_anim.stop()
+        
+        self._y_anim = QPropertyAnimation(self, b"pos")
+        self._y_anim.setDuration(300)
+        self._y_anim.setStartValue(current_pos)
+        self._y_anim.setEndValue(QPoint(current_pos.x(), y))
+        self._y_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._y_anim.start()
     
     def show_animated(self):
-        """Show with fade-in animation"""
+        """Show with fade-in and slide animation"""
         self.show()
         
         # Fade in
         self.fade_in = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_in.setDuration(250)
+        self.fade_in.setDuration(350)
         self.fade_in.setStartValue(0.0)
         self.fade_in.setEndValue(1.0)
         self.fade_in.setEasingCurve(QEasingCurve.OutCubic)
@@ -96,7 +122,7 @@ class ToastWidget(QLabel):
     def hide_animated(self):
         """Hide with fade-out animation"""
         self.fade_out = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_out.setDuration(200)
+        self.fade_out.setDuration(250)
         self.fade_out.setStartValue(1.0)
         self.fade_out.setEndValue(0.0)
         self.fade_out.setEasingCurve(QEasingCurve.InCubic)
@@ -113,27 +139,27 @@ class ToastWidget(QLabel):
 class ToastManager:
     """Manages toast notification queue"""
     
-    SPACING = 10  # Vertical spacing between toasts
-    MARGIN_TOP = 20
+    SPACING = 12  # Vertical spacing between toasts
+    MARGIN_TOP = 50  # Below window title bar
     MARGIN_RIGHT = 20
     
     def __init__(self, parent: QWidget):
         self.parent = parent
         self.toasts: list[ToastWidget] = []
     
-    def info(self, message: str, duration: int = 2500):
+    def info(self, message: str, duration: int = 3000):
         """Show info notification"""
         self._show_toast(message, ToastType.INFO, duration)
     
-    def success(self, message: str, duration: int = 2500):
+    def success(self, message: str, duration: int = 3000):
         """Show success notification"""
         self._show_toast(message, ToastType.SUCCESS, duration)
     
-    def warning(self, message: str, duration: int = 3500):
+    def warning(self, message: str, duration: int = 4000):
         """Show warning notification"""
         self._show_toast(message, ToastType.WARNING, duration)
     
-    def error(self, message: str, duration: int = 4000):
+    def error(self, message: str, duration: int = 5000):
         """Show error notification"""
         self._show_toast(message, ToastType.ERROR, duration)
     
@@ -148,10 +174,14 @@ class ToastManager:
         """Remove toast from queue and reposition"""
         if toast in self.toasts:
             self.toasts.remove(toast)
-            self._reposition_toasts()
+            # Smooth reposition remaining toasts
+            QTimer.singleShot(50, self._reposition_toasts)
     
     def _reposition_toasts(self):
         """Reposition all active toasts in stack"""
+        if not self.toasts:
+            return
+        
         parent_rect = self.parent.rect()
         parent_global = self.parent.mapToGlobal(parent_rect.topLeft())
         
@@ -159,7 +189,13 @@ class ToastManager:
         
         for toast in self.toasts:
             x = parent_rect.width() - toast.width() - self.MARGIN_RIGHT
-            y = y_offset
+            target_pos = parent_global + QPoint(x, y_offset)
             
-            toast.move(parent_global + QPoint(x, y))
+            # Use animated repositioning if toast is already visible
+            if toast.isVisible():
+                toast.set_target_y(target_pos.y())
+                toast.move(target_pos.x(), toast.y())
+            else:
+                toast.move(target_pos)
+            
             y_offset += toast.height() + self.SPACING

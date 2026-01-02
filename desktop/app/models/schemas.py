@@ -6,6 +6,36 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
+# ========== Gemini Models ==========
+AVAILABLE_MODELS = [
+    {
+        "name": "gemini-3-flash-preview",
+        "display_name": "Flash",
+        "thinking_levels": ["low", "medium", "high"],
+        "default_thinking": "medium",
+    },
+    {
+        "name": "gemini-3-pro-preview",
+        "display_name": "Pro",
+        "thinking_levels": ["low", "high"],
+        "default_thinking": "high",
+    },
+]
+
+# Модель по умолчанию
+DEFAULT_MODEL = "gemini-3-flash-preview"
+
+# Модель -> допустимые thinking levels
+MODEL_THINKING_LEVELS: dict[str, list[str]] = {
+    m["name"]: m["thinking_levels"] for m in AVAILABLE_MODELS
+}
+
+# Модель -> thinking level по умолчанию
+MODEL_DEFAULT_THINKING: dict[str, str] = {
+    m["name"]: m["default_thinking"] for m in AVAILABLE_MODELS
+}
+
+
 class FileType(str, Enum):
     """Типы файлов в node_files"""
     PDF = "pdf"                 # Исходный PDF
