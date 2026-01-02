@@ -188,16 +188,6 @@ DEFAULT_MODEL=gemini-3-flash-preview
 5. **Async everywhere**: qasync event loop, asyncio.to_thread для sync clients
 6. **Thinking level**: default "low" для быстрых ответов
 
-## Testing
-
-```bash
-pytest
-pytest tests/test_agent.py -v
-pytest tests/test_supabase_repo.py -v
-```
-
-Используются моки для всех внешних зависимостей (Supabase, Gemini, R2).
-
 ## Future Enhancements
 
 - Model Inspector (trace + thinking display)

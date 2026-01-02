@@ -9,8 +9,3 @@ class AppError(Exception):
 class ServiceError(AppError):
     """Service layer error"""
     pass
-
-
-class CacheError(AppError):
-    """Cache operation error"""
-    pass

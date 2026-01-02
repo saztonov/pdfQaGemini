@@ -72,9 +72,6 @@ class GeminiClient:
         Upload file to Gemini Files API.
         Returns dict with: name, uri, mime_type
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         def _sync_upload():
             client = self._get_client()
             try:
@@ -185,9 +182,6 @@ class GeminiClient:
         Returns:
             Parsed JSON dict matching schema
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         def _sync_generate():
             client = self._get_client()
             try:

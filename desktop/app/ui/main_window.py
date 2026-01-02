@@ -710,7 +710,6 @@ class MainWindow(QMainWindow):
             
             if not context_item and r2_key:
                 # Create temporary context item
-                from app.models.schemas import ContextItem
                 context_item = ContextItem(
                     id=hashlib.md5(r2_key.encode()).hexdigest(),
                     title=r2_key.split("/")[-1],

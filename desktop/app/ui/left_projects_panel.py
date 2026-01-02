@@ -1,13 +1,12 @@
 """Left panel - Projects Tree"""
 from typing import Optional
-import asyncio
 import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QTreeWidget, QTreeWidgetItem, QLabel, QFrame
 )
-from PySide6.QtCore import Signal, Qt, QEvent, QSettings, QTimer
-from PySide6.QtGui import QColor, QBrush, QIcon
+from PySide6.QtCore import Signal, Qt, QEvent, QSettings
+from PySide6.QtGui import QColor, QBrush
 from qasync import asyncSlot
 from app.services.supabase_repo import SupabaseRepo
 from app.models.schemas import TreeNode, FileType, FILE_TYPE_ICONS, FILE_TYPE_COLORS
@@ -748,10 +747,6 @@ class LeftProjectsPanel(QWidget):
             "crop": "image/png",
         }
         return mime_map.get(file_type, "application/octet-stream")
-    
-    def refresh(self):
-        """Refresh tree (convenience method)"""
-        asyncio.create_task(self.load_roots())
     
     def _save_expanded_state(self):
         """Save expanded nodes state to settings"""

@@ -1,8 +1,8 @@
 """Toast notification system"""
 from enum import Enum
 from typing import Optional
-from PySide6.QtWidgets import QLabel, QGraphicsOpacityEffect, QWidget
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint, Property
+from PySide6.QtWidgets import QLabel, QGraphicsOpacityEffect, QWidget, QFrame, QVBoxLayout
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint
 from PySide6.QtGui import QFont
 
 
@@ -14,28 +14,28 @@ class ToastType(Enum):
     ERROR = "error"
 
 
-class ToastWidget(QLabel):
+class ToastWidget(QFrame):
     """Single toast notification widget"""
     
     STYLES = {
         ToastType.INFO: {
-            "bg": "rgba(46, 125, 50, 235)",
+            "bg": "#43a047",
             "border": "#66bb6a",
             "icon": "ℹ"
         },
         ToastType.SUCCESS: {
-            "bg": "rgba(46, 125, 50, 235)",
+            "bg": "#43a047",
             "border": "#66bb6a",
             "icon": "✓"
         },
         ToastType.WARNING: {
-            "bg": "rgba(56, 142, 60, 235)",
+            "bg": "#66bb6a",
             "border": "#81c784",
             "icon": "⚠"
         },
         ToastType.ERROR: {
-            "bg": "rgba(67, 160, 71, 235)",
-            "border": "#a5d6a7",
+            "bg": "#7cb342",
+            "border": "#9ccc65",
             "icon": "✕"
         }
     }
@@ -45,46 +45,55 @@ class ToastWidget(QLabel):
         self.duration = duration
         self.toast_type = toast_type
         self._target_y = 0
+        self._message = message
         
         # Style
         style_info = self.STYLES[toast_type]
-        icon = style_info["icon"]
-        bg_color = style_info["bg"]
-        border_color = style_info["border"]
+        self._icon = style_info["icon"]
+        self._bg_color = style_info["bg"]
+        self._border_color = style_info["border"]
         
-        self.setText(f"{icon}  {message}")
         self.setStyleSheet(f"""
-            QLabel {{
-                background-color: {bg_color};
+            QFrame {{
+                background-color: {self._bg_color};
                 color: white;
-                padding: 14px 22px;
                 border-radius: 10px;
-                border: 2px solid {border_color};
-                font-size: 13px;
-                font-weight: 500;
+                border: 2px solid {self._border_color};
             }}
         """)
         
-        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        
+        # Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 22, 14)
+        layout.setSpacing(0)
+        
+        # Label for text
+        self.label = QLabel(f"{self._icon}  {message}", self)
+        self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.label.setStyleSheet("border: none; background: transparent; color: white;")
         
         # Font
         font = QFont()
         font.setPixelSize(13)
         font.setWeight(QFont.Medium)
-        self.setFont(font)
+        self.label.setFont(font)
+        
+        # Size
+        self.label.setMinimumWidth(250)
+        self.label.setMaximumWidth(380)
+        self.label.setWordWrap(True)
+        
+        layout.addWidget(self.label)
+        
+        # Adjust size
+        self.adjustSize()
         
         # Opacity effect
         self.opacity_effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.opacity_effect)
-        
-        # Size
-        self.setMinimumWidth(280)
-        self.setMaximumWidth(420)
-        self.setWordWrap(True)
-        self.adjustSize()
         
         # Animation for position
         self._y_anim = None

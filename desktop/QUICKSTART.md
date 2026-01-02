@@ -237,26 +237,6 @@ Click **Connect** в toolbar → загружает `.env` → инициали�
 - **Confirm ROI**: подтвердить и обработать
 - **Reject / Close**: отменить
 
-## Testing
-
-```bash
-cd desktop
-pytest
-```
-
-**Запустить конкретный тест:**
-```bash
-pytest tests/test_agent.py -v
-pytest tests/test_pdf_render.py::TestPDFRenderer::test_render_roi -v
-```
-
-**Coverage:**
-- Все services с моками (Supabase, Gemini, R2)
-- UI components (panels, dialogs)
-- PDF rendering
-- ROI workflow
-- Validation schemas
-
 ## Architecture Highlights
 
 ### Async Everywhere
@@ -403,8 +383,7 @@ pytest tests/test_pdf_render.py::TestPDFRenderer::test_render_roi -v
 1. Check console output (stderr)
 2. Check toast notifications
 3. Check `.env` credentials
-4. Run tests: `pytest -v`
-5. Read error messages в chat panel (system messages)
+4. Read error messages в chat panel (system messages)
 
 ## MVP Complete! 🎉
 

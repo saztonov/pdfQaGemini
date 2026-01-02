@@ -20,13 +20,6 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
-## Тесты
-
-```bash
-cd desktop
-pytest
-```
-
 ## Настройка
 
 ### Вариант 1: Через UI (рекомендуется)

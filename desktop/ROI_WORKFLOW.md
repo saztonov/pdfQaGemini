@@ -267,30 +267,6 @@ except Exception as e:
     return  # Don't proceed
 ```
 
-## Testing
-
-### PDFRenderer Tests
-```python
-def test_render_roi(renderer, mock_fitz):
-    bbox_norm = (0.1, 0.1, 0.9, 0.9)
-    result = renderer.render_roi(pdf_path, bbox_norm, dpi=400)
-    
-    # Verify clip was used
-    call_kwargs = mock_page.get_pixmap.call_args[1]
-    assert "clip" in call_kwargs
-```
-
-### ImageViewerDialog Tests
-```python
-def test_roi_drawn_enables_confirm(dialog):
-    dialog.load_image(image)
-    rect = QRectF(0.1, 0.1, 0.8, 0.8)
-    dialog._on_roi_drawn(rect)
-    
-    assert dialog.btn_confirm.isEnabled()
-    assert dialog.current_bbox_norm is not None
-```
-
 ## Future Enhancements
 
 1. **Multi-page support**: page selector в ImageViewerDialog

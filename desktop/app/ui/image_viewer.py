@@ -1,6 +1,5 @@
 """Image viewer with ROI selection"""
 from typing import Optional, Tuple, List
-from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,

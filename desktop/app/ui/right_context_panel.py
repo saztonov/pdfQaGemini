@@ -1,4 +1,5 @@
 """Right panel - Context & Gemini Files"""
+import logging
 from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -10,6 +11,8 @@ from app.services.supabase_repo import SupabaseRepo
 from app.services.gemini_client import GeminiClient
 from app.models.schemas import ContextItem, NodeFile, FileType, FILE_TYPE_ICONS
 
+logger = logging.getLogger(__name__)
+
 
 class RightContextPanel(QWidget):
     """Context and Gemini Files panel"""
@@ -17,7 +20,6 @@ class RightContextPanel(QWidget):
     # Signals
     uploadContextItemsRequested = Signal(list)  # list[str] node_file_ids to upload
     refreshGeminiRequested = Signal()
-    removeContextItemRequested = Signal(str)  # item_id to remove
     
     def __init__(
         self,
@@ -236,7 +238,6 @@ class RightContextPanel(QWidget):
                 self.toast_manager.success(f"Загружено {len(self.context_items)} файлов")
         
         except Exception as e:
-            import logging
             logging.error(f"Ошибка load_node_files: {e}", exc_info=True)
             if self.toast_manager:
                 self.toast_manager.error(f"Ошибка загрузки файлов: {e}")
@@ -272,9 +273,6 @@ class RightContextPanel(QWidget):
     
     async def upload_selected_to_gemini(self):
         """Upload selected context items to Gemini"""
-        import logging
-        logger = logging.getLogger(__name__)
-        
         logger.info("=== RightContextPanel.upload_selected_to_gemini вызван ===")
         
         if not self.gemini_client:
@@ -441,8 +439,6 @@ class RightContextPanel(QWidget):
         if not files_info:
             return
         
-        from app.models.schemas import FILE_TYPE_ICONS, FileType
-        
         added_count = 0
         for file_info in files_info:
             file_id = str(file_info["id"])
@@ -480,8 +476,7 @@ class RightContextPanel(QWidget):
                         status="local",
                     )
                 except Exception as e:
-                    import logging
-                    logging.error(f"Ошибка сохранения контекста в БД: {e}")
+                    logger.error(f"Ошибка сохранения контекста в БД: {e}")
         
         # Update table
         self._update_context_table()
@@ -494,13 +489,8 @@ class RightContextPanel(QWidget):
         if not self.supabase_repo or not self.conversation_id:
             return
         
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
             context_files = await self.supabase_repo.qa_load_context_files(self.conversation_id)
-            
-            from app.models.schemas import FILE_TYPE_ICONS, FileType
             
             for cf in context_files:
                 node_file = cf.get("node_files")

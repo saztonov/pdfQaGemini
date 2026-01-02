@@ -3,10 +3,10 @@ import logging
 import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QComboBox, QFrame, QTextBrowser
+    QPushButton, QComboBox, QFrame, QTextBrowser
 )
 from PySide6.QtCore import Signal, Qt, Slot, QUrl
-from PySide6.QtGui import QTextCursor, QColor, QKeyEvent
+from PySide6.QtGui import QTextCursor, QKeyEvent
 from datetime import datetime
 from app.models.schemas import MODEL_THINKING_LEVELS, MODEL_DEFAULT_THINKING, DEFAULT_MODEL
 

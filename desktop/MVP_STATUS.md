@@ -27,12 +27,10 @@ desktop/
     models/
       schemas.py         ✓ 9 pydantic models
     utils/
-      timing.py          ✓ timer context
       errors.py          ✓ custom exceptions
     db/
       migrations/
         001_pdfQaGemini_qa.sql  ✓ 6 tables + RPC
-  tests/                 ✓ unit tests with mocks
   pyproject.toml         ✓ dependencies
   env.example            ✓ config template
   README.md              ✓ setup + workflow
@@ -72,24 +70,6 @@ desktop/
 - ✓ asyncio.to_thread for sync clients (Supabase, Gemini, boto3)
 - ✓ httpx.AsyncClient for streaming downloads
 - ✓ Semaphore for concurrency control
-
-### 7. Testing
-- ✓ 13 test files with mocks
-- ✓ test_schemas.py: validation tests
-- ✓ test_supabase_repo.py: async repo tests
-- ✓ test_r2_async.py: download/upload tests
-- ✓ test_gemini_client.py: Files API + generation tests
-- ✓ test_cache.py: LRU cache tests
-- ✓ test_agent.py: ask() + schema tests
-- ✓ test_left_projects_panel.py: UI tests
-- ✓ test_right_context_panel.py: tabs + tables tests
-- ✓ test_chat_panel.py: messages + signals tests
-- ✓ test_pdf_render.py: render preview + ROI tests
-- ✓ test_image_viewer.py: ROI selection + dialog tests
-- ✓ test_trace.py: TraceStore + ModelTrace tests
-- ✓ test_model_inspector.py: inspector window tests
-- ✓ test_settings_dialog.py: QSettings + UI tests
-- ✓ pytest + pytest-asyncio configured
 
 ## 🔄 Workflow Implementation
 
@@ -141,16 +121,11 @@ cp env.example .env
 
 # 3. Run
 python -m app.main
-
-# 4. Test
-pytest
 ```
 
 ## 📊 Statistics
 
-- Total files: 52+
 - Python LOC: ~5200
-- Test coverage: Core services + UI components + ROI workflow + tracing
 - Dependencies: 10 main packages
 - Tables: 6 QA + 2 existing
 - UI panels: 4 main + ImageViewerDialog + ModelInspectorWindow

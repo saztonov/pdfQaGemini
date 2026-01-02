@@ -1,12 +1,15 @@
 """Cloudflare R2 async client"""
 import asyncio
 import hashlib
+import logging
 from pathlib import Path
 from typing import Optional
 import httpx
 import boto3
 from botocore.client import Config
 from app.services.cache import CacheManager
+
+logger = logging.getLogger(__name__)
 
 
 class R2AsyncClient:
@@ -71,9 +74,6 @@ class R2AsyncClient:
         Download file to cache with streaming.
         Returns cached file path.
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         # Generate cache key from URL if not provided
         if cache_key is None:
             cache_key = hashlib.sha256(url.encode()).hexdigest()
