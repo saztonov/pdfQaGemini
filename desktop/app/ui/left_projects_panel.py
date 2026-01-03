@@ -383,6 +383,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                     file_item.setData(0, Qt.UserRole + 3, "file")
                     file_item.setData(0, Qt.UserRole + 4, nf.r2_key)
                     file_item.setData(0, Qt.UserRole + 5, nf.file_type)
+                    file_item.setData(0, Qt.UserRole + 6, nf.mime_type)
                     parent_item.addChild(file_item)
 
                 if crops:
@@ -404,6 +405,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                         crop_item.setData(0, Qt.UserRole + 3, "file")
                         crop_item.setData(0, Qt.UserRole + 4, nf.r2_key)
                         crop_item.setData(0, Qt.UserRole + 5, FileType.CROP.value)
+                        crop_item.setData(0, Qt.UserRole + 6, nf.mime_type)
                         crops_item.addChild(crop_item)
 
                     # Auto-expand crops folder if not too many files

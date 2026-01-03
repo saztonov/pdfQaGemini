@@ -23,18 +23,46 @@ MODEL_REPLY_SCHEMA = {
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["answer", "open_image", "request_roi", "final"],
+                        "enum": ["request_files", "open_image", "request_roi", "final"],
                     },
                     "payload": {
                         "type": "object",
-                        "description": "Данные действия (context_item_id, r2_key, image_ref, hint_text и т.д.)",
+                        "description": "Данные действия",
                         "properties": {
+                            # request_files payload
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "context_item_id": {"type": "string"},
+                                        "kind": {"type": "string", "enum": ["crop", "text"]},
+                                        "reason": {"type": "string"},
+                                        "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                                    },
+                                },
+                            },
+                            # open_image payload
                             "context_item_id": {"type": "string"},
                             "r2_key": {"type": "string"},
-                            "image_ref": {"type": "string"},
-                            "hint_text": {"type": "string"},
-                            "page": {"type": "integer"},
-                            "text": {"type": "string"},
+                            # request_roi payload
+                            "image_ref": {
+                                "type": "object",
+                                "properties": {
+                                    "context_item_id": {"type": "string"},
+                                },
+                            },
+                            "goal": {"type": "string"},
+                            "dpi": {"type": "integer"},
+                            "suggested_bbox_norm": {
+                                "type": "object",
+                                "properties": {
+                                    "x1": {"type": "number"},
+                                    "y1": {"type": "number"},
+                                    "x2": {"type": "number"},
+                                    "y2": {"type": "number"},
+                                },
+                            },
                         },
                     },
                     "note": {"type": "string", "description": "Опциональная заметка"},
@@ -44,24 +72,10 @@ MODEL_REPLY_SCHEMA = {
         },
         "is_final": {"type": "boolean", "description": "Является ли ответ финальным"},
     },
-    "required": ["assistant_text"],
+    "required": ["assistant_text", "actions", "is_final"],
 }
 
 
-SYSTEM_PROMPT = """Ты — помощник для анализа PDF-документов.
-
-КРИТИЧЕСКИ ВАЖНО: Отвечай СТРОГО на основе прикреплённых файлов в контексте. Используй ТОЛЬКО информацию из загруженных документов. Если файлы отсутствуют или не содержат ответа — сообщи об этом. ЗАПРЕЩЕНО использовать внешние знания или выдумывать информацию.
-
-Правила:
-- Отвечай кратко и по делу на русском языке.
-- ОБЯЗАТЕЛЬНО цитируй конкретные места из документов для подтверждения ответа.
-- Если нет прикреплённых файлов — верни: "Документы не загружены в контекст. Загрузите файлы в Gemini Files."
-- Если информации недостаточно — укажи: "В загруженных документах нет информации по этому вопросу."
-- Если нужно показать изображение — верни action "open_image" с context_item_id или r2_key.
-- Если нужен ROI — верни action "request_roi" с описанием области.
-
-Отвечай только текстом, без дополнительного форматирования или JSON структур.
-"""
 
 
 class Agent:
@@ -77,48 +91,60 @@ class Agent:
         self.supabase_repo = supabase_repo
         self.trace_store = trace_store
 
-    async def ask(
+    async def ask_question(
         self,
         conversation_id: UUID,
         user_text: str,
         file_refs: list[dict],
         model: str,
+        system_prompt: str = "",
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
+        media_resolution: Optional[str] = None,
     ) -> ModelReply:
         """
-        Ask question to Gemini with structured output.
+        Ask question to Gemini with structured output (non-streaming).
 
         Args:
             conversation_id: Conversation UUID
             user_text: User question
-            file_refs: List of dicts with 'uri' and 'mime_type' keys
+            file_refs: List of dicts with 'uri', 'mime_type', optional 'is_roi' keys
             model: Model name (required)
+            system_prompt: System prompt from user settings
             thinking_level: "low", "medium", or "high"
             thinking_budget: Optional max thinking tokens
+            media_resolution: Override resolution ("low", "medium", "high")
 
         Returns:
             ModelReply with assistant text and actions
         """
-        logger.info("=== Agent.ask ===")
+        # Auto-detect: if any file has is_roi=True, use HIGH resolution
+        has_roi = any(fr.get("is_roi", False) for fr in file_refs)
+        effective_resolution = media_resolution or ("high" if has_roi else "low")
+
+        logger.info("=== Agent.ask_question ===")
         logger.info(f"  model: {model}")
+        logger.info(f"  system_prompt: {len(system_prompt)} chars")
         logger.info(f"  thinking_level: {thinking_level}")
         logger.info(f"  thinking_budget: {thinking_budget}")
-        logger.info(f"  file_refs count: {len(file_refs)}")
+        logger.info(f"  file_refs count: {len(file_refs)}, has_roi: {has_roi}")
+        logger.info(f"  media_resolution: {effective_resolution}")
         for i, fr in enumerate(file_refs[:3]):
-            logger.info(f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}")
+            logger.info(f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}, is_roi={fr.get('is_roi', False)}")
 
-        # Create trace
+        start_time = time.perf_counter()
+        raw_response = None
+        parsed_actions = []
+
+        # Create trace with all inputs
         trace = ModelTrace(
             conversation_id=conversation_id,
             model=model,
             thinking_level=thinking_level,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             user_text=user_text,
             input_files=file_refs,
         )
-
-        start_time = time.perf_counter()
 
         try:
             # Save user message
@@ -133,28 +159,32 @@ class Agent:
             )
 
             # Generate structured response with files
-            result_dict = await self.gemini_client.generate_structured(
+            raw_response = await self.gemini_client.generate_structured(
                 model=model,
-                system_prompt=SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 user_text=user_text,
                 file_refs=file_refs,
                 schema=MODEL_REPLY_SCHEMA,
                 thinking_level=thinking_level,
                 thinking_budget=thinking_budget,
+                media_resolution=effective_resolution,
             )
 
             # Calculate latency
             latency_ms = (time.perf_counter() - start_time) * 1000
 
             # Parse to ModelReply
-            reply = ModelReply(**result_dict)
+            reply = ModelReply(**raw_response)
 
-            # Update trace
-            trace.response_json = result_dict
-            trace.parsed_actions = [
+            # Build parsed actions
+            parsed_actions = [
                 {"type": action.type, "payload": action.payload, "note": action.note}
                 for action in reply.actions
             ]
+
+            # Update trace with all outputs
+            trace.response_json = raw_response
+            trace.parsed_actions = parsed_actions
             trace.latency_ms = latency_ms
             trace.is_final = reply.is_final
             trace.assistant_text = reply.assistant_text
@@ -168,7 +198,7 @@ class Agent:
                     "model": model,
                     "thinking_level": thinking_level,
                     "file_refs": file_refs,
-                    "actions": trace.parsed_actions,
+                    "actions": parsed_actions,
                     "is_final": reply.is_final,
                     "trace_id": trace.id,
                 },
@@ -181,9 +211,12 @@ class Agent:
             return reply
 
         except Exception as e:
-            # Record error
+            # Record error with raw_response if available
             trace.errors.append(str(e))
             trace.latency_ms = (time.perf_counter() - start_time) * 1000
+            if raw_response:
+                trace.response_json = raw_response
+            trace.parsed_actions = parsed_actions
 
             if self.trace_store:
                 self.trace_store.add(trace)
@@ -229,24 +262,19 @@ class Agent:
             model: Model name
             thinking_level: "low", "medium", or "high"
             thinking_budget: Optional max thinking tokens
-            system_prompt: Custom system prompt (if empty, uses default)
+            system_prompt: System prompt from user settings
         """
         logger.info("=== Agent.ask_stream ===")
         logger.info(f"  model: {model}, thinking: {thinking_level}, budget: {thinking_budget}")
         logger.info(f"  file_refs count: {len(file_refs)}")
-        logger.info(
-            f"  system_prompt: {'custom' if system_prompt else 'default'} ({len(system_prompt)} chars)"
-        )
+        logger.info(f"  system_prompt: {len(system_prompt)} chars")
 
-        # Use custom or default system prompt
-        final_system_prompt = system_prompt if system_prompt else SYSTEM_PROMPT
-
-        # Create trace
+        # Create trace with all inputs
         trace = ModelTrace(
             conversation_id=conversation_id,
             model=model,
             thinking_level=thinking_level,
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             user_text=user_text,
             input_files=file_refs,
         )
@@ -271,7 +299,7 @@ class Agent:
         try:
             async for chunk in self.gemini_client.generate_stream_with_thoughts(
                 model=model,
-                system_prompt=final_system_prompt,
+                system_prompt=system_prompt,
                 user_text=user_text,
                 file_refs=file_refs,
                 thinking_level=thinking_level,
@@ -290,7 +318,7 @@ class Agent:
             # Calculate latency
             latency_ms = (time.perf_counter() - start_time) * 1000
 
-            # Update trace (full data, no truncation)
+            # Update trace with all outputs
             trace.response_json = {
                 "assistant_text": full_answer,
                 "thoughts": full_thought,

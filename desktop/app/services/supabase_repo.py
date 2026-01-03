@@ -60,6 +60,7 @@ class SupabaseRepo:
             response = (
                 client.table("tree_nodes")
                 .select("*")
+                .eq("client_id", client_id)
                 .eq("parent_id", parent_id)
                 .order("sort_order")
                 .order("name")
@@ -133,10 +134,51 @@ class SupabaseRepo:
 
         return await asyncio.to_thread(_sync_fetch)
 
+    async def fetch_document_bundle_files(self, document_node_id: str) -> dict:
+        """Fetch bundle files for document node"""
+
+        def _sync_fetch():
+            client = self._get_client()
+            response = (
+                client.table("node_files")
+                .select("*")
+                .eq("node_id", document_node_id)
+                .execute()
+            )
+            files = [NodeFile(**row) for row in response.data]
+
+            text_types = {"ocr_html", "result_json", "pdf"}
+            return {
+                "text_files": [f for f in files if f.file_type in text_types],
+                "crop_files": [f for f in files if f.file_type == "crop"],
+                "annotation_files": [f for f in files if f.file_type == "annotation"],
+            }
+
+        return await asyncio.to_thread(_sync_fetch)
+
+    async def fetch_all_crops_for_document(
+        self, client_id: str, document_node_id: str
+    ) -> list[NodeFile]:
+        """Fetch all crop files for document including descendants"""
+        # Get descendants via RPC
+        descendants = await self.get_descendant_documents(
+            client_id=client_id,
+            root_ids=[document_node_id],
+            node_types=None,
+        )
+        node_ids = [document_node_id] + [str(d.id) for d in descendants]
+
+        # Fetch all files
+        all_files = await self.fetch_node_files(node_ids)
+
+        # Filter crops
+        return [f for f in all_files if f.file_type == "crop"]
+
     # QA Conversations
 
     async def qa_create_conversation(
         self,
+        client_id: str,
         title: str = "",
     ) -> Conversation:
         """Create new conversation"""
@@ -146,7 +188,7 @@ class SupabaseRepo:
             now = datetime.utcnow().isoformat()
             data = {
                 "id": str(uuid4()),
-                "client_id": "default",
+                "client_id": client_id,
                 "title": title,
                 "created_at": now,
                 "updated_at": now,

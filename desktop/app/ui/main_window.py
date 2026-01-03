@@ -383,6 +383,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
                 timestamp = format_time(datetime.utcnow(), "%d.%m.%y %H:%M")
                 conv = await self.supabase_repo.qa_create_conversation(
+                    client_id="default",
                     title=f"Чат {timestamp}",
                 )
                 self.current_conversation_id = conv.id

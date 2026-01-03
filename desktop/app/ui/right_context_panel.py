@@ -1198,7 +1198,9 @@ class RightContextPanel(QWidget):
 
         if ok and title:
             try:
-                conv = await self.supabase_repo.qa_create_conversation(title=title)
+                conv = await self.supabase_repo.qa_create_conversation(
+                    client_id="default", title=title
+                )
                 await self.refresh_chats()
 
                 if self.toast_manager:

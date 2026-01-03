@@ -177,8 +177,43 @@ class ContextItem(BaseModel):
 
 
 # Model outputs
+
+class RequestFilesItem(BaseModel):
+    """Item for request_files action"""
+    context_item_id: str
+    kind: Literal["crop", "text"]
+    reason: str
+    priority: Literal["high", "medium", "low"] = "medium"
+
+
+class RequestFilesPayload(BaseModel):
+    """Payload for request_files action"""
+    items: list[RequestFilesItem] = Field(default_factory=list)
+
+
+class ImageRef(BaseModel):
+    """Reference to an image for ROI"""
+    context_item_id: str
+
+
+class BboxNorm(BaseModel):
+    """Normalized bounding box"""
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+
+class RequestRoiPayload(BaseModel):
+    """Payload for request_roi action"""
+    image_ref: ImageRef
+    goal: str
+    dpi: int = 400
+    suggested_bbox_norm: Optional[BboxNorm] = None
+
+
 class ModelAction(BaseModel):
-    type: Literal["answer", "open_image", "request_roi", "final"]
+    type: Literal["request_files", "open_image", "request_roi", "final"]
     payload: dict[str, Any] = Field(default_factory=dict)
     note: Optional[str] = None
 

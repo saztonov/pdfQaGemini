@@ -1,8 +1,13 @@
 """Event handlers for MainWindow"""
 import logging
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from qasync import asyncSlot
+
+from app.services.bundle_builder import DocumentBundleBuilder
+from app.models.schemas import FileType
 
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
@@ -15,7 +20,7 @@ class MainWindowHandlers:
 
     @asyncSlot(list)
     async def _on_nodes_add_context(self: "MainWindow", node_ids: list[str]):
-        """Handle add nodes to context - load files and upload to Gemini"""
+        """Handle add nodes to context - build bundle and upload to Gemini"""
         if not node_ids:
             return
 
@@ -23,7 +28,11 @@ class MainWindowHandlers:
             self.toast_manager.error("Supabase не инициализирован")
             return
 
-        self.toast_manager.info(f"Загрузка файлов для {len(node_ids)} узлов...")
+        if not self.gemini_client or not self.r2_client:
+            self.toast_manager.error("Сервисы не инициализированы")
+            return
+
+        self.toast_manager.info(f"Подготовка bundle для {len(node_ids)} узлов...")
 
         try:
             # Fetch node files for selected nodes
@@ -33,25 +42,130 @@ class MainWindowHandlers:
                 self.toast_manager.warning("Нет файлов для загрузки")
                 return
 
-            # Convert to files_info format and upload
-            files_info = []
-            for nf in node_files:
-                files_info.append(
-                    {
-                        "id": str(nf.id),
-                        "r2_key": nf.r2_key,
-                        "file_name": nf.file_name,
-                        "file_type": nf.file_type,
-                        "mime_type": nf.mime_type,
-                        "node_id": nf.node_id,
-                    }
-                )
-
-            await self._upload_files_to_gemini(files_info)
+            # Build bundle using DocumentBundleBuilder
+            await self._build_and_upload_bundle(node_files, node_ids)
 
         except Exception as e:
             logger.error(f"Ошибка загрузки файлов узлов: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
+
+    async def _build_and_upload_bundle(
+        self: "MainWindow", node_files: list, node_ids: list[str]
+    ):
+        """Build bundle.txt from node files and upload to Gemini"""
+        builder = DocumentBundleBuilder()
+
+        # Select primary text source
+        text_source = builder.select_primary_text_source(node_files)
+        text_bytes = None
+        text_file_type = None
+
+        if text_source:
+            logger.info(f"Text source selected: {text_source.file_type} - {text_source.file_name}")
+            # Download text file from R2
+            try:
+                text_bytes = await self.r2_client.download_bytes(text_source.r2_key)
+                text_file_type = text_source.file_type
+                logger.info(f"Downloaded {len(text_bytes)} bytes from R2")
+            except Exception as e:
+                logger.error(f"Failed to download text source: {e}")
+
+        # Get crop files
+        crop_files = [nf for nf in node_files if nf.file_type == FileType.CROP.value]
+        logger.info(f"Found {len(crop_files)} crop files")
+
+        # Get document name from first node
+        doc_name = "document"
+        if node_files:
+            # Try to get meaningful name
+            first_file = node_files[0]
+            doc_name = first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
+
+        # Build bundle
+        bundle_bytes, crop_index = builder.build_bundle(
+            text_file_bytes=text_bytes,
+            text_file_type=text_file_type,
+            crop_node_files=crop_files,
+            document_name=doc_name,
+        )
+
+        logger.info(f"Bundle built: {len(bundle_bytes)} bytes, {len(crop_index)} crops")
+
+        # Write bundle to temp file
+        bundle_file_name = f"{doc_name}_bundle.txt"
+        with tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".txt", delete=False
+        ) as tmp_file:
+            tmp_file.write(bundle_bytes)
+            tmp_path = Path(tmp_file.name)
+
+        try:
+            # Upload bundle to Gemini
+            self.toast_manager.info("Загрузка bundle.txt в Gemini...")
+
+            result = await self.gemini_client.upload_file(
+                tmp_path,
+                mime_type="text/plain",
+                display_name=bundle_file_name,
+            )
+
+            gemini_name = result.get("name")
+            gemini_uri = result.get("uri", "")
+            logger.info(f"Bundle uploaded: {gemini_name}")
+
+            # Save metadata to database
+            if self.supabase_repo and gemini_name:
+                # Use first node_file id as source reference
+                source_node_file_id = str(node_files[0].id) if node_files else None
+
+                gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
+                    gemini_name=gemini_name,
+                    gemini_uri=gemini_uri,
+                    display_name=bundle_file_name,
+                    mime_type="text/plain",
+                    size_bytes=len(bundle_bytes),
+                    source_node_file_id=source_node_file_id,
+                    source_r2_key=None,
+                    expires_at=None,
+                )
+
+                # Store crop_index in metadata for later use
+                if gemini_file_result and crop_index:
+                    # Could store crop_index in gemini_file metadata if needed
+                    logger.info(f"Crop index: {len(crop_index)} items stored")
+
+                # Attach to conversation
+                if self.current_conversation_id and gemini_file_result:
+                    gemini_file_id = gemini_file_result.get("id")
+                    if gemini_file_id:
+                        try:
+                            await self.supabase_repo.qa_attach_gemini_file(
+                                conversation_id=str(self.current_conversation_id),
+                                gemini_file_id=gemini_file_id,
+                            )
+                            logger.info(f"Bundle attached to chat {self.current_conversation_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to attach bundle: {e}")
+
+            # Refresh panels
+            if self.right_panel:
+                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+                await self.right_panel.refresh_files(conversation_id=conv_id)
+
+                if gemini_name:
+                    self.right_panel.select_file_for_request(gemini_name)
+
+                self._sync_files_to_chat()
+                await self.right_panel.refresh_chats()
+
+            self.toast_manager.success(f"✓ Bundle загружен ({len(bundle_bytes)} bytes)")
+
+        finally:
+            # Cleanup temp file
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
 
     @asyncSlot(list)
     async def _on_files_add_context(self: "MainWindow", files_info: list[dict]):
@@ -207,15 +321,10 @@ class MainWindowHandlers:
         thinking_budget: int,
         file_refs: list,
     ):
-        """Handle ask model request with streaming thoughts"""
-        logger.info("=== _on_ask_model ===")
+        """Handle ask model request - agentic loop with structured output"""
+        logger.info("=== _on_ask_model (agentic) ===")
         logger.info(f"  user_text: {user_text[:50]}...")
-        logger.info(
-            f"  system_prompt: {'custom' if system_prompt else 'default'} ({len(system_prompt)} chars)"
-        )
-        logger.info(f"  model_name: {model_name}")
-        logger.info(f"  thinking_level: {thinking_level}")
-        logger.info(f"  thinking_budget: {thinking_budget}")
+        logger.info(f"  model_name: {model_name}, thinking: {thinking_level}")
         logger.info(f"  file_refs: {len(file_refs)}")
 
         if not user_text.strip():
@@ -226,7 +335,7 @@ class MainWindowHandlers:
             self.toast_manager.error("Агент не инициализирован. Нажмите 'Подключиться'.")
             return
 
-        # Create conversation on first message if not exists
+        # Ensure conversation exists
         if not self.current_conversation_id:
             await self._ensure_conversation()
             if not self.current_conversation_id:
@@ -237,109 +346,349 @@ class MainWindowHandlers:
             self.chat_panel.set_input_enabled(False)
             self.chat_panel.add_user_message(user_text)
 
-        # Use file_refs from ChatPanel (already selected by user)
-        if not file_refs:
-            self.toast_manager.warning(
-                "⚠️ Нет выбранных файлов. Модель ответит без контекста документов."
-            )
-        else:
-            self.toast_manager.info(f"Запрос с {len(file_refs)} файлами...")
-
         try:
-            has_thoughts = False
-            full_answer = ""
-
-            if self.chat_panel:
-                self.chat_panel.start_thinking_block()
-
-            async for chunk in self.agent.ask_stream(
-                conversation_id=self.current_conversation_id,
-                user_text=user_text,
-                file_refs=file_refs,
-                model=model_name,
+            await self._run_agentic(
+                question=user_text,
+                system_prompt=system_prompt,
+                model_name=model_name,
                 thinking_level=thinking_level,
                 thinking_budget=thinking_budget,
-                system_prompt=system_prompt,
-            ):
-                chunk_type = chunk.get("type", "")
-                content = chunk.get("content", "")
-
-                if chunk_type == "thought":
-                    has_thoughts = True
-                    if self.chat_panel:
-                        self.chat_panel.append_thought_chunk(content)
-
-                elif chunk_type == "text":
-                    full_answer += content
-                    if self.chat_panel:
-                        self.chat_panel.append_answer_chunk(content)
-
-                elif chunk_type == "done":
-                    break
-
-                elif chunk_type == "error":
-                    raise Exception(content)
-
-            # Filter out JSON at the end if present
-            import re
-
-            json_pattern = r'\s*\{\s*"assistant_text"\s*:.*?\}\s*$'
-            full_answer = re.sub(json_pattern, "", full_answer, flags=re.DOTALL).strip()
-
-            if self.chat_panel:
-                if has_thoughts:
-                    self.chat_panel.finish_thinking_block()
-
-                meta = {
-                    "model": model_name,
-                    "thinking_level": thinking_level,
-                    "is_final": True,
-                    "files_count": len(file_refs),
-                }
-                self.chat_panel.add_assistant_message(full_answer, meta)
-
-            self.toast_manager.success("✓ Ответ получен")
-
-            # Update conversation timestamp
-            if self.current_conversation_id and self.supabase_repo:
-                try:
-                    await self.supabase_repo.qa_update_conversation(
-                        conversation_id=str(self.current_conversation_id)
-                    )
-                except Exception as e:
-                    logger.warning(f"Не удалось обновить timestamp чата: {e}")
-
-            # Save chat messages to R2
-            if self.current_conversation_id and self.supabase_repo and self.r2_client:
-                try:
-                    messages = await self.supabase_repo.qa_list_messages(
-                        str(self.current_conversation_id)
-                    )
-                    messages_data = [
-                        {
-                            "id": str(msg.id),
-                            "role": msg.role,
-                            "content": msg.content,
-                            "meta": msg.meta,
-                            "created_at": msg.created_at.isoformat() if msg.created_at else None,
-                        }
-                        for msg in messages
-                    ]
-                    await self.r2_client.save_chat_messages(
-                        str(self.current_conversation_id), messages_data
-                    )
-                    logger.info(
-                        f"Переписка сохранена на R2 для чата {self.current_conversation_id}"
-                    )
-                except Exception as e:
-                    logger.error(f"Не удалось сохранить переписку на R2: {e}")
-
+                initial_file_refs=file_refs,
+            )
         except Exception as e:
-            logger.error(f"Ошибка запроса: {e}", exc_info=True)
+            logger.error(f"Ошибка agentic loop: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
             if self.chat_panel:
                 self.chat_panel.add_system_message(f"Ошибка: {e}", "error")
-
         finally:
             if self.chat_panel:
                 self.chat_panel.set_input_enabled(True)
+
+    async def _run_agentic(
+        self: "MainWindow",
+        question: str,
+        system_prompt: str,
+        model_name: str,
+        thinking_level: str,
+        thinking_budget: int,
+        initial_file_refs: list,
+    ):
+        """Run agentic loop: PLAN → FETCH → ANSWER → ROI → FINAL"""
+        MAX_ITER = 4
+        current_file_refs = list(initial_file_refs)
+
+        # Build context catalog from available crops
+        context_catalog = self._build_context_catalog()
+
+        if not current_file_refs:
+            self.toast_manager.warning("⚠️ Нет файлов. Модель ответит без контекста.")
+        else:
+            self.toast_manager.info(f"Agentic запрос с {len(current_file_refs)} файлами...")
+
+        for iteration in range(MAX_ITER):
+            logger.info(f"=== Agentic iteration {iteration + 1}/{MAX_ITER} ===")
+
+            # Build prompt with catalog
+            user_prompt = self._build_agentic_prompt(question, context_catalog, iteration)
+
+            # Call agent with structured output
+            reply = await self.agent.ask_question(
+                conversation_id=self.current_conversation_id,
+                user_text=user_prompt,
+                file_refs=current_file_refs,
+                model=model_name,
+                system_prompt=system_prompt,
+                thinking_level="low",
+                thinking_budget=thinking_budget,
+            )
+
+            logger.info(f"  Reply: is_final={reply.is_final}, actions={len(reply.actions)}")
+
+            # Process actions
+            should_continue = False
+
+            for action in reply.actions:
+                action_type = action.type
+                logger.info(f"  Action: {action_type}")
+
+                if action_type == "request_files":
+                    items = action.payload.get("items", [])
+                    if items:
+                        self.toast_manager.info(f"Докачиваю {len(items)} файлов...")
+                        new_refs, uploaded_file_infos = await self._fetch_and_upload_crops(items)
+                        current_file_refs.extend(new_refs)
+                        # Update right panel and auto-select in chat
+                        if uploaded_file_infos:
+                            if self.right_panel:
+                                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+                                await self.right_panel.refresh_files(conversation_id=conv_id)
+                            if self.chat_panel:
+                                self.chat_panel.add_selected_files(uploaded_file_infos)
+                        should_continue = True
+
+                elif action_type == "request_roi":
+                    self.toast_manager.info("Рендерю ROI...")
+                    roi_ref = await self._handle_roi_action_agentic(action)
+                    if roi_ref:
+                        # Mark ROI for high resolution processing
+                        roi_ref["is_roi"] = True
+                        current_file_refs.append(roi_ref)
+                        should_continue = True
+
+                elif action_type == "final":
+                    # Show final answer in chat
+                    if self.chat_panel:
+                        meta = {
+                            "model": model_name,
+                            "thinking_level": thinking_level,
+                            "is_final": True,
+                            "iterations": iteration + 1,
+                            "files_count": len(current_file_refs),
+                        }
+                        self.chat_panel.add_assistant_message(reply.assistant_text, meta)
+
+                    self.toast_manager.success(f"✓ Ответ получен (итераций: {iteration + 1})")
+                    await self._save_conversation_state()
+                    return
+
+            # If no continue actions, show response and exit
+            if not should_continue:
+                if self.chat_panel:
+                    meta = {
+                        "model": model_name,
+                        "thinking_level": thinking_level,
+                        "is_final": reply.is_final,
+                        "iterations": iteration + 1,
+                        "files_count": len(current_file_refs),
+                    }
+                    self.chat_panel.add_assistant_message(reply.assistant_text, meta)
+
+                self.toast_manager.success(f"✓ Ответ получен (итераций: {iteration + 1})")
+                await self._save_conversation_state()
+                return
+
+        # Max iterations reached
+        self.toast_manager.warning(f"Достигнут лимит итераций ({MAX_ITER})")
+        if self.chat_panel:
+            self.chat_panel.add_system_message(
+                f"Лимит итераций ({MAX_ITER}) достигнут", "warning"
+            )
+        await self._save_conversation_state()
+
+    def _build_context_catalog(self: "MainWindow") -> dict:
+        """Build minimal context catalog JSON from available files"""
+        catalog = {"crops": [], "text_files": []}
+
+        if not self.right_panel:
+            return catalog
+
+        for item in getattr(self.right_panel, "context_items", []):
+            entry = {
+                "context_item_id": item.id,
+                "title": item.title,
+                "mime_type": item.mime_type,
+            }
+            # Classify by mime_type
+            if "image" in item.mime_type or "pdf" in item.mime_type:
+                catalog["crops"].append(entry)
+            else:
+                catalog["text_files"].append(entry)
+
+        return catalog
+
+    def _build_agentic_prompt(
+        self: "MainWindow", question: str, catalog: dict, iteration: int
+    ) -> str:
+        """Build user prompt with context catalog"""
+        import json
+
+        prompt_parts = [question]
+
+        if iteration == 0 and (catalog["crops"] or catalog["text_files"]):
+            prompt_parts.append("\n\n--- CONTEXT CATALOG ---")
+            prompt_parts.append(json.dumps(catalog, ensure_ascii=False, indent=2))
+            prompt_parts.append("--- END CATALOG ---")
+
+        return "\n".join(prompt_parts)
+
+    async def _fetch_and_upload_crops(
+        self: "MainWindow", items: list[dict]
+    ) -> tuple[list[dict], list[dict]]:
+        """Fetch crops from R2 and upload to Gemini, return (file_refs, file_infos)"""
+        new_refs = []
+        uploaded_file_infos = []
+
+        if not self.r2_client or not self.gemini_client:
+            return new_refs, uploaded_file_infos
+
+        for item in items:
+            context_item_id = item.get("context_item_id")
+            if not context_item_id:
+                continue
+
+            # Find context item by id
+            context_item = None
+            if self.right_panel:
+                for ci in getattr(self.right_panel, "context_items", []):
+                    if ci.id == context_item_id:
+                        context_item = ci
+                        break
+
+            if not context_item or not context_item.r2_key:
+                logger.warning(f"Context item not found: {context_item_id}")
+                continue
+
+            try:
+                # Download from R2
+                url = self.r2_client.build_public_url(context_item.r2_key)
+                cached_path = await self.r2_client.download_to_cache(url, context_item_id)
+
+                # Upload to Gemini
+                result = await self.gemini_client.upload_file(
+                    cached_path,
+                    mime_type=context_item.mime_type,
+                    display_name=context_item.title,
+                )
+
+                gemini_name = result.get("name")
+                gemini_uri = result.get("uri")
+                if gemini_uri:
+                    new_refs.append({
+                        "uri": gemini_uri,
+                        "mime_type": context_item.mime_type,
+                    })
+                    # Build file_info for chat panel
+                    uploaded_file_infos.append({
+                        "name": gemini_name,
+                        "uri": gemini_uri,
+                        "mime_type": context_item.mime_type,
+                        "display_name": result.get("display_name") or context_item.title,
+                    })
+                    logger.info(f"  Uploaded crop: {context_item.title}")
+
+            except Exception as e:
+                logger.error(f"Failed to upload crop {context_item_id}: {e}")
+
+        return new_refs, uploaded_file_infos
+
+    async def _handle_roi_action_agentic(
+        self: "MainWindow", action
+    ) -> dict | None:
+        """Handle ROI action in agentic mode, return file_ref or None"""
+        from app.ui.image_viewer import ImageViewerDialog
+        import tempfile
+        from datetime import datetime
+        import asyncio
+
+        payload = action.payload
+        image_ref = payload.get("image_ref", {})
+        context_item_id = image_ref.get("context_item_id") if isinstance(image_ref, dict) else image_ref
+
+        if not context_item_id:
+            return None
+
+        # Find context item
+        context_item = None
+        if self.right_panel:
+            for ci in getattr(self.right_panel, "context_items", []):
+                if ci.id == context_item_id:
+                    context_item = ci
+                    break
+
+        if not context_item or not context_item.r2_key:
+            return None
+
+        if not self.r2_client or not self.gemini_client or not self.pdf_renderer:
+            return None
+
+        try:
+            # Download file
+            url = self.r2_client.build_public_url(context_item.r2_key)
+            cached_path = await self.r2_client.download_to_cache(url, context_item.id)
+
+            # Render preview
+            preview_image = self.pdf_renderer.render_preview(cached_path, page_num=0, dpi=150)
+
+            # Show dialog and wait for result
+            result_ref = {"value": None}
+            event = asyncio.Event()
+
+            dialog = ImageViewerDialog(self)
+            dialog.load_image(preview_image)
+            dialog.set_model_suggestions([action])
+
+            async def on_roi_selected(bbox, note):
+                # Render ROI at high DPI
+                roi_png = self.pdf_renderer.render_roi(cached_path, bbox, page_num=0, dpi=400)
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                roi_filename = f"roi_{timestamp}.png"
+
+                # Upload to Gemini
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    tmp.write(roi_png)
+                    tmp_path = Path(tmp.name)
+
+                try:
+                    upload_result = await self.gemini_client.upload_file(
+                        tmp_path, mime_type="image/png", display_name=roi_filename
+                    )
+                    gemini_uri = upload_result.get("uri")
+                    if gemini_uri:
+                        result_ref["value"] = {"uri": gemini_uri, "mime_type": "image/png"}
+                finally:
+                    tmp_path.unlink(missing_ok=True)
+
+                event.set()
+
+            def on_rejected(reason):
+                event.set()
+
+            dialog.roiSelected.connect(
+                lambda bbox, note: asyncio.create_task(on_roi_selected(bbox, note))
+            )
+            dialog.roiRejected.connect(on_rejected)
+
+            dialog.show()
+            await event.wait()
+            dialog.close()
+
+            return result_ref["value"]
+
+        except Exception as e:
+            logger.error(f"ROI action failed: {e}")
+            return None
+
+    async def _save_conversation_state(self: "MainWindow"):
+        """Save conversation state after agentic loop"""
+        if not self.current_conversation_id or not self.supabase_repo:
+            return
+
+        try:
+            await self.supabase_repo.qa_update_conversation(
+                conversation_id=str(self.current_conversation_id)
+            )
+        except Exception as e:
+            logger.warning(f"Не удалось обновить timestamp чата: {e}")
+
+        # Save to R2
+        if self.r2_client:
+            try:
+                messages = await self.supabase_repo.qa_list_messages(
+                    str(self.current_conversation_id)
+                )
+                messages_data = [
+                    {
+                        "id": str(msg.id),
+                        "role": msg.role,
+                        "content": msg.content,
+                        "meta": msg.meta,
+                        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                    }
+                    for msg in messages
+                ]
+                await self.r2_client.save_chat_messages(
+                    str(self.current_conversation_id), messages_data
+                )
+            except Exception as e:
+                logger.error(f"Не удалось сохранить переписку на R2: {e}")

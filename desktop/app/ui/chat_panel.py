@@ -522,6 +522,20 @@ class ChatPanel(QWidget):
         self._selected_files.clear()
         self._rebuild_file_chips()
 
+    def add_selected_files(self, file_infos: list[dict]):
+        """Auto-select files by name (for agentic crops loading)"""
+        for f in file_infos:
+            name = f.get("name", "")
+            if not name:
+                continue
+            # Add to available if not present
+            if not any(af.get("name") == name for af in self._available_files):
+                self._available_files.append(f)
+            # Select it
+            self._selected_files[name] = f
+        self._rebuild_file_chips()
+        self._update_files_count()
+
     def _update_files_count(self):
         """Update files count label"""
         count = len(self._selected_files)

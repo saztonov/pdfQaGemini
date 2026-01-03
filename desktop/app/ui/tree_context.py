@@ -151,6 +151,7 @@ class TreeContextMixin:
         file_id = item.data(0, Qt.UserRole)
         r2_key = item.data(0, Qt.UserRole + 4)
         file_type = item.data(0, Qt.UserRole + 5)
+        mime_type = item.data(0, Qt.UserRole + 6)
 
         if not file_id or not r2_key:
             return None
@@ -172,7 +173,9 @@ class TreeContextMixin:
         for icon in ["📄", "📋", "📝", "📊", "🖼️"]:
             file_name = file_name.replace(icon, "").strip()
 
-        mime_type = self._get_mime_type_for_file_type(file_type)
+        # Prefer DB mime_type, fallback to guessing
+        if not mime_type:
+            mime_type = self._get_fallback_mime_type(file_type, r2_key)
 
         return {
             "id": file_id,
@@ -192,6 +195,7 @@ class TreeContextMixin:
         file_id = child.data(0, Qt.UserRole)
         r2_key = child.data(0, Qt.UserRole + 4)
         file_type = child.data(0, Qt.UserRole + 5)
+        mime_type = child.data(0, Qt.UserRole + 6)
 
         if not file_id or not r2_key:
             return None
@@ -204,7 +208,9 @@ class TreeContextMixin:
         for icon in ["📄", "📋", "📝", "📊", "🖼️"]:
             file_name = file_name.replace(icon, "").strip()
 
-        mime_type = self._get_mime_type_for_file_type(file_type)
+        # Prefer DB mime_type, fallback to guessing
+        if not mime_type:
+            mime_type = self._get_fallback_mime_type(file_type, r2_key)
 
         return {
             "id": file_id,
@@ -234,13 +240,23 @@ class TreeContextMixin:
                     continue
         return selected
 
-    def _get_mime_type_for_file_type(self: "LeftProjectsPanel", file_type: str) -> str:
-        """Get MIME type for file type"""
-        mime_map = {
-            "pdf": "application/pdf",
-            "annotation": "application/json",
-            "ocr_html": "text/html",
-            "result_json": "application/json",
-            "crop": "image/png",
-        }
-        return mime_map.get(file_type, "application/octet-stream")
+    def _get_fallback_mime_type(
+        self: "LeftProjectsPanel", file_type: str, r2_key: str
+    ) -> str:
+        """Get fallback MIME type when DB mime_type is empty"""
+        # Fallback by file_type
+        if file_type == "pdf":
+            return "application/pdf"
+        if file_type == "ocr_html":
+            return "text/plain"
+        if file_type in ("annotation", "result_json"):
+            return "application/json"
+        if file_type == "crop":
+            # Guess by extension
+            ext = r2_key.rsplit(".", 1)[-1].lower() if "." in r2_key else ""
+            if ext == "pdf":
+                return "application/pdf"
+            if ext in ("png", "jpg", "jpeg", "webp", "gif"):
+                return f"image/{ext.replace('jpg', 'jpeg')}"
+            return "application/pdf"
+        return "application/octet-stream"
