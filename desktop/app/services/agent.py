@@ -166,6 +166,7 @@ class Agent:
             ]
             trace.latency_ms = latency_ms
             trace.is_final = reply.is_final
+            trace.assistant_text = reply.assistant_text
             
             # Save assistant message
             await self.supabase_repo.qa_add_message(
@@ -221,6 +222,7 @@ class Agent:
         model: str,
         thinking_level: str = "medium",
         thinking_budget: Optional[int] = None,
+        system_prompt: str = "",
     ) -> AsyncIterator[dict]:
         """
         Ask question with streaming response including thoughts.
@@ -236,10 +238,15 @@ class Agent:
             model: Model name
             thinking_level: "low", "medium", or "high"
             thinking_budget: Optional max thinking tokens
+            system_prompt: Custom system prompt (if empty, uses default)
         """
         logger.info(f"=== Agent.ask_stream ===")
         logger.info(f"  model: {model}, thinking: {thinking_level}, budget: {thinking_budget}")
         logger.info(f"  file_refs count: {len(file_refs)}")
+        logger.info(f"  system_prompt: {'custom' if system_prompt else 'default'} ({len(system_prompt)} chars)")
+        
+        # Use custom or default system prompt
+        final_system_prompt = system_prompt if system_prompt else SYSTEM_PROMPT
         
         # Create trace
         trace = ModelTrace(
@@ -271,7 +278,7 @@ class Agent:
         try:
             async for chunk in self.gemini_client.generate_stream_with_thoughts(
                 model=model,
-                system_prompt=SYSTEM_PROMPT,
+                system_prompt=final_system_prompt,
                 user_text=user_text,
                 file_refs=file_refs,
                 thinking_level=thinking_level,
@@ -290,14 +297,16 @@ class Agent:
             # Calculate latency
             latency_ms = (time.perf_counter() - start_time) * 1000
             
-            # Update trace
+            # Update trace (full data, no truncation)
             trace.response_json = {
                 "assistant_text": full_answer,
-                "thought_summary": full_thought[:500] if full_thought else None,
+                "thoughts": full_thought,
             }
             trace.parsed_actions = []
             trace.latency_ms = latency_ms
             trace.is_final = True
+            trace.assistant_text = full_answer
+            trace.full_thoughts = full_thought
             
             # Save assistant message
             await self.supabase_repo.qa_add_message(
@@ -307,7 +316,6 @@ class Agent:
                 meta={
                     "model": model,
                     "thinking_level": thinking_level,
-                    "thought_summary": full_thought[:500] if full_thought else None,
                     "latency_ms": latency_ms,
                     "trace_id": trace.id,
                 }

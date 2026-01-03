@@ -193,11 +193,12 @@ class MainWindowHandlers:
         """Legacy handler - no longer used"""
         pass
     
-    @asyncSlot(str, str, str, object, list)
-    async def _on_ask_model(self: "MainWindow", user_text: str, model_name: str, thinking_level: str, thinking_budget: int, file_refs: list):
+    @asyncSlot(str, str, str, str, object, list)
+    async def _on_ask_model(self: "MainWindow", user_text: str, system_prompt: str, model_name: str, thinking_level: str, thinking_budget: int, file_refs: list):
         """Handle ask model request with streaming thoughts"""
         logger.info(f"=== _on_ask_model ===")
         logger.info(f"  user_text: {user_text[:50]}...")
+        logger.info(f"  system_prompt: {'custom' if system_prompt else 'default'} ({len(system_prompt)} chars)")
         logger.info(f"  model_name: {model_name}")
         logger.info(f"  thinking_level: {thinking_level}")
         logger.info(f"  thinking_budget: {thinking_budget}")
@@ -242,6 +243,7 @@ class MainWindowHandlers:
                 model=model_name,
                 thinking_level=thinking_level,
                 thinking_budget=thinking_budget,
+                system_prompt=system_prompt,
             ):
                 chunk_type = chunk.get("type", "")
                 content = chunk.get("content", "")

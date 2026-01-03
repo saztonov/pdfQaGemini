@@ -178,6 +178,15 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.action_settings.setToolTip("Настройки подключения")
         self.action_settings.triggered.connect(self._on_open_settings)
         settings_menu.addAction(self.action_settings)
+        
+        settings_menu.addSeparator()
+        
+        self.action_prompts = QAction("Промты", self)
+        self.action_prompts.setShortcut("Ctrl+P")
+        self.action_prompts.setToolTip("Управление промтами")
+        self.action_prompts.triggered.connect(self._on_open_prompts)
+        self.action_prompts.setEnabled(False)
+        settings_menu.addAction(self.action_prompts)
     
     def _connect_signals(self):
         """Connect panel signals"""
@@ -194,6 +203,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         
         if self.chat_panel:
             self.chat_panel.askModelRequested.connect(self._on_ask_model)
+            self.chat_panel.editPromptRequested.connect(self._on_edit_prompt_from_chat)
     
     @asyncSlot()
     async def _on_refresh_gemini_async(self):
@@ -229,6 +239,59 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         dialog = SettingsDialog(self)
         if dialog.exec():
             self.toast_manager.success("Настройки сохранены. Нажмите 'Подключиться' для применения.")
+    
+    @asyncSlot()
+    async def _on_open_prompts(self):
+        """Open prompts management dialog"""
+        if not self.supabase_repo:
+            self.toast_manager.error("Сначала подключитесь к базе данных")
+            return
+        
+        from app.ui.prompts_dialog import PromptsDialog
+        
+        dialog = PromptsDialog(
+            self.supabase_repo,
+            self.r2_client,
+            self.toast_manager,
+            self
+        )
+        await dialog.load_prompts()
+        result = dialog.exec()
+        
+        # Reload prompts in chat panel after dialog closes
+        if result and self.chat_panel:
+            await self._load_prompts()
+    
+    @asyncSlot(str)
+    async def _on_edit_prompt_from_chat(self, prompt_id: str):
+        """Open prompts dialog to edit specific prompt"""
+        if not self.supabase_repo:
+            self.toast_manager.error("Сначала подключитесь к базе данных")
+            return
+        
+        from app.ui.prompts_dialog import PromptsDialog
+        
+        dialog = PromptsDialog(
+            self.supabase_repo,
+            self.r2_client,
+            self.toast_manager,
+            self
+        )
+        await dialog.load_prompts()
+        
+        # Select the prompt in the dialog
+        for i in range(dialog.prompts_list.count()):
+            item = dialog.prompts_list.item(i)
+            if item.data(Qt.UserRole) == prompt_id:
+                dialog.prompts_list.setCurrentItem(item)
+                dialog._on_prompt_selected(item)
+                break
+        
+        result = dialog.exec()
+        
+        # Reload prompts in chat panel after dialog closes
+        if result and self.chat_panel:
+            await self._load_prompts()
     
     @asyncSlot()
     async def _on_connect(self):
@@ -311,6 +374,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
                 await self.left_panel.load_roots()
             
             await self._load_gemini_models()
+            await self._load_prompts()
             
             logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
             self.toast_manager.success("✓ Подключено")
@@ -345,6 +409,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.action_refresh_tree.setEnabled(True)
         self.action_upload.setEnabled(True)
         self.action_refresh_gemini.setEnabled(True)
+        self.action_prompts.setEnabled(True)
     
     @asyncSlot()
     async def _on_refresh_tree(self):
@@ -408,6 +473,21 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         except Exception as e:
             logger.error(f"Ошибка загрузки моделей: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
+    
+    async def _load_prompts(self):
+        """Load user prompts"""
+        if not self.supabase_repo:
+            return
+        
+        try:
+            prompts = await self.supabase_repo.prompts_list()
+            
+            if self.chat_panel:
+                self.chat_panel.set_prompts(prompts)
+                logger.info(f"Загружено {len(prompts)} промтов")
+        
+        except Exception as e:
+            logger.error(f"Ошибка загрузки промтов: {e}", exc_info=True)
     
     # Delegate to mixin
     async def _process_model_actions(self, actions: list):

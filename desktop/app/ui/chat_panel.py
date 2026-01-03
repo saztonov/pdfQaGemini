@@ -120,7 +120,8 @@ class ChatPanel(QWidget):
     """Chat panel with message history and input"""
     
     # Signals
-    askModelRequested = Signal(str, str, str, object, list)  # user_text, model_name, thinking_level, thinking_budget, file_refs
+    askModelRequested = Signal(str, str, str, str, object, list)  # user_text, system_prompt, model_name, thinking_level, thinking_budget, file_refs
+    editPromptRequested = Signal(str)  # prompt_id
     
     def __init__(self):
         super().__init__()
@@ -130,6 +131,8 @@ class ChatPanel(QWidget):
         self._renderer = MessageRenderer()
         self._available_files: list[dict] = []  # files from Gemini
         self._selected_files: dict[str, dict] = {}  # name -> file_info
+        self._available_prompts: list[dict] = []  # user prompts
+        self._current_system_prompt: str = ""
         self._setup_ui()
     
     def _setup_ui(self):
@@ -269,6 +272,41 @@ class ChatPanel(QWidget):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(8)
         toolbar_layout.setContentsMargins(0, 4, 0, 0)
+        
+        # Prompt selector
+        prompt_label = QLabel("📝")
+        prompt_label.setToolTip("Промты")
+        prompt_label.setStyleSheet("color: #888; font-size: 14px;")
+        toolbar_layout.addWidget(prompt_label)
+        
+        self.prompt_combo = QComboBox()
+        self.prompt_combo.setToolTip("Выбор промта")
+        self.prompt_combo.currentIndexChanged.connect(self._on_prompt_changed)
+        self.prompt_combo.setFixedWidth(150)
+        self.prompt_combo.setStyleSheet(self._combo_style())
+        self.prompt_combo.addItem("Без промта", None)
+        toolbar_layout.addWidget(self.prompt_combo)
+        
+        # Edit prompt button
+        self.btn_edit_prompt = QPushButton("✏️")
+        self.btn_edit_prompt.setToolTip("Редактировать промт")
+        self.btn_edit_prompt.setFixedSize(28, 28)
+        self.btn_edit_prompt.setCursor(Qt.PointingHandCursor)
+        self.btn_edit_prompt.clicked.connect(self._on_edit_prompt)
+        self.btn_edit_prompt.setEnabled(False)
+        self.btn_edit_prompt.setStyleSheet("""
+            QPushButton {
+                background-color: #3e3e42;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: #505054; }
+            QPushButton:disabled { background-color: transparent; color: #555; }
+        """)
+        toolbar_layout.addWidget(self.btn_edit_prompt)
+        
+        toolbar_layout.addSpacing(8)
         
         # Model selector
         self.model_combo = QComboBox()
@@ -503,13 +541,14 @@ class ChatPanel(QWidget):
         thinking_level = self.thinking_combo.currentData() or "medium"
         thinking_budget = self.budget_combo.currentData()  # None = auto
         file_refs = self.get_selected_file_refs()
+        system_prompt = self._current_system_prompt
         
-        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}")
+        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}, system_prompt_len={len(system_prompt)}")
         if not model_name:
             logger.warning("No model selected!")
             return
         
-        self.askModelRequested.emit(text, model_name, thinking_level, thinking_budget, file_refs)
+        self.askModelRequested.emit(text, system_prompt, model_name, thinking_level, thinking_budget, file_refs)
         self.input_field.clear()
     
     def _on_model_changed(self, index: int):
@@ -705,3 +744,56 @@ class ChatPanel(QWidget):
                 self._messages.append({"role": "system", "content": content, "timestamp": timestamp, "level": msg.get("level", "info")})
         
         self._rerender_messages()
+    
+    def set_prompts(self, prompts: list[dict]):
+        """Set available prompts"""
+        self._available_prompts = prompts
+        self.prompt_combo.blockSignals(True)
+        
+        # Save current selection
+        current_id = self.prompt_combo.currentData()
+        
+        self.prompt_combo.clear()
+        self.prompt_combo.addItem("Без промта", None)
+        
+        for prompt in prompts:
+            prompt_id = prompt.get("id")
+            title = prompt.get("title", "Без названия")
+            self.prompt_combo.addItem(title, prompt_id)
+        
+        # Restore selection
+        if current_id:
+            idx = self.prompt_combo.findData(current_id)
+            if idx >= 0:
+                self.prompt_combo.setCurrentIndex(idx)
+        
+        self.prompt_combo.blockSignals(False)
+    
+    def _on_prompt_changed(self, index: int):
+        """Handle prompt selection change"""
+        prompt_id = self.prompt_combo.currentData()
+        
+        if prompt_id is None:
+            # No prompt selected
+            self._current_system_prompt = ""
+            self.btn_edit_prompt.setEnabled(False)
+            return
+        
+        # Find prompt
+        prompt = next((p for p in self._available_prompts if p.get("id") == prompt_id), None)
+        if prompt:
+            self._current_system_prompt = prompt.get("system_prompt", "")
+            user_text = prompt.get("user_text", "")
+            
+            # Fill user text if not empty
+            if user_text:
+                self.input_field.setPlainText(user_text)
+            
+            self.btn_edit_prompt.setEnabled(True)
+            logger.info(f"Prompt applied: {prompt.get('title')}, system_prompt_len={len(self._current_system_prompt)}, user_text_len={len(user_text)}")
+    
+    def _on_edit_prompt(self):
+        """Handle edit prompt button click"""
+        prompt_id = self.prompt_combo.currentData()
+        if prompt_id:
+            self.editPromptRequested.emit(prompt_id)

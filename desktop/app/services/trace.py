@@ -21,6 +21,9 @@ class ModelTrace(BaseModel):
     latency_ms: Optional[float] = None
     errors: list[str] = Field(default_factory=list)
     is_final: bool = False
+    # Full response data (no truncation)
+    assistant_text: str = ""
+    full_thoughts: str = ""
     
     class Config:
         from_attributes = True

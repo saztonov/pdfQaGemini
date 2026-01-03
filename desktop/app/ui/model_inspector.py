@@ -1,4 +1,4 @@
-"""Model inspector window"""
+"""Model inspector window - full logging of model interactions"""
 from typing import Optional
 import json
 from PySide6.QtWidgets import (
@@ -11,8 +11,14 @@ from PySide6.QtGui import QFont, QColor
 from app.services.trace import TraceStore, ModelTrace
 
 
+def format_time(dt, fmt: str) -> str:
+    """Format datetime"""
+    from app.utils.time_utils import format_time as ft
+    return ft(dt, fmt)
+
+
 class ModelInspectorWindow(QMainWindow):
-    """Window for inspecting model call traces"""
+    """Window for inspecting model call traces - full logging"""
     
     def __init__(self, trace_store: TraceStore, parent=None):
         super().__init__(parent)
@@ -20,7 +26,7 @@ class ModelInspectorWindow(QMainWindow):
         self.current_trace: Optional[ModelTrace] = None
         
         self.setWindowTitle("Инспектор модели")
-        self.resize(1200, 800)
+        self.resize(1400, 900)
         
         self._setup_ui()
         self._setup_refresh_timer()
@@ -39,7 +45,7 @@ class ModelInspectorWindow(QMainWindow):
         left_panel = self._create_left_panel()
         layout.addWidget(left_panel, 1)
         
-        # Right panel: Tabs with details
+        # Right panel: Full log view
         right_panel = self._create_right_panel()
         layout.addWidget(right_panel, 3)
     
@@ -96,7 +102,7 @@ class ModelInspectorWindow(QMainWindow):
         return panel
     
     def _create_right_panel(self) -> QWidget:
-        """Create right panel with tabs"""
+        """Create right panel with full log tabs"""
         panel = QFrame()
         panel.setFrameStyle(QFrame.StyledPanel)
         layout = QVBoxLayout(panel)
@@ -122,17 +128,29 @@ class ModelInspectorWindow(QMainWindow):
             }
         """)
         
-        # Overview tab
-        self.overview_text = self._create_text_area()
-        self.tabs.addTab(self.overview_text, "📊 Обзор")
+        # Full Log tab (main view)
+        self.full_log_text = self._create_text_area()
+        self.tabs.addTab(self.full_log_text, "📋 Полный лог")
         
-        # Request tab
-        self.request_text = self._create_text_area()
-        self.tabs.addTab(self.request_text, "📤 Запрос")
+        # System Prompt tab
+        self.system_prompt_text = self._create_text_area()
+        self.tabs.addTab(self.system_prompt_text, "📝 Системный промпт")
+        
+        # User Request tab
+        self.user_request_text = self._create_text_area()
+        self.tabs.addTab(self.user_request_text, "👤 Запрос")
+        
+        # Thoughts tab
+        self.thoughts_text = self._create_text_area()
+        self.tabs.addTab(self.thoughts_text, "🧠 Мысли модели")
         
         # Response tab
         self.response_text = self._create_text_area()
-        self.tabs.addTab(self.response_text, "📥 Ответ")
+        self.tabs.addTab(self.response_text, "📥 Ответ модели")
+        
+        # JSON tab
+        self.json_text = self._create_text_area()
+        self.tabs.addTab(self.json_text, "{ } JSON")
         
         # Errors tab
         self.errors_text = self._create_text_area(error=True)
@@ -142,16 +160,28 @@ class ModelInspectorWindow(QMainWindow):
         
         # Copy buttons
         btn_layout = QHBoxLayout()
-        self.btn_copy_request = QPushButton("📋 Копировать запрос")
-        self.btn_copy_request.clicked.connect(self._copy_request_json)
+        
+        self.btn_copy_all = QPushButton("📋 Копировать всё")
+        self.btn_copy_all.clicked.connect(self._copy_all)
+        self.btn_copy_all.setEnabled(False)
+        self.btn_copy_all.setStyleSheet("font-weight: bold;")
+        
+        self.btn_copy_request = QPushButton("Копировать запрос")
+        self.btn_copy_request.clicked.connect(self._copy_request)
         self.btn_copy_request.setEnabled(False)
         
-        self.btn_copy_response = QPushButton("📋 Копировать ответ")
-        self.btn_copy_response.clicked.connect(self._copy_response_json)
+        self.btn_copy_response = QPushButton("Копировать ответ")
+        self.btn_copy_response.clicked.connect(self._copy_response)
         self.btn_copy_response.setEnabled(False)
         
+        self.btn_copy_json = QPushButton("Копировать JSON")
+        self.btn_copy_json.clicked.connect(self._copy_json)
+        self.btn_copy_json.setEnabled(False)
+        
+        btn_layout.addWidget(self.btn_copy_all)
         btn_layout.addWidget(self.btn_copy_request)
         btn_layout.addWidget(self.btn_copy_response)
+        btn_layout.addWidget(self.btn_copy_json)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
         
@@ -161,6 +191,7 @@ class ModelInspectorWindow(QMainWindow):
         """Create styled text area"""
         text_edit = QPlainTextEdit()
         text_edit.setReadOnly(True)
+        text_edit.setLineWrapMode(QPlainTextEdit.WidgetWidth)
         
         font = QFont("Consolas", 11)
         font.setStyleHint(QFont.Monospace)
@@ -202,7 +233,6 @@ class ModelInspectorWindow(QMainWindow):
         self.trace_list.clear()
         traces = self.trace_store.list()
         
-        from app.utils.time_utils import format_time
         for trace in traces:
             time_str = format_time(trace.ts, "%H:%M:%S")
             latency_str = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "—"
@@ -212,7 +242,10 @@ class ModelInspectorWindow(QMainWindow):
             if trace.errors:
                 status = "✗"
             
-            item_text = f"[{time_str}] {status} {latency_str} | {files_count} файл(ов)"
+            # Show model name shortened
+            model_short = trace.model.replace("gemini-", "").replace("-preview", "")
+            
+            item_text = f"[{time_str}] {status} {model_short} | {latency_str} | {files_count} файл(ов)"
             
             item = QListWidgetItem(item_text)
             item.setData(Qt.UserRole, trace.id)
@@ -245,103 +278,283 @@ class ModelInspectorWindow(QMainWindow):
         self.current_trace = trace
         self._display_trace(trace)
         
+        # Enable buttons
+        self.btn_copy_all.setEnabled(True)
         self.btn_copy_request.setEnabled(True)
-        self.btn_copy_response.setEnabled(bool(trace.response_json))
+        self.btn_copy_response.setEnabled(bool(trace.assistant_text or trace.response_json))
+        self.btn_copy_json.setEnabled(bool(trace.response_json))
         
         # Switch to errors tab if there are errors
         if trace.errors:
-            self.tabs.setCurrentIndex(3)
+            self.tabs.setCurrentIndex(6)  # Errors tab
     
     def _display_trace(self, trace: ModelTrace):
-        """Display trace details"""
-        # Overview
-        overview = f"""═══════════════════════════════════════════════════════════
-                      ОБЗОР ЗАПРОСА
+        """Display trace details in all tabs"""
+        time_str = format_time(trace.ts, "%Y-%m-%d %H:%M:%S")
+        
+        # === Full Log Tab ===
+        full_log = self._build_full_log(trace, time_str)
+        self.full_log_text.setPlainText(full_log)
+        
+        # === System Prompt Tab ===
+        self.system_prompt_text.setPlainText(trace.system_prompt or "(нет системного промпта)")
+        
+        # === User Request Tab ===
+        user_request = f"""═══════════════════════════════════════════════════════════
+                        ЗАПРОС ПОЛЬЗОВАТЕЛЯ
 ═══════════════════════════════════════════════════════════
 
-📌 Модель:           {trace.model}
+📅 Время: {time_str}
+📌 Модель: {trace.model}
 🧠 Уровень мышления: {trace.thinking_level}
-⏱️ Задержка:         {trace.latency_ms:.2f} мс
-✅ Финальный:        {"Да" if trace.is_final else "Нет"}
-📁 Входных файлов:   {len(trace.input_files)}
+📁 Файлов: {len(trace.input_files)}
 
-═══════════════════════════════════════════════════════════
-                   ИДЕНТИФИКАТОРЫ
-═══════════════════════════════════════════════════════════
+───────────────────────────────────────────────────────────
+                         ТЕКСТ ЗАПРОСА
+───────────────────────────────────────────────────────────
 
-🆔 ID диалога:     {trace.conversation_id}
-🔖 ID трассировки: {trace.id}
-🕐 Время:          {format_time(trace.ts, "%Y-%m-%d %H:%M:%S")}
-
-═══════════════════════════════════════════════════════════
-                    ВХОДНЫЕ ФАЙЛЫ
-═══════════════════════════════════════════════════════════
+{trace.user_text}
 
 """
         if trace.input_files:
+            user_request += """───────────────────────────────────────────────────────────
+                       ПРИКРЕПЛЁННЫЕ ФАЙЛЫ
+───────────────────────────────────────────────────────────
+
+"""
             for i, f in enumerate(trace.input_files, 1):
                 uri = f.get("uri", "—")
                 mime = f.get("mime_type", "—")
-                overview += f"  {i}. {mime}\n     {uri}\n\n"
+                name = f.get("display_name") or f.get("name", "—")
+                user_request += f"  {i}. {name}\n     MIME: {mime}\n     URI: {uri}\n\n"
+        
+        self.user_request_text.setPlainText(user_request)
+        
+        # === Thoughts Tab ===
+        if trace.full_thoughts:
+            thoughts = f"""═══════════════════════════════════════════════════════════
+                        МЫСЛИ МОДЕЛИ (полностью)
+═══════════════════════════════════════════════════════════
+
+{trace.full_thoughts}
+"""
         else:
-            overview += "  (нет файлов)\n"
+            thoughts = "(модель не использовала режим мышления или мысли не записаны)"
+        self.thoughts_text.setPlainText(thoughts)
         
-        self.overview_text.setPlainText(overview)
+        # === Response Tab ===
+        response_text = trace.assistant_text or ""
+        if not response_text and trace.response_json:
+            response_text = trace.response_json.get("assistant_text", "")
         
-        # Request
-        request_data = {
-            "model": trace.model,
-            "system_prompt": trace.system_prompt,
-            "user_text": trace.user_text,
-            "file_refs": trace.input_files,
-            "thinking_level": trace.thinking_level,
+        response = f"""═══════════════════════════════════════════════════════════
+                        ОТВЕТ МОДЕЛИ (полностью)
+═══════════════════════════════════════════════════════════
+
+⏱️ Задержка: {trace.latency_ms:.2f} мс
+✅ Финальный: {"Да" if trace.is_final else "Нет"}
+
+───────────────────────────────────────────────────────────
+                         ТЕКСТ ОТВЕТА
+───────────────────────────────────────────────────────────
+
+{response_text}
+"""
+        self.response_text.setPlainText(response)
+        
+        # === JSON Tab ===
+        json_data = {
+            "request": {
+                "model": trace.model,
+                "thinking_level": trace.thinking_level,
+                "system_prompt": trace.system_prompt,
+                "user_text": trace.user_text,
+                "input_files": trace.input_files,
+            },
+            "response": trace.response_json,
+            "meta": {
+                "trace_id": trace.id,
+                "conversation_id": str(trace.conversation_id),
+                "timestamp": time_str,
+                "latency_ms": trace.latency_ms,
+                "is_final": trace.is_final,
+            }
         }
-        request_text = json.dumps(request_data, indent=2, ensure_ascii=False)
-        self.request_text.setPlainText(request_text)
+        if trace.full_thoughts:
+            json_data["thoughts"] = trace.full_thoughts
+        if trace.parsed_actions:
+            json_data["parsed_actions"] = trace.parsed_actions
+        if trace.errors:
+            json_data["errors"] = trace.errors
         
-        # Response
-        if trace.response_json:
-            response_text = json.dumps(trace.response_json, indent=2, ensure_ascii=False)
-        else:
-            response_text = "(нет ответа)"
-        self.response_text.setPlainText(response_text)
+        json_text = json.dumps(json_data, indent=2, ensure_ascii=False)
+        self.json_text.setPlainText(json_text)
         
-        # Errors
+        # === Errors Tab ===
         if trace.errors:
             errors_text = "\n\n".join(trace.errors)
         else:
             errors_text = "✓ Ошибок нет"
         self.errors_text.setPlainText(errors_text)
     
-    def _copy_request_json(self):
-        """Copy request JSON to clipboard"""
+    def _build_full_log(self, trace: ModelTrace, time_str: str) -> str:
+        """Build full chronological log text"""
+        lines = []
+        
+        lines.append("╔═══════════════════════════════════════════════════════════╗")
+        lines.append("║              ПОЛНЫЙ ЛОГ ВЗАИМОДЕЙСТВИЯ С МОДЕЛЬЮ          ║")
+        lines.append("╚═══════════════════════════════════════════════════════════╝")
+        lines.append("")
+        lines.append(f"═══ ЗАПРОС {trace.id[:8]} ═══")
+        lines.append("")
+        lines.append(f"⏰ Время: {time_str}")
+        lines.append(f"📌 Модель: {trace.model}")
+        lines.append(f"🧠 Thinking Level: {trace.thinking_level}")
+        lines.append(f"⏱️ Latency: {trace.latency_ms:.2f} мс" if trace.latency_ms else "⏱️ Latency: —")
+        lines.append(f"✅ Финальный: {'Да' if trace.is_final else 'Нет'}")
+        lines.append(f"📁 Файлов: {len(trace.input_files)}")
+        lines.append("")
+        
+        # System prompt
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 📝 SYSTEM PROMPT                                            │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        lines.append(trace.system_prompt or "(нет)")
+        lines.append("")
+        
+        # User text
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 👤 USER TEXT                                                │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        lines.append(trace.user_text or "(нет)")
+        lines.append("")
+        
+        # Input files
+        if trace.input_files:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 📁 INPUT FILES                                              │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            for i, f in enumerate(trace.input_files, 1):
+                lines.append(f"  {i}. {f.get('display_name') or f.get('name', '—')}")
+                lines.append(f"     mime: {f.get('mime_type', '—')}")
+                lines.append(f"     uri: {f.get('uri', '—')}")
+                lines.append("")
+        
+        # Thoughts (full)
+        if trace.full_thoughts:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 🧠 MODEL THOUGHTS (полностью)                               │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(trace.full_thoughts)
+            lines.append("")
+        
+        # Response
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 📥 RESPONSE JSON                                            │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        if trace.response_json:
+            lines.append(json.dumps(trace.response_json, indent=2, ensure_ascii=False))
+        else:
+            lines.append("(нет ответа)")
+        lines.append("")
+        
+        # Assistant text (full)
+        response_text = trace.assistant_text or ""
+        if not response_text and trace.response_json:
+            response_text = trace.response_json.get("assistant_text", "")
+        
+        if response_text:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 💬 ASSISTANT TEXT (полностью)                               │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(response_text)
+            lines.append("")
+        
+        # Parsed actions
+        if trace.parsed_actions:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ ⚡ PARSED ACTIONS                                           │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(json.dumps(trace.parsed_actions, indent=2, ensure_ascii=False))
+            lines.append("")
+        
+        # Errors
+        if trace.errors:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ ⚠️ ERRORS                                                   │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            for err in trace.errors:
+                lines.append(f"  ❌ {err}")
+            lines.append("")
+        
+        lines.append("═══════════════════════════════════════════════════════════════")
+        lines.append("                        КОНЕЦ ЛОГА")
+        lines.append("═══════════════════════════════════════════════════════════════")
+        
+        return "\n".join(lines)
+    
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard"""
+        from PySide6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+    
+    def _copy_all(self):
+        """Copy full log to clipboard"""
+        if not self.current_trace:
+            return
+        
+        text = self.full_log_text.toPlainText()
+        self._copy_to_clipboard(text)
+    
+    def _copy_request(self):
+        """Copy request data to clipboard"""
         if not self.current_trace:
             return
         
         request_data = {
             "model": self.current_trace.model,
+            "thinking_level": self.current_trace.thinking_level,
             "system_prompt": self.current_trace.system_prompt,
             "user_text": self.current_trace.user_text,
-            "file_refs": self.current_trace.input_files,
-            "thinking_level": self.current_trace.thinking_level,
+            "input_files": self.current_trace.input_files,
         }
         
         json_str = json.dumps(request_data, indent=2, ensure_ascii=False)
-        
-        from PySide6.QtWidgets import QApplication
-        clipboard = QApplication.clipboard()
-        clipboard.setText(json_str)
+        self._copy_to_clipboard(json_str)
     
-    def _copy_response_json(self):
-        """Copy response JSON to clipboard"""
-        if not self.current_trace or not self.current_trace.response_json:
+    def _copy_response(self):
+        """Copy response to clipboard"""
+        if not self.current_trace:
             return
         
-        json_str = json.dumps(self.current_trace.response_json, indent=2, ensure_ascii=False)
+        response_text = self.current_trace.assistant_text or ""
+        if not response_text and self.current_trace.response_json:
+            response_text = self.current_trace.response_json.get("assistant_text", "")
         
-        from PySide6.QtWidgets import QApplication
-        clipboard = QApplication.clipboard()
-        clipboard.setText(json_str)
+        # Include thoughts if available
+        if self.current_trace.full_thoughts:
+            full_text = f"=== МЫСЛИ МОДЕЛИ ===\n\n{self.current_trace.full_thoughts}\n\n=== ОТВЕТ МОДЕЛИ ===\n\n{response_text}"
+        else:
+            full_text = response_text
+        
+        self._copy_to_clipboard(full_text)
+    
+    def _copy_json(self):
+        """Copy full JSON to clipboard"""
+        if not self.current_trace:
+            return
+        
+        text = self.json_text.toPlainText()
+        self._copy_to_clipboard(text)
     
     def _clear_traces(self):
         """Clear all traces"""
@@ -349,10 +562,17 @@ class ModelInspectorWindow(QMainWindow):
         self.current_trace = None
         self._refresh_list()
         
-        self.overview_text.clear()
-        self.request_text.clear()
+        # Clear all tabs
+        self.full_log_text.clear()
+        self.system_prompt_text.clear()
+        self.user_request_text.clear()
+        self.thoughts_text.clear()
         self.response_text.clear()
+        self.json_text.clear()
         self.errors_text.clear()
         
+        # Disable buttons
+        self.btn_copy_all.setEnabled(False)
         self.btn_copy_request.setEnabled(False)
         self.btn_copy_response.setEnabled(False)
+        self.btn_copy_json.setEnabled(False)

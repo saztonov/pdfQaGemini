@@ -272,3 +272,51 @@ class R2AsyncClient:
                 logger.info(f"Deleted {len(delete_keys)} objects from chat {conversation_id}")
         
         await asyncio.to_thread(_sync_delete)
+    
+    # Prompts storage methods
+    
+    async def save_prompt(self, prompt_id: str, prompt_data: dict) -> str:
+        """
+        Save prompt to R2 as JSON.
+        Returns R2 key.
+        """
+        import json
+        
+        r2_key = f"prompts/{prompt_id}.json"
+        data = json.dumps(prompt_data, ensure_ascii=False, indent=2).encode("utf-8")
+        
+        await self.upload_bytes(r2_key, data, content_type="application/json")
+        return r2_key
+    
+    async def load_prompt(self, prompt_id: str) -> Optional[dict]:
+        """
+        Load prompt from R2.
+        Returns prompt data or None if not found.
+        """
+        import json
+        
+        r2_key = f"prompts/{prompt_id}.json"
+        
+        try:
+            exists = await self.object_exists(r2_key)
+            if not exists:
+                return None
+            
+            data = await self.download_bytes(r2_key)
+            return json.loads(data.decode("utf-8"))
+        except Exception as e:
+            logger.error(f"Error loading prompt: {e}")
+            return None
+    
+    async def delete_prompt(self, prompt_id: str) -> None:
+        """Delete prompt from R2"""
+        def _sync_delete():
+            s3 = self._get_s3_client()
+            r2_key = f"prompts/{prompt_id}.json"
+            try:
+                s3.delete_object(Bucket=self.bucket, Key=r2_key)
+                logger.info(f"Deleted prompt {prompt_id}")
+            except Exception as e:
+                logger.error(f"Error deleting prompt: {e}")
+        
+        await asyncio.to_thread(_sync_delete)
