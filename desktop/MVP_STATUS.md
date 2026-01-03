@@ -45,9 +45,9 @@ desktop/
 
 ### 3. UI Components
 - ✓ MainWindow: toolbar, 3-panel splitter, state management
-- ✓ LeftProjectsPanel: QTreeWidget, client_id input, lazy loading, Add to Context
-- ✓ ChatPanel: HTML formatted messages, user/assistant/system, metadata display
-- ✓ RightContextPanel: 2 tabs (Context, Gemini Files), tables, Load/Upload/Delete
+- ✓ LeftProjectsPanel: QTreeWidget, lazy loading, прямая загрузка в Gemini
+- ✓ ChatPanel: HTML chat, streaming thoughts, **выбор файлов через чипы**, model/thinking selector
+- ✓ RightContextPanel: **единая панель Gemini Files** с чекбоксами для выбора файлов
 - ✓ ToastManager: 4 types (info/success/warning/error), non-blocking, stacked
 
 ### 4. Services
@@ -73,21 +73,15 @@ desktop/
 
 ## 🔄 Workflow Implementation
 
-### Complete User Flow
-1. ✓ Startup → check configuration → toast if not configured
+### Упрощённый User Flow (v2)
+1. ✓ Startup → auto-connect если настроено → toast если нет
 2. ✓ Settings → configure Supabase/R2/Gemini → save to QSettings
-3. ✓ Connect → loads QSettings → initializes services → creates conversation
-2. ✓ LeftPanel: enter client_id → Refresh → lazy tree loading
-3. ✓ Select nodes → Add to Context → get_descendant_documents()
-4. ✓ RightPanel Context tab: Load Node Files → fetch_node_files()
-5. ✓ Select files → Upload to Gemini → download + upload + cache
-6. ✓ RightPanel Gemini Files tab: Refresh → list_files()
-7. ✓ ChatPanel: ask question → Agent.ask() → structured generation
-8. ✓ Display assistant reply with metadata (model, thinking, actions, is_final)
-9. ✓ Process actions:
-   - open_image: download → render preview → ImageViewerDialog
-   - request_roi: download → render → ROI selection → render high-quality → upload R2 + Gemini → ask model again
-   - final: completion message
+3. ✓ Connect → инициализация сервисов → загрузка Gemini Files
+4. ✓ **LeftPanel: выбор файлов → "📤 Загрузить в Gemini" → мгновенная загрузка**
+5. ✓ **RightPanel: автообновление списка Gemini Files с чекбоксами**
+6. ✓ **ChatPanel: выбор файлов через чипы → ввод вопроса → отправка**
+7. ✓ Streaming thoughts + answer display
+8. ✓ Process actions (open_image, request_roi, final)
 
 ## ⏳ Not Implemented (Out of MVP Scope)
 - Pro model fallback for is_final=true
@@ -100,10 +94,10 @@ desktop/
 ## 📋 Known Limitations (MVP)
 
 1. No RLS - security через application logic
-2. Gemini Files всегда с mime_type="application/pdf" (можно улучшить)
-3. Context item status только локально (не сохраняется в БД пока не нужно)
+2. ~~Gemini Files всегда с mime_type="application/pdf"~~ ✓ ИСПРАВЛЕНО - определяется автоматически
+3. ~~Context item status только локально~~ ✓ УДАЛЕНО - Context tab убран, прямая загрузка в Gemini
 4. Один активный conversation per session (можно добавить список)
-5. Thinking level hardcoded "low" (можно добавить переключатель)
+5. ~~Thinking level hardcoded "low"~~ ✓ ИСПРАВЛЕНО - селектор в ChatPanel
 6. No pagination для больших списков (MVP достаточно)
 
 ## 🚀 Ready to Run

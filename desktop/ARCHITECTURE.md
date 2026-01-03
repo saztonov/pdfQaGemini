@@ -34,16 +34,20 @@ Desktop приложение на PySide6 + qasync для работы с PDF д
 - PDF не дублируется (только как сам документ)
 
 #### ChatPanel
-- QTextEdit для истории (read-only, HTML formatting)
-- QLineEdit + QPushButton для ввода
-- Методы: add_user_message, add_assistant_message, add_system_message
-- Emit: askModelRequested(user_text)
+- QTextBrowser для истории (read-only, HTML formatting, collapsible thoughts)
+- Улучшенная форма ввода с:
+  - Выбором файлов через чипы (FileChip)
+  - Кнопками "Все" / "Снять" для быстрого выбора
+  - Селектором модели и уровня thinking
+- Методы: add_user_message, add_assistant_message, set_available_files
+- Emit: askModelRequested(user_text, model_name, thinking_level, file_refs)
 
 #### RightContextPanel
-- QTabWidget: Context + Gemini Files
-- Context tab: таблица ContextItem, кнопки Load/Upload/Detach
-- Gemini Files tab: таблица list_files(), кнопки Refresh/Delete
-- Emit: uploadContextItemsRequested, refreshGeminiRequested
+- Единая панель Gemini Files (без вкладок)
+- Таблица загруженных файлов с чекбоксами для выбора
+- Кнопки: Обновить, Удалить, Выбрать все, Снять выбор
+- Автоматическое обновление после загрузки файлов
+- Emit: refreshGeminiRequested, filesSelectionChanged
 
 #### ToastManager
 - Очередь всплывающих уведомлений
@@ -91,47 +95,33 @@ Desktop приложение на PySide6 + qasync для работы с PDF д
 
 ## Data Flow
 
-### Add Documents to Context
-```
-User selects nodes in tree
-  → LeftProjectsPanel.add_selected_to_context()
-    → SupabaseRepo.get_descendant_documents(root_ids, node_types=["document"])
-      → emit addToContextRequested(document_node_ids)
-        → MainWindow._on_nodes_add_context()
-          → RightContextPanel.set_context_node_ids()
+### Упрощённый Workflow (Select → Upload → Ask)
 
-User clicks "Load Node Files"
-  → RightContextPanel.load_node_files()
-    → SupabaseRepo.fetch_node_files(context_node_ids)
-      → creates ContextItem[] → updates context_table
 ```
+1. Выбор файлов в дереве → Мгновенная загрузка в Gemini
+   User selects nodes/files in tree → clicks "📤 Загрузить в Gemini"
+     → LeftProjectsPanel.add_selected_to_context()
+       → emit addToContextRequested(node_ids) или addFilesToContextRequested(files_info)
+         → MainWindow._upload_files_to_gemini(files_info)
+           → for each file:
+               R2AsyncClient.download_to_cache(r2_key)
+               GeminiClient.upload_file(cached_path)
+           → RightContextPanel.refresh_files()  # автообновление
+           → ChatPanel.set_available_files()    # синхронизация с чатом
 
-### Upload to Gemini
-```
-User selects files, clicks "Upload Selected to Gemini"
-  → RightContextPanel.upload_selected_to_gemini()
-    → emit uploadContextItemsRequested(item_ids)
-      → MainWindow._on_upload_context_items()
-        → for each item:
-            R2AsyncClient.download_to_cache(r2_key)
-            GeminiClient.upload_file(cached_path)
-            update ContextItem status + gemini_name
-            add to attached_gemini_files[]
-```
+2. Выбор файлов для запроса (в ChatPanel)
+   User clicks file chips in input form
+     → _selected_files updated
+     → visual feedback (blue selected, gray unselected)
 
-### Ask Model
-```
-User types question, presses Send
-  → ChatPanel emit askModelRequested(user_text)
-    → MainWindow._on_ask_model()
-      → collect file_uris from attached_gemini_files
-      → Agent.ask(conversation_id, user_text, file_uris)
-        → save user message to qa_messages
-        → GeminiClient.generate_structured(system_prompt, user_text, file_uris, schema)
-          → returns ModelReply
-        → save assistant message to qa_messages
-      → ChatPanel.add_assistant_message(reply.assistant_text, meta)
-      → _process_model_actions(reply.actions)
+3. Отправка запроса с выбранными файлами
+   User types question, selects files, presses Send
+     → ChatPanel emit askModelRequested(text, model, thinking, file_refs)
+       → MainWindow._on_ask_model()
+         → Agent.ask_stream(conversation_id, user_text, file_refs, model, thinking_level)
+           → streaming thoughts → ChatPanel.append_thought_chunk()
+           → streaming answer → ChatPanel.append_answer_chunk()
+         → ChatPanel.add_assistant_message(answer, meta)
 ```
 
 ## Database Schema (Supabase)

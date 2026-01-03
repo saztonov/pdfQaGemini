@@ -1,8 +1,9 @@
-"""Center panel - Chat"""
+"""Center panel - Chat with file selection"""
 import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QPushButton, QComboBox, QFrame, QTextBrowser
+    QPushButton, QComboBox, QFrame, QTextBrowser,
+    QScrollArea, QLabel, QSizePolicy
 )
 from PySide6.QtCore import Signal, Qt, Slot, QUrl
 from PySide6.QtGui import QTextCursor, QKeyEvent
@@ -11,6 +12,73 @@ from app.models.schemas import MODEL_THINKING_LEVELS, MODEL_DEFAULT_THINKING, DE
 from app.ui.message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
+
+
+class FileChip(QFrame):
+    """Clickable file chip for selection"""
+    
+    clicked = Signal(str, bool)  # file_name, is_selected
+    
+    def __init__(self, file_name: str, display_name: str, selected: bool = False, parent=None):
+        super().__init__(parent)
+        self.file_name = file_name
+        self._selected = selected
+        
+        self.setFixedHeight(28)
+        self.setCursor(Qt.PointingHandCursor)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 2, 8, 2)
+        layout.setSpacing(4)
+        
+        self.check_label = QLabel("✓" if selected else "○")
+        self.check_label.setFixedWidth(14)
+        layout.addWidget(self.check_label)
+        
+        # Truncate long names
+        short_name = display_name[:25] + "..." if len(display_name) > 28 else display_name
+        self.name_label = QLabel(short_name)
+        self.name_label.setToolTip(display_name)
+        layout.addWidget(self.name_label)
+        
+        self._update_style()
+    
+    @property
+    def selected(self) -> bool:
+        return self._selected
+    
+    @selected.setter
+    def selected(self, value: bool):
+        self._selected = value
+        self.check_label.setText("✓" if value else "○")
+        self._update_style()
+    
+    def _update_style(self):
+        if self._selected:
+            self.setStyleSheet("""
+                QFrame {
+                    background-color: #0e639c;
+                    border-radius: 14px;
+                    border: 1px solid #1177bb;
+                }
+                QLabel { color: white; font-size: 11px; }
+            """)
+        else:
+            self.setStyleSheet("""
+                QFrame {
+                    background-color: #3e3e42;
+                    border-radius: 14px;
+                    border: 1px solid #555;
+                }
+                QFrame:hover { background-color: #505054; }
+                QLabel { color: #ccc; font-size: 11px; }
+            """)
+    
+    def mousePressEvent(self, event):
+        self._selected = not self._selected
+        self.check_label.setText("✓" if self._selected else "○")
+        self._update_style()
+        self.clicked.emit(self.file_name, self._selected)
 
 
 class PromptInput(QTextEdit):
@@ -49,7 +117,7 @@ class ChatPanel(QWidget):
     """Chat panel with message history and input"""
     
     # Signals
-    askModelRequested = Signal(str, str, str)  # user_text, model_name, thinking_level
+    askModelRequested = Signal(str, str, str, list)  # user_text, model_name, thinking_level, file_refs
     
     def __init__(self):
         super().__init__()
@@ -57,6 +125,8 @@ class ChatPanel(QWidget):
         self._current_answer_block_id: str | None = None
         self._messages: list[dict] = []
         self._renderer = MessageRenderer()
+        self._available_files: list[dict] = []  # files from Gemini
+        self._selected_files: dict[str, dict] = {}  # name -> file_info
         self._setup_ui()
     
     def _setup_ui(self):
@@ -86,48 +156,127 @@ class ChatPanel(QWidget):
         # Input Block
         self.input_container = QFrame()
         self.input_container.setStyleSheet("""
-            QFrame {
+            QFrame#input_container {
                 background-color: #2d2d2d;
                 border: 1px solid #404040;
-                border-radius: 24px;
-                padding: 4px;
+                border-radius: 16px;
+            }
+        """)
+        self.input_container.setObjectName("input_container")
+        
+        input_main_layout = QVBoxLayout(self.input_container)
+        input_main_layout.setContentsMargins(12, 10, 12, 10)
+        input_main_layout.setSpacing(8)
+        
+        # Files selection area
+        self.files_header = QHBoxLayout()
+        self.files_header.setSpacing(8)
+        
+        files_label = QLabel("📎 Файлы:")
+        files_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.files_header.addWidget(files_label)
+        
+        self.files_count_label = QLabel("0 выбрано")
+        self.files_count_label.setStyleSheet("color: #0e639c; font-size: 11px;")
+        self.files_header.addWidget(self.files_count_label)
+        
+        self.btn_toggle_files = QPushButton("▼")
+        self.btn_toggle_files.setFixedSize(24, 24)
+        self.btn_toggle_files.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_files.setToolTip("Показать/скрыть файлы")
+        self.btn_toggle_files.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #888;
+                font-size: 10px;
+            }
+            QPushButton:hover { color: #fff; }
+        """)
+        self.btn_toggle_files.clicked.connect(self._toggle_files_panel)
+        self.files_header.addWidget(self.btn_toggle_files)
+        
+        self.files_header.addStretch()
+        
+        self.btn_select_all_files = QPushButton("Все")
+        self.btn_select_all_files.setFixedHeight(22)
+        self.btn_select_all_files.setCursor(Qt.PointingHandCursor)
+        self.btn_select_all_files.setStyleSheet(self._small_button_style())
+        self.btn_select_all_files.clicked.connect(self._select_all_files)
+        self.files_header.addWidget(self.btn_select_all_files)
+        
+        self.btn_clear_files = QPushButton("Снять")
+        self.btn_clear_files.setFixedHeight(22)
+        self.btn_clear_files.setCursor(Qt.PointingHandCursor)
+        self.btn_clear_files.setStyleSheet(self._small_button_style())
+        self.btn_clear_files.clicked.connect(self._clear_file_selection)
+        self.files_header.addWidget(self.btn_clear_files)
+        
+        input_main_layout.addLayout(self.files_header)
+        
+        # Files chips container (collapsible)
+        self.files_scroll = QScrollArea()
+        self.files_scroll.setWidgetResizable(True)
+        self.files_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.files_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.files_scroll.setMaximumHeight(100)
+        self.files_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: transparent;
+                border: none;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: transparent;
             }
         """)
         
-        input_main_layout = QVBoxLayout(self.input_container)
-        input_main_layout.setContentsMargins(16, 12, 16, 8)
-        input_main_layout.setSpacing(8)
+        self.files_container = QWidget()
+        self.files_layout = QHBoxLayout(self.files_container)
+        self.files_layout.setContentsMargins(0, 0, 0, 0)
+        self.files_layout.setSpacing(6)
+        self.files_layout.addStretch()
+        
+        self.files_scroll.setWidget(self.files_container)
+        input_main_layout.addWidget(self.files_scroll)
+        
+        # No files message
+        self.no_files_label = QLabel("Нет загруженных файлов. Выберите файлы в дереве проектов.")
+        self.no_files_label.setStyleSheet("color: #666; font-size: 11px; padding: 8px 0;")
+        self.no_files_label.setAlignment(Qt.AlignCenter)
+        input_main_layout.addWidget(self.no_files_label)
         
         # Text input area
         self.input_field = PromptInput()
-        self.input_field.setPlaceholderText("Спросите Gemini 3...")
+        self.input_field.setPlaceholderText("Задайте вопрос... (Enter - отправить, Shift+Enter - новая строка)")
         self.input_field.sendRequested.connect(self._on_send)
         self.input_field.setStyleSheet("""
             QTextEdit {
-                background-color: transparent;
-                border: none;
-                font-size: 15px;
+                background-color: #1e1e1e;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                font-size: 14px;
                 color: #e0e0e0;
-                padding: 0px;
+                padding: 8px;
             }
+            QTextEdit:focus { border: 1px solid #0e639c; }
         """)
         input_main_layout.addWidget(self.input_field)
         
         # Bottom toolbar
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(8)
-        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setContentsMargins(0, 4, 0, 0)
         
         # Model selector
         self.model_combo = QComboBox()
         self.model_combo.setToolTip("Выбор модели")
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
-        self.model_combo.setFixedWidth(90)
+        self.model_combo.setFixedWidth(140)
         self.model_combo.setStyleSheet(self._combo_style())
         
         # Thinking level selector
         self.thinking_combo = QComboBox()
-        self.thinking_combo.setToolTip("Режим рассуждения")
+        self.thinking_combo.setToolTip("Уровень рассуждения")
         self.thinking_combo.setFixedWidth(100)
         self.thinking_combo.setStyleSheet(self._combo_style())
         
@@ -136,22 +285,23 @@ class ChatPanel(QWidget):
         toolbar_layout.addStretch()
         
         # Send button
-        self.btn_send = QPushButton("Отправить")
-        self.btn_send.setToolTip("Отправить (Enter)")
+        self.btn_send = QPushButton("➤ Отправить")
+        self.btn_send.setToolTip("Отправить запрос (Enter)")
         self.btn_send.clicked.connect(self._on_send)
-        self.btn_send.setFixedHeight(32)
+        self.btn_send.setFixedHeight(36)
+        self.btn_send.setCursor(Qt.PointingHandCursor)
         self.btn_send.setStyleSheet("""
             QPushButton {
-                background-color: #4285f4;
+                background-color: #0e639c;
                 color: white;
                 border: none;
-                border-radius: 6px;
-                padding: 0 16px;
+                border-radius: 8px;
+                padding: 0 20px;
                 font-size: 13px;
                 font-weight: 500;
             }
-            QPushButton:hover { background-color: #5a9cf5; }
-            QPushButton:pressed { background-color: #3367d6; }
+            QPushButton:hover { background-color: #1177bb; }
+            QPushButton:pressed { background-color: #0a4d78; }
             QPushButton:disabled { background-color: #404040; color: #666; }
         """)
         
@@ -161,16 +311,31 @@ class ChatPanel(QWidget):
         
         layout.addWidget(self.input_container)
         
+        self._files_panel_visible = True
         self._show_welcome()
+        self._update_files_visibility()
+    
+    def _small_button_style(self) -> str:
+        return """
+            QPushButton {
+                background-color: #3e3e42;
+                color: #aaa;
+                border: none;
+                border-radius: 4px;
+                padding: 2px 8px;
+                font-size: 10px;
+            }
+            QPushButton:hover { background-color: #505054; color: #fff; }
+        """
     
     def _combo_style(self) -> str:
         return """
             QComboBox {
-                background-color: #404040;
+                background-color: #3e3e42;
                 color: #e0e0e0;
                 border: 1px solid #555;
-                border-radius: 12px;
-                padding: 4px 8px;
+                border-radius: 8px;
+                padding: 6px 10px;
                 font-size: 12px;
             }
             QComboBox:hover { background-color: #505050; }
@@ -185,21 +350,113 @@ class ChatPanel(QWidget):
             QComboBox QAbstractItemView {
                 background-color: #333;
                 color: #e0e0e0;
-                selection-background-color: #4285f4;
+                selection-background-color: #0e639c;
                 border: 1px solid #555;
                 border-radius: 8px;
             }
         """
+    
+    def _toggle_files_panel(self):
+        """Toggle files panel visibility"""
+        self._files_panel_visible = not self._files_panel_visible
+        self.btn_toggle_files.setText("▲" if self._files_panel_visible else "▼")
+        self._update_files_visibility()
+    
+    def _update_files_visibility(self):
+        """Update files panel visibility"""
+        has_files = len(self._available_files) > 0
+        self.files_scroll.setVisible(self._files_panel_visible and has_files)
+        self.no_files_label.setVisible(self._files_panel_visible and not has_files)
+        self.btn_select_all_files.setVisible(has_files)
+        self.btn_clear_files.setVisible(has_files)
     
     def _show_welcome(self):
         """Show welcome message"""
         self.chat_history.setHtml("""
             <div style="color: #888; padding: 40px; text-align: center;">
                 <h2 style="color: #e0e0e0; margin-bottom: 16px;">pdfQaGemini</h2>
-                <p style="font-size: 14px;">Выберите документы слева, добавьте в контекст,<br>
-                загрузите в Gemini Files и задайте вопрос.</p>
+                <p style="font-size: 14px; line-height: 1.6;">
+                    1. Выберите файлы в дереве проектов слева<br>
+                    2. Они автоматически загрузятся в Gemini Files<br>
+                    3. Выберите нужные файлы для запроса<br>
+                    4. Задайте вопрос
+                </p>
             </div>
         """)
+    
+    def set_available_files(self, files: list[dict]):
+        """Set available Gemini files for selection"""
+        self._available_files = files
+        self._rebuild_file_chips()
+        self._update_files_visibility()
+    
+    def _rebuild_file_chips(self):
+        """Rebuild file chips from available files"""
+        # Clear existing chips
+        while self.files_layout.count() > 1:  # Keep stretch
+            item = self.files_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add chips for each file
+        for file_info in self._available_files:
+            name = file_info.get("name", "")
+            display = file_info.get("display_name") or name
+            selected = name in self._selected_files
+            
+            chip = FileChip(name, display, selected)
+            chip.clicked.connect(self._on_file_chip_clicked)
+            self.files_layout.insertWidget(self.files_layout.count() - 1, chip)
+        
+        self._update_files_count()
+    
+    def _on_file_chip_clicked(self, file_name: str, is_selected: bool):
+        """Handle file chip click"""
+        if is_selected:
+            # Find file info
+            for f in self._available_files:
+                if f.get("name") == file_name:
+                    self._selected_files[file_name] = f
+                    break
+        else:
+            self._selected_files.pop(file_name, None)
+        
+        self._update_files_count()
+    
+    def _select_all_files(self):
+        """Select all available files"""
+        self._selected_files.clear()
+        for f in self._available_files:
+            name = f.get("name", "")
+            if name:
+                self._selected_files[name] = f
+        self._rebuild_file_chips()
+    
+    def _clear_file_selection(self):
+        """Clear file selection"""
+        self._selected_files.clear()
+        self._rebuild_file_chips()
+    
+    def _update_files_count(self):
+        """Update files count label"""
+        count = len(self._selected_files)
+        total = len(self._available_files)
+        if count == 0:
+            self.files_count_label.setText(f"{total} доступно")
+            self.files_count_label.setStyleSheet("color: #888; font-size: 11px;")
+        else:
+            self.files_count_label.setText(f"{count} из {total} выбрано")
+            self.files_count_label.setStyleSheet("color: #0e639c; font-size: 11px;")
+    
+    def get_selected_file_refs(self) -> list[dict]:
+        """Get selected file references for request"""
+        refs = []
+        for f in self._selected_files.values():
+            refs.append({
+                "uri": f.get("uri"),
+                "mime_type": f.get("mime_type", "application/octet-stream"),
+            })
+        return refs
     
     def _on_link_clicked(self, url: QUrl):
         """Handle link clicks for collapsible thoughts"""
@@ -230,13 +487,14 @@ class ChatPanel(QWidget):
         
         model_name = self.model_combo.currentData()
         thinking_level = self.thinking_combo.currentData() or "medium"
+        file_refs = self.get_selected_file_refs()
         
-        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}")
+        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}, files={len(file_refs)}")
         if not model_name:
             logger.warning("No model selected!")
             return
         
-        self.askModelRequested.emit(text, model_name, thinking_level)
+        self.askModelRequested.emit(text, model_name, thinking_level, file_refs)
         self.input_field.clear()
     
     def _on_model_changed(self, index: int):
@@ -250,7 +508,7 @@ class ChatPanel(QWidget):
         levels = MODEL_THINKING_LEVELS.get(model_name, ["medium"])
         default = MODEL_DEFAULT_THINKING.get(model_name, "medium")
         
-        level_display = {"low": "Low", "medium": "Medium", "high": "High"}
+        level_display = {"low": "🐇 Low", "medium": "🦊 Medium", "high": "🦉 High"}
         
         for level in levels:
             self.thinking_combo.addItem(level_display.get(level, level), level)
@@ -298,10 +556,14 @@ class ChatPanel(QWidget):
     def add_user_message(self, text: str):
         """Add user message to chat"""
         timestamp = datetime.now().strftime("%H:%M:%S")
+        files_info = ""
+        if self._selected_files:
+            files_info = f" [{len(self._selected_files)} файлов]"
         self._messages.append({
             "role": "user",
             "content": text,
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "files_count": len(self._selected_files)
         })
         self._rerender_messages()
     

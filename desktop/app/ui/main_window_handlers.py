@@ -17,160 +17,139 @@ class MainWindowHandlers:
     
     @asyncSlot(list)
     async def _on_nodes_add_context(self: "MainWindow", node_ids: list[str]):
-        """Handle add nodes to context"""
+        """Handle add nodes to context - load files and upload to Gemini"""
         if not node_ids:
             return
         
-        new_count = 0
-        for node_id in node_ids:
-            if node_id not in self.context_node_ids:
-                self.context_node_ids.append(node_id)
-                new_count += 1
+        if not self.supabase_repo:
+            self.toast_manager.error("Supabase не инициализирован")
+            return
         
-        if self.supabase_repo and self.current_conversation_id:
-            try:
-                await self.supabase_repo.qa_add_nodes(
-                    str(self.current_conversation_id),
-                    node_ids
-                )
-            except Exception as e:
-                logger.error(f"Ошибка сохранения узлов в БД: {e}")
-                self.toast_manager.error(f"Ошибка сохранения: {e}")
+        self.toast_manager.info(f"Загрузка файлов для {len(node_ids)} узлов...")
+        
+        try:
+            # Fetch node files for selected nodes
+            node_files = await self.supabase_repo.fetch_node_files(node_ids)
+            
+            if not node_files:
+                self.toast_manager.warning("Нет файлов для загрузки")
                 return
-        
-        if self.right_panel:
-            self.right_panel.set_context_node_ids(self.context_node_ids)
-            await self.right_panel.load_node_files()
-        else:
-            self.toast_manager.success(f"В контекст добавлено {len(node_ids)} документов")
+            
+            # Convert to files_info format and upload
+            files_info = []
+            for nf in node_files:
+                files_info.append({
+                    "id": str(nf.id),
+                    "r2_key": nf.r2_key,
+                    "file_name": nf.file_name,
+                    "file_type": nf.file_type,
+                    "mime_type": nf.mime_type,
+                    "node_id": nf.node_id,
+                })
+            
+            await self._upload_files_to_gemini(files_info)
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки файлов узлов: {e}", exc_info=True)
+            self.toast_manager.error(f"Ошибка: {e}")
     
     @asyncSlot(list)
     async def _on_files_add_context(self: "MainWindow", files_info: list[dict]):
-        """Handle add files to context"""
+        """Handle add files to context - upload directly to Gemini"""
         if not files_info:
             return
         
-        logger.info(f"Добавление {len(files_info)} файлов напрямую в контекст")
-        
-        if self.right_panel:
-            await self.right_panel.add_files_to_context(files_info)
-        else:
-            self.toast_manager.success(f"Добавлено {len(files_info)} файлов в контекст")
+        await self._upload_files_to_gemini(files_info)
     
-    @asyncSlot(list)
-    async def _on_upload_context_items(self: "MainWindow", item_ids: list):
-        """Handle upload context items to Gemini"""
-        logger.info(f"=== НАЧАЛО ЗАГРУЗКИ В GEMINI ===")
-        logger.info(f"Количество выбранных элементов: {len(item_ids)}")
-        logger.info(f"IDs: {item_ids}")
+    async def _upload_files_to_gemini(self: "MainWindow", files_info: list[dict]):
+        """Upload files to Gemini and refresh panel"""
+        logger.info(f"=== ЗАГРУЗКА {len(files_info)} ФАЙЛОВ В GEMINI ===")
         
         if not self.gemini_client or not self.r2_client:
             logger.error("Сервисы не инициализированы")
             self.toast_manager.error("Сервисы не инициализированы")
             return
         
-        if not self.right_panel:
-            logger.error("RightPanel не инициализирован")
-            self.toast_manager.error("Панель контекста не инициализирована")
-            return
-        
-        logger.info(f"Всего элементов в контексте: {len(self.right_panel.context_items)}")
-        
-        self.toast_manager.info(f"Загрузка {len(item_ids)} файлов в Gemini...")
+        self.toast_manager.info(f"Загрузка {len(files_info)} файлов в Gemini...")
         
         uploaded_count = 0
         failed_count = 0
+        uploaded_names = []
         
-        for idx, item_id in enumerate(item_ids, 1):
+        for idx, file_info in enumerate(files_info, 1):
             try:
-                logger.info(f"--- Обработка файла {idx}/{len(item_ids)}: {item_id} ---")
+                r2_key = file_info.get("r2_key")
+                file_name = file_info.get("file_name", "file")
+                mime_type = file_info.get("mime_type", "application/octet-stream")
+                file_id = file_info.get("id", str(idx))
                 
-                context_item = None
-                for item in self.right_panel.context_items:
-                    if item.id == item_id:
-                        context_item = item
-                        break
-                
-                if not context_item:
-                    logger.warning(f"Элемент {item_id} не найден в контексте, пропуск")
+                if not r2_key:
+                    logger.warning(f"Файл {file_name} не имеет r2_key, пропуск")
                     failed_count += 1
                     continue
                 
-                logger.info(f"Найден элемент: title={context_item.title}, r2_key={context_item.r2_key}, mime={context_item.mime_type}")
+                # Download from R2
+                url = self.r2_client.build_public_url(r2_key)
+                logger.info(f"[{idx}/{len(files_info)}] Скачивание: {file_name}")
                 
-                if not context_item.r2_key:
-                    logger.warning(f"Элемент {item_id} не имеет r2_key, пропуск")
-                    failed_count += 1
-                    continue
+                cached_path = await self.r2_client.download_to_cache(url, file_id)
                 
-                url = self.r2_client.build_public_url(context_item.r2_key)
-                logger.info(f"Скачивание из R2: url={url}")
-                
-                cached_path = await self.r2_client.download_to_cache(url, item_id)
-                logger.info(f"Файл скачан в кэш: {cached_path}, существует={cached_path.exists()}, размер={cached_path.stat().st_size if cached_path.exists() else 0} байт")
-                
-                logger.info(f"Загрузка в Gemini: mime_type={context_item.mime_type}, display_name={context_item.title}")
+                # Upload to Gemini
+                logger.info(f"[{idx}/{len(files_info)}] Загрузка в Gemini: {file_name}")
                 
                 result = await self.gemini_client.upload_file(
                     cached_path,
-                    mime_type=context_item.mime_type,
-                    display_name=context_item.title,
+                    mime_type=mime_type,
+                    display_name=file_name,
                 )
                 
-                logger.info(f"Gemini результат: name={result.get('name')}, uri={result.get('uri')}")
-                
-                gemini_name = result["name"]
-                gemini_uri = result["uri"]
-                
-                if self.right_panel:
-                    self.right_panel.update_context_item_status(
-                        item_id,
-                        "uploaded",
-                        gemini_name
-                    )
-                    logger.info(f"Статус элемента обновлен: uploaded, gemini_name={gemini_name}")
-                
-                if self.supabase_repo and self.current_conversation_id and context_item.node_file_id:
-                    try:
-                        await self.supabase_repo.qa_save_context_file(
-                            str(self.current_conversation_id),
-                            str(context_item.node_file_id),
-                            gemini_name=gemini_name,
-                            gemini_uri=gemini_uri,
-                            status="uploaded",
-                        )
-                    except Exception as e:
-                        logger.error(f"Ошибка сохранения статуса в БД: {e}")
-                
-                self.attached_gemini_files.append({
-                    "gemini_name": gemini_name,
-                    "gemini_uri": gemini_uri,
-                    "context_item_id": item_id,
-                    "mime_type": context_item.mime_type,
-                })
+                gemini_name = result.get("name")
+                logger.info(f"[{idx}/{len(files_info)}] ✓ Загружен: {gemini_name}")
                 
                 uploaded_count += 1
-                logger.info(f"✓ Файл {idx}/{len(item_ids)} успешно загружен")
+                if gemini_name:
+                    uploaded_names.append(gemini_name)
             
             except Exception as e:
-                logger.error(f"✗ Ошибка загрузки файла {item_id}: {e}", exc_info=True)
+                logger.error(f"✗ Ошибка загрузки {file_info.get('file_name', '?')}: {e}", exc_info=True)
                 failed_count += 1
-                self.toast_manager.error(f"Ошибка файла {idx}: {e}")
         
-        logger.info(f"=== ЗАВЕРШЕНИЕ ЗАГРУЗКИ: успешно={uploaded_count}, ошибок={failed_count} ===")
+        # Refresh Gemini Files panel
+        if self.right_panel:
+            await self.right_panel.refresh_files()
+            
+            # Auto-select newly uploaded files
+            for name in uploaded_names:
+                self.right_panel.select_file_for_request(name)
+            
+            # Sync to chat panel
+            self._sync_files_to_chat()
         
+        # Show result
         if uploaded_count > 0:
-            self.toast_manager.success(f"Загружено {uploaded_count} файлов в Gemini")
+            self.toast_manager.success(f"✓ Загружено {uploaded_count} файлов в Gemini")
         if failed_count > 0:
-            self.toast_manager.warning(f"Не удалось загрузить {failed_count} файлов")
+            self.toast_manager.warning(f"✗ Не удалось загрузить {failed_count} файлов")
     
-    @asyncSlot(str, str, str)
-    async def _on_ask_model(self: "MainWindow", user_text: str, model_name: str, thinking_level: str):
+    def _sync_files_to_chat(self: "MainWindow"):
+        """Sync available Gemini files to chat panel"""
+        if self.right_panel and self.chat_panel:
+            files = self.right_panel.gemini_files
+            self.chat_panel.set_available_files(files)
+    
+    @asyncSlot(list)
+    async def _on_upload_context_items(self: "MainWindow", item_ids: list):
+        """Legacy handler - no longer used"""
+        pass
+    
+    @asyncSlot(str, str, str, list)
+    async def _on_ask_model(self: "MainWindow", user_text: str, model_name: str, thinking_level: str, file_refs: list):
         """Handle ask model request with streaming thoughts"""
         logger.info(f"=== _on_ask_model ===")
         logger.info(f"  user_text: {user_text[:50]}...")
         logger.info(f"  model_name: {model_name}")
         logger.info(f"  thinking_level: {thinking_level}")
+        logger.info(f"  file_refs: {len(file_refs)}")
         
         if not user_text.strip():
             self.toast_manager.warning("Пустое сообщение")
@@ -188,32 +167,13 @@ class MainWindowHandlers:
             self.chat_panel.set_input_enabled(False)
             self.chat_panel.add_user_message(user_text)
         
-        self.toast_manager.info(f"Отправка запроса модели {model_name} (thinking: {thinking_level})...")
+        # Use file_refs from ChatPanel (already selected by user)
+        if not file_refs:
+            self.toast_manager.warning("⚠️ Нет выбранных файлов. Модель ответит без контекста документов.")
+        else:
+            self.toast_manager.info(f"Запрос с {len(file_refs)} файлами...")
         
         try:
-            file_refs = []
-            logger.info(f"  attached_gemini_files: {len(self.attached_gemini_files)}")
-            for gf in self.attached_gemini_files:
-                file_refs.append({
-                    "uri": gf["gemini_uri"],
-                    "mime_type": gf.get("mime_type", "application/pdf"),
-                })
-            
-            if not file_refs and self.right_panel and self.right_panel.gemini_files:
-                logger.info(f"  Используем gemini_files из right_panel: {len(self.right_panel.gemini_files)}")
-                for gf in self.right_panel.gemini_files:
-                    uri = gf.get("uri")
-                    if uri:
-                        file_refs.append({
-                            "uri": uri,
-                            "mime_type": gf.get("mime_type", "application/octet-stream"),
-                        })
-                if file_refs:
-                    self.toast_manager.info(f"Используется {len(file_refs)} файлов из Gemini Files")
-            
-            if not file_refs:
-                self.toast_manager.warning("Внимание: нет загруженных файлов в Gemini. Модель будет отвечать без контекста документов.")
-            
             has_thoughts = False
             full_answer = ""
             
@@ -254,14 +214,15 @@ class MainWindowHandlers:
                     "model": model_name,
                     "thinking_level": thinking_level,
                     "is_final": True,
+                    "files_count": len(file_refs),
                 }
                 self.chat_panel.add_assistant_message(full_answer, meta)
             
-            self.toast_manager.success("Ответ получен")
+            self.toast_manager.success("✓ Ответ получен")
         
         except Exception as e:
             logger.error(f"Ошибка запроса: {e}", exc_info=True)
-            self.toast_manager.error(f"Ошибка запроса: {e}")
+            self.toast_manager.error(f"Ошибка: {e}")
             if self.chat_panel:
                 self.chat_panel.add_system_message(f"Ошибка: {e}", "error")
         
