@@ -1,5 +1,4 @@
 """Prompts management dialog"""
-import asyncio
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (
@@ -15,7 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from qasync import asyncSlot
 
 logger = logging.getLogger(__name__)
@@ -196,13 +195,9 @@ class PromptsDialog(QDialog):
         self.btn_delete.setEnabled(False)
         self.prompts_list.clearSelection()
 
-    def _on_save_prompt(self):
-        """Handle save prompt - schedule async task"""
-        # Use QTimer to defer task creation, avoiding nested task context
-        QTimer.singleShot(0, lambda: asyncio.ensure_future(self._save_prompt_async()))
-
-    async def _save_prompt_async(self):
-        """Async save prompt implementation"""
+    @asyncSlot()
+    async def _on_save_prompt(self):
+        """Handle save prompt"""
         title = self.title_edit.text().strip()
         system_prompt = self.system_prompt_edit.toPlainText().strip()
         user_text = self.user_text_edit.toPlainText().strip()
@@ -260,8 +255,9 @@ class PromptsDialog(QDialog):
             logger.error(f"Error saving prompt: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка сохранения: {e}")
 
-    def _on_delete_prompt(self):
-        """Handle delete prompt - schedule async task"""
+    @asyncSlot()
+    async def _on_delete_prompt(self):
+        """Handle delete prompt"""
         if not self.current_prompt_id:
             return
 
@@ -276,12 +272,6 @@ class PromptsDialog(QDialog):
 
         if reply != QMessageBox.Yes:
             return
-
-        # Use QTimer to defer task creation
-        QTimer.singleShot(0, lambda: asyncio.ensure_future(self._delete_prompt_async()))
-
-    async def _delete_prompt_async(self):
-        """Async delete prompt implementation"""
         try:
             # Delete from R2
             if self.r2_client:

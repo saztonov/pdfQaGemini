@@ -240,8 +240,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
                 "Настройки сохранены. Нажмите 'Подключиться' для применения."
             )
 
-    @asyncSlot()
-    async def _on_open_prompts(self):
+    def _on_open_prompts(self):
         """Open prompts management dialog"""
         if not self.supabase_repo:
             self.toast_manager.error("Сначала подключитесь к базе данных")
@@ -249,16 +248,24 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         from app.ui.prompts_dialog import PromptsDialog
 
-        dialog = PromptsDialog(self.supabase_repo, self.r2_client, self.toast_manager, self)
-        await dialog.load_prompts()
-        result = dialog.exec()
+        dialog = PromptsDialog(
+            self.supabase_repo, self.r2_client, self.toast_manager, self, client_id=self.client_id
+        )
+        
+        # Connect finished signal to reload prompts
+        def on_dialog_finished(result):
+            if result and self.chat_panel:
+                asyncio.create_task(self._load_prompts())
+        
+        dialog.finished.connect(on_dialog_finished)
+        
+        # Show dialog as non-blocking modal
+        dialog.open()
+        
+        # Load prompts after dialog is shown (@asyncSlot creates task automatically)
+        dialog.load_prompts()
 
-        # Reload prompts in chat panel after dialog closes
-        if result and self.chat_panel:
-            await self._load_prompts()
-
-    @asyncSlot(str)
-    async def _on_edit_prompt_from_chat(self, prompt_id: str):
+    def _on_edit_prompt_from_chat(self, prompt_id: str):
         """Open prompts dialog to edit specific prompt"""
         if not self.supabase_repo:
             self.toast_manager.error("Сначала подключитесь к базе данных")
@@ -266,22 +273,34 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         from app.ui.prompts_dialog import PromptsDialog
 
-        dialog = PromptsDialog(self.supabase_repo, self.r2_client, self.toast_manager, self)
-        await dialog.load_prompts()
-
-        # Select the prompt in the dialog
-        for i in range(dialog.prompts_list.count()):
-            item = dialog.prompts_list.item(i)
-            if item.data(Qt.UserRole) == prompt_id:
-                dialog.prompts_list.setCurrentItem(item)
-                dialog._on_prompt_selected(item)
-                break
-
-        result = dialog.exec()
-
-        # Reload prompts in chat panel after dialog closes
-        if result and self.chat_panel:
-            await self._load_prompts()
+        dialog = PromptsDialog(
+            self.supabase_repo, self.r2_client, self.toast_manager, self, client_id=self.client_id
+        )
+        
+        # Connect finished signal to reload prompts
+        def on_dialog_finished(result):
+            if result and self.chat_panel:
+                asyncio.create_task(self._load_prompts())
+        
+        dialog.finished.connect(on_dialog_finished)
+        
+        # Show dialog as non-blocking modal
+        dialog.open()
+        
+        # Load prompts and select the specific one
+        async def load_and_select():
+            dialog.prompts = await self.supabase_repo.prompts_list(client_id=self.client_id)
+            dialog._refresh_list()
+            
+            # Select the prompt in the dialog
+            for i in range(dialog.prompts_list.count()):
+                item = dialog.prompts_list.item(i)
+                if item.data(Qt.UserRole) == prompt_id:
+                    dialog.prompts_list.setCurrentItem(item)
+                    dialog._on_prompt_selected(item)
+                    break
+        
+        asyncio.create_task(load_and_select())
 
     @asyncSlot()
     async def _on_connect(self):
