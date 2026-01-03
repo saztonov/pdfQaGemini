@@ -140,10 +140,7 @@ class SupabaseRepo:
         def _sync_fetch():
             client = self._get_client()
             response = (
-                client.table("node_files")
-                .select("*")
-                .eq("node_id", document_node_id)
-                .execute()
+                client.table("node_files").select("*").eq("node_id", document_node_id).execute()
             )
             files = [NodeFile(**row) for row in response.data]
 

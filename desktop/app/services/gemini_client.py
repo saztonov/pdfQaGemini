@@ -275,13 +275,13 @@ class GeminiClient:
                         file_name = "files/" + file_uri.split("/files/")[-1]
                     try:
                         file_obj = await client.aio.files.get(name=file_name)
-                        file_mime = getattr(file_obj, "mime_type", None) or "application/octet-stream"
+                        file_mime = (
+                            getattr(file_obj, "mime_type", None) or "application/octet-stream"
+                        )
                         actual_uri = getattr(file_obj, "uri", None) or file_uri
                         if file_mime == "application/json":
                             file_mime = "text/plain"
-                        parts.append(
-                            types.Part.from_uri(file_uri=actual_uri, mime_type=file_mime)
-                        )
+                        parts.append(types.Part.from_uri(file_uri=actual_uri, mime_type=file_mime))
                     except Exception:
                         parts.append(
                             types.Part.from_uri(

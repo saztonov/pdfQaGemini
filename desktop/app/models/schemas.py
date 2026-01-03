@@ -178,8 +178,10 @@ class ContextItem(BaseModel):
 
 # Model outputs
 
+
 class RequestFilesItem(BaseModel):
     """Item for request_files action"""
+
     context_item_id: str
     kind: Literal["crop", "text"]
     reason: str
@@ -188,16 +190,19 @@ class RequestFilesItem(BaseModel):
 
 class RequestFilesPayload(BaseModel):
     """Payload for request_files action"""
+
     items: list[RequestFilesItem] = Field(default_factory=list)
 
 
 class ImageRef(BaseModel):
     """Reference to an image for ROI"""
+
     context_item_id: str
 
 
 class BboxNorm(BaseModel):
     """Normalized bounding box"""
+
     x1: float
     y1: float
     x2: float
@@ -206,6 +211,7 @@ class BboxNorm(BaseModel):
 
 class RequestRoiPayload(BaseModel):
     """Payload for request_roi action"""
+
     image_ref: ImageRef
     goal: str
     dpi: int = 400

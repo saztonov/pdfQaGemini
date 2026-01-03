@@ -16,9 +16,7 @@ class DocumentBundleBuilder:
     # Priority order for text sources
     TEXT_SOURCE_PRIORITY = [FileType.OCR_HTML, FileType.RESULT_JSON, FileType.PDF]
 
-    def select_primary_text_source(
-        self, node_files: list[NodeFile]
-    ) -> Optional[NodeFile]:
+    def select_primary_text_source(self, node_files: list[NodeFile]) -> Optional[NodeFile]:
         """
         Select best text source from node files.
         Priority: ocr_html -> result_json -> pdf
@@ -117,9 +115,7 @@ class DocumentBundleBuilder:
         result = "\n\n".join(text_parts)
         return result[:MAX_BUNDLE_CHARS]
 
-    def _extract_fields(
-        self, obj, field_names: list[str], results: list[str], depth: int = 0
-    ):
+    def _extract_fields(self, obj, field_names: list[str], results: list[str], depth: int = 0):
         """Recursively extract text fields from JSON object"""
         if depth > 5:  # Limit recursion
             return
@@ -147,11 +143,13 @@ class DocumentBundleBuilder:
 
             crop_id = self._extract_crop_id(nf.file_name, nf.r2_key)
             if crop_id:
-                crops.append({
-                    "crop_id": crop_id,
-                    "context_item_id": str(nf.id),
-                    "r2_key": nf.r2_key,
-                })
+                crops.append(
+                    {
+                        "crop_id": crop_id,
+                        "context_item_id": str(nf.id),
+                        "r2_key": nf.r2_key,
+                    }
+                )
 
         return crops
 

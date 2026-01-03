@@ -38,7 +38,10 @@ MODEL_REPLY_SCHEMA = {
                                         "context_item_id": {"type": "string"},
                                         "kind": {"type": "string", "enum": ["crop", "text"]},
                                         "reason": {"type": "string"},
-                                        "priority": {"type": "string", "enum": ["high", "medium", "low"]},
+                                        "priority": {
+                                            "type": "string",
+                                            "enum": ["high", "medium", "low"],
+                                        },
                                     },
                                 },
                             },
@@ -74,8 +77,6 @@ MODEL_REPLY_SCHEMA = {
     },
     "required": ["assistant_text", "actions", "is_final"],
 }
-
-
 
 
 class Agent:
@@ -130,7 +131,9 @@ class Agent:
         logger.info(f"  file_refs count: {len(file_refs)}, has_roi: {has_roi}")
         logger.info(f"  media_resolution: {effective_resolution}")
         for i, fr in enumerate(file_refs[:3]):
-            logger.info(f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}, is_roi={fr.get('is_roi', False)}")
+            logger.info(
+                f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}, is_roi={fr.get('is_roi', False)}"
+            )
 
         start_time = time.perf_counter()
         raw_response = None

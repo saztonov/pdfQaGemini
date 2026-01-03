@@ -49,9 +49,7 @@ class MainWindowHandlers:
             logger.error(f"Ошибка загрузки файлов узлов: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
 
-    async def _build_and_upload_bundle(
-        self: "MainWindow", node_files: list, node_ids: list[str]
-    ):
+    async def _build_and_upload_bundle(self: "MainWindow", node_files: list, node_ids: list[str]):
         """Build bundle.txt from node files and upload to Gemini"""
         builder = DocumentBundleBuilder()
 
@@ -79,7 +77,9 @@ class MainWindowHandlers:
         if node_files:
             # Try to get meaningful name
             first_file = node_files[0]
-            doc_name = first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
+            doc_name = (
+                first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
+            )
 
         # Build bundle
         bundle_bytes, crop_index = builder.build_bundle(
@@ -93,9 +93,7 @@ class MainWindowHandlers:
 
         # Write bundle to temp file
         bundle_file_name = f"{doc_name}_bundle.txt"
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=".txt", delete=False
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".txt", delete=False) as tmp_file:
             tmp_file.write(bundle_bytes)
             tmp_path = Path(tmp_file.name)
 
@@ -149,7 +147,9 @@ class MainWindowHandlers:
 
             # Refresh panels
             if self.right_panel:
-                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+                conv_id = (
+                    str(self.current_conversation_id) if self.current_conversation_id else None
+                )
                 await self.right_panel.refresh_files(conversation_id=conv_id)
 
                 if gemini_name:
@@ -420,7 +420,11 @@ class MainWindowHandlers:
                         # Update right panel and auto-select in chat
                         if uploaded_file_infos:
                             if self.right_panel:
-                                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+                                conv_id = (
+                                    str(self.current_conversation_id)
+                                    if self.current_conversation_id
+                                    else None
+                                )
                                 await self.right_panel.refresh_files(conversation_id=conv_id)
                             if self.chat_panel:
                                 self.chat_panel.add_selected_files(uploaded_file_infos)
@@ -470,9 +474,7 @@ class MainWindowHandlers:
         # Max iterations reached
         self.toast_manager.warning(f"Достигнут лимит итераций ({MAX_ITER})")
         if self.chat_panel:
-            self.chat_panel.add_system_message(
-                f"Лимит итераций ({MAX_ITER}) достигнут", "warning"
-            )
+            self.chat_panel.add_system_message(f"Лимит итераций ({MAX_ITER}) достигнут", "warning")
         await self._save_conversation_state()
 
     def _build_context_catalog(self: "MainWindow") -> dict:
@@ -553,17 +555,21 @@ class MainWindowHandlers:
                 gemini_name = result.get("name")
                 gemini_uri = result.get("uri")
                 if gemini_uri:
-                    new_refs.append({
-                        "uri": gemini_uri,
-                        "mime_type": context_item.mime_type,
-                    })
+                    new_refs.append(
+                        {
+                            "uri": gemini_uri,
+                            "mime_type": context_item.mime_type,
+                        }
+                    )
                     # Build file_info for chat panel
-                    uploaded_file_infos.append({
-                        "name": gemini_name,
-                        "uri": gemini_uri,
-                        "mime_type": context_item.mime_type,
-                        "display_name": result.get("display_name") or context_item.title,
-                    })
+                    uploaded_file_infos.append(
+                        {
+                            "name": gemini_name,
+                            "uri": gemini_uri,
+                            "mime_type": context_item.mime_type,
+                            "display_name": result.get("display_name") or context_item.title,
+                        }
+                    )
                     logger.info(f"  Uploaded crop: {context_item.title}")
 
             except Exception as e:
@@ -571,9 +577,7 @@ class MainWindowHandlers:
 
         return new_refs, uploaded_file_infos
 
-    async def _handle_roi_action_agentic(
-        self: "MainWindow", action
-    ) -> dict | None:
+    async def _handle_roi_action_agentic(self: "MainWindow", action) -> dict | None:
         """Handle ROI action in agentic mode, return file_ref or None"""
         from app.ui.image_viewer import ImageViewerDialog
         import tempfile
@@ -582,7 +586,9 @@ class MainWindowHandlers:
 
         payload = action.payload
         image_ref = payload.get("image_ref", {})
-        context_item_id = image_ref.get("context_item_id") if isinstance(image_ref, dict) else image_ref
+        context_item_id = (
+            image_ref.get("context_item_id") if isinstance(image_ref, dict) else image_ref
+        )
 
         if not context_item_id:
             return None

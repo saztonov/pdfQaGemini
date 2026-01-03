@@ -240,9 +240,7 @@ class TreeContextMixin:
                     continue
         return selected
 
-    def _get_fallback_mime_type(
-        self: "LeftProjectsPanel", file_type: str, r2_key: str
-    ) -> str:
+    def _get_fallback_mime_type(self: "LeftProjectsPanel", file_type: str, r2_key: str) -> str:
         """Get fallback MIME type when DB mime_type is empty"""
         # Fallback by file_type
         if file_type == "pdf":
