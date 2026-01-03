@@ -1,0 +1,73 @@
+# Pre-commit hooks для автоматической проверки перед коммитом
+# Установка: pip install pre-commit && pre-commit install
+# Запуск вручную: pre-commit run --all-files
+
+repos:
+  # Базовые проверки
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Проверка YAML синтаксиса
+      - id: check-yaml
+      # Проверка TOML синтаксиса
+      - id: check-toml
+      # Проверка JSON синтаксиса
+      - id: check-json
+      # Предотвращение коммита больших файлов
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      # Проверка на случайно добавленные private keys
+      - id: detect-private-key
+      # Убедиться что файлы заканчиваются переводом строки
+      - id: end-of-file-fixer
+      # Убрать trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      # Проверка merge конфликтов
+      - id: check-merge-conflict
+      # Запретить коммит в main/master напрямую
+      - id: no-commit-to-branch
+        args: ['--branch', 'main', '--branch', 'master']
+        stages: [commit]
+      # Проверка что Python файлы валидны
+      - id: check-ast
+      # Проверка docstring в первой строке
+      - id: check-docstring-first
+      # Сортировка requirements.txt
+      - id: requirements-txt-fixer
+
+  # Сканирование секретов
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
+
+  # Python форматирование с black
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.10
+        args: ['--line-length=100']
+
+  # Python линтер ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # Проверка безопасности зависимостей
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.3
+    hooks:
+      - id: python-safety-dependencies-check
+        files: requirements.txt
+
+  # Jupyter notebooks - очистка output
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.6.1
+    hooks:
+      - id: nbstripout

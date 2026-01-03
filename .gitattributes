@@ -1,0 +1,137 @@
+# Git Attributes для pdfQaGemini
+
+# ============================================
+# AUTO DETECT LINE ENDINGS
+# ============================================
+# Автоматическая нормализация line endings
+* text=auto
+
+# ============================================
+# TEXT FILES
+# ============================================
+# Явно указываем текстовые файлы для нормализации
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.sql text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.xml text eol=lf
+*.sh text eol=lf
+
+# Git конфигурация
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.cursorrules text eol=lf
+
+# ============================================
+# WINDOWS SPECIFIC
+# ============================================
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=lf
+
+# ============================================
+# BINARY FILES
+# ============================================
+# Явно указываем бинарные файлы
+*.pyc binary
+*.pyo binary
+*.pyd binary
+*.so binary
+*.dll binary
+*.dylib binary
+*.exe binary
+
+# Изображения
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.webp binary
+
+# Документы
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+
+# Архивы
+*.zip binary
+*.tar binary
+*.gz binary
+*.bz2 binary
+*.7z binary
+*.rar binary
+
+# Шрифты
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+
+# Базы данных
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# ============================================
+# ЗАЩИТА ОТ СЛУЧАЙНОГО КОММИТА СЕКРЕТОВ
+# ============================================
+# Файлы с потенциально чувствительными данными
+.env filter=secret
+.env.* filter=secret
+*secret* filter=secret
+*password* filter=secret
+*credentials* filter=secret
+*.key filter=secret
+*.pem filter=secret
+*.p12 filter=secret
+*.pfx filter=secret
+
+# Локальные настройки
+local_settings.py filter=secret
+settings_local.py filter=secret
+config.local.* filter=secret
+
+# ============================================
+# PYTHON SPECIFIC
+# ============================================
+# Python байткод
+*.py[cod] binary
+
+# Jupyter Notebooks - strip output before commit
+*.ipynb filter=nbstripout
+
+# ============================================
+# GIT LFS (если используется)
+# ============================================
+# Для больших бинарных файлов можно использовать Git LFS
+# *.pdf filter=lfs diff=lfs merge=lfs -text
+# *.zip filter=lfs diff=lfs merge=lfs -text
+
+# ============================================
+# DIFF SETTINGS
+# ============================================
+# Улучшенный diff для определенных типов файлов
+*.py diff=python
+*.md diff=markdown
+*.json diff=json
+
+# ============================================
+# MERGE SETTINGS
+# ============================================
+# Стратегии для автоматически генерируемых файлов
+package-lock.json merge=ours
+poetry.lock merge=ours
