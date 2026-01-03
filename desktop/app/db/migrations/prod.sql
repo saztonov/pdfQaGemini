@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2026-01-03T17:31:59.468379
+-- Generated: 2026-01-03T21:42:34.068336
 -- Database: postgres
 -- Host: aws-1-eu-north-1.pooler.supabase.com
 
@@ -950,7 +950,7 @@ CREATE OR REPLACE FUNCTION auth.email()
  LANGUAGE sql
  STABLE
 AS $function$
-  select
+  select 
   coalesce(
     nullif(current_setting('request.jwt.claim.email', true), ''),
     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email')
@@ -964,7 +964,7 @@ CREATE OR REPLACE FUNCTION auth.jwt()
  LANGUAGE sql
  STABLE
 AS $function$
-  select
+  select 
     coalesce(
         nullif(current_setting('request.jwt.claim', true), ''),
         nullif(current_setting('request.jwt.claims', true), '')
@@ -979,7 +979,7 @@ CREATE OR REPLACE FUNCTION auth.role()
  LANGUAGE sql
  STABLE
 AS $function$
-  select
+  select 
   coalesce(
     nullif(current_setting('request.jwt.claim.role', true), ''),
     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
@@ -994,7 +994,7 @@ CREATE OR REPLACE FUNCTION auth.uid()
  LANGUAGE sql
  STABLE
 AS $function$
-  select
+  select 
   coalesce(
     nullif(current_setting('request.jwt.claim.sub', true), ''),
     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
@@ -1788,7 +1788,7 @@ BEGIN
     RETURN QUERY
     WITH RECURSIVE descendants AS (
         -- Base: root nodes
-        SELECT
+        SELECT 
             t.id,
             t.parent_id,
             t.node_type,
@@ -1802,11 +1802,11 @@ BEGIN
         FROM public.tree_nodes t
         WHERE t.client_id = p_client_id
           AND t.id = ANY(p_root_ids)
-
+        
         UNION ALL
-
+        
         -- Recursive: children
-        SELECT
+        SELECT 
             t.id,
             t.parent_id,
             t.node_type,
@@ -1821,7 +1821,7 @@ BEGIN
         INNER JOIN descendants d ON t.parent_id = d.id
         WHERE t.client_id = p_client_id
     )
-    SELECT
+    SELECT 
         d.id,
         d.parent_id,
         d.node_type,
@@ -1845,7 +1845,7 @@ CREATE OR REPLACE FUNCTION public.qa_list_conversations_with_stats(p_client_id t
  LANGUAGE sql
  STABLE
 AS $function$
-    SELECT
+    SELECT 
         c.id,
         c.client_id,
         c.title,
@@ -1887,13 +1887,13 @@ DECLARE
     v_res_key TEXT;
 BEGIN
     -- Обходим все документы
-    FOR doc IN
+    FOR doc IN 
         SELECT id, attributes->>'r2_key' as r2_key, pdf_status
-        FROM tree_nodes
+        FROM tree_nodes 
         WHERE node_type = 'document'
     LOOP
         v_r2_key := doc.r2_key;
-
+        
         IF v_r2_key IS NULL OR v_r2_key = '' THEN
             v_status := 'unknown';
             v_message := 'Нет R2 ключа';
@@ -1902,16 +1902,16 @@ BEGIN
             v_ann_key := regexp_replace(v_r2_key, '\.pdf$', '_annotation.json', 'i');
             v_ocr_key := regexp_replace(v_r2_key, '\.pdf$', '_ocr.html', 'i');
             v_res_key := regexp_replace(v_r2_key, '\.pdf$', '_result.json', 'i');
-
+            
             -- Проверяем наличие в node_files
-            SELECT
+            SELECT 
                 bool_or(file_type = 'annotation') AS has_ann,
                 bool_or(file_type = 'ocr_html') AS has_ocr,
                 bool_or(file_type = 'result_json') AS has_res
             INTO v_has_ann_db, v_has_ocr_db, v_has_res_db
             FROM node_files
             WHERE node_id = doc.id;
-
+            
             -- Определяем статус на основе наличия файлов в БД
             IF v_has_ann_db AND v_has_ocr_db AND v_has_res_db THEN
                 v_status := 'complete';
@@ -1930,15 +1930,15 @@ BEGIN
                 END IF;
             END IF;
         END IF;
-
+        
         -- Обновляем статус
         UPDATE tree_nodes
-        SET
+        SET 
             pdf_status = v_status,
             pdf_status_message = v_message,
             pdf_status_updated_at = NOW()
         WHERE id = doc.id;
-
+        
         -- Возвращаем результат
         node_id := doc.id;
         old_status := doc.pdf_status;
@@ -1981,7 +1981,7 @@ CREATE OR REPLACE FUNCTION public.update_pdf_status(p_node_id uuid, p_status tex
 AS $function$
 BEGIN
     UPDATE tree_nodes
-    SET
+    SET 
         pdf_status = p_status,
         pdf_status_message = p_message,
         pdf_status_updated_at = NOW(),
@@ -3494,9 +3494,9 @@ BEGIN
     ELSE
         cursor_op := '<';
     END IF;
-
+    
     sort_col := lower(sort_column);
-    -- Validate sort column
+    -- Validate sort column  
     IF sort_col IN ('updated_at', 'created_at') THEN
         cursor_expr := format(
             '($5 = '''' OR ROW(date_trunc(''milliseconds'', %I), name COLLATE "C") %s ROW(COALESCE(NULLIF($6, '''')::timestamptz, ''epoch''::timestamptz), $5))',
@@ -3571,7 +3571,7 @@ CREATE OR REPLACE FUNCTION storage.update_updated_at_column()
 AS $function$
 BEGIN
     NEW.updated_at = now();
-    RETURN NEW;
+    RETURN NEW; 
 END;
 $function$
 

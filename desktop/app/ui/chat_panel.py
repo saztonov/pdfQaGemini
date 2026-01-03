@@ -308,7 +308,6 @@ class ChatPanel(QWidget):
 
         self.prompt_combo = QComboBox()
         self.prompt_combo.setToolTip("Выбор промта")
-        self.prompt_combo.currentIndexChanged.connect(self._on_prompt_changed)
         self.prompt_combo.setFixedWidth(150)
         self.prompt_combo.setStyleSheet(self._combo_style())
         self.prompt_combo.addItem("Без промта", None)
@@ -395,6 +394,10 @@ class ChatPanel(QWidget):
         layout.addWidget(self.input_container)
 
         self._files_panel_visible = True
+        
+        # Connect prompt combo signal AFTER all widgets are created
+        self.prompt_combo.currentIndexChanged.connect(self._on_prompt_changed)
+        
         self._show_welcome()
         self._update_files_visibility()
 

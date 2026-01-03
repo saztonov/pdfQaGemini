@@ -36,6 +36,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.toast_manager = ToastManager(self)
 
         # Application state
+        self.client_id: str = "default"  # Will be loaded from settings
         self.current_conversation_id: Optional[UUID] = None
         self.context_node_ids: list[str] = []
         self.attached_gemini_files: list[dict] = []
@@ -299,6 +300,10 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             config = SettingsDialog.get_settings()
             logger.info("Конфигурация загружена")
 
+            # Save client_id from settings
+            self.client_id = config.get("client_id", "default")
+            logger.info(f"Используется client_id: {self.client_id}")
+
             supabase_url = config["supabase_url"]
             supabase_key = config["supabase_key"]
             gemini_api_key = config["gemini_api_key"]
@@ -341,7 +346,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
             if self.right_panel:
                 self.right_panel.set_services(
-                    self.supabase_repo, self.gemini_client, self.r2_client, self.toast_manager
+                    self.supabase_repo, self.gemini_client, self.r2_client, self.toast_manager,
+                    client_id=self.client_id
                 )
                 self.right_panel.trace_store = self.trace_store
 
@@ -360,9 +366,9 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
             self._enable_actions()
 
-            # Load tree
+            # Load tree with correct client_id
             if self.left_panel:
-                await self.left_panel.load_roots()
+                await self.left_panel.load_roots(client_id=self.client_id)
 
             await self._load_gemini_models()
             await self._load_prompts()
@@ -383,7 +389,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
                 timestamp = format_time(datetime.utcnow(), "%d.%m.%y %H:%M")
                 conv = await self.supabase_repo.qa_create_conversation(
-                    client_id="default",
+                    client_id=self.client_id,
                     title=f"Чат {timestamp}",
                 )
                 self.current_conversation_id = conv.id
@@ -409,7 +415,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         """Refresh projects tree"""
         self.toast_manager.info("Обновление дерева...")
         if self.left_panel:
-            await self.left_panel.load_roots()
+            await self.left_panel.load_roots(client_id=self.client_id)
             self.toast_manager.success("✓ Дерево обновлено")
 
     @asyncSlot()
@@ -473,7 +479,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             return
 
         try:
-            prompts = await self.supabase_repo.prompts_list()
+            prompts = await self.supabase_repo.prompts_list(client_id=self.client_id)
 
             if self.chat_panel:
                 self.chat_panel.set_prompts(prompts)

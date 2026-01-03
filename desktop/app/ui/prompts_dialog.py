@@ -23,11 +23,12 @@ logger = logging.getLogger(__name__)
 class PromptsDialog(QDialog):
     """Dialog for managing user prompts"""
 
-    def __init__(self, supabase_repo, r2_client, toast_manager, parent=None):
+    def __init__(self, supabase_repo, r2_client, toast_manager, parent=None, client_id: str = "default"):
         super().__init__(parent)
         self.supabase_repo = supabase_repo
         self.r2_client = r2_client
         self.toast_manager = toast_manager
+        self.client_id = client_id
 
         self.setWindowTitle("Управление промтами")
         self.resize(900, 600)
@@ -150,7 +151,7 @@ class PromptsDialog(QDialog):
     async def load_prompts(self):
         """Load prompts from database"""
         try:
-            self.prompts = await self.supabase_repo.prompts_list()
+            self.prompts = await self.supabase_repo.prompts_list(client_id=self.client_id)
             self._refresh_list()
 
             if self.prompts:
@@ -229,7 +230,8 @@ class PromptsDialog(QDialog):
             else:
                 # Create new
                 prompt = await self.supabase_repo.prompts_create(
-                    title=title, system_prompt=system_prompt, user_text=user_text
+                    title=title, system_prompt=system_prompt, user_text=user_text,
+                    client_id=self.client_id
                 )
 
                 # Save to R2

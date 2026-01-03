@@ -29,14 +29,15 @@ class SupabaseRepo:
 
     # Tree operations
 
-    async def fetch_roots(self) -> list[TreeNode]:
-        """Fetch root tree nodes"""
+    async def fetch_roots(self, client_id: str = "default") -> list[TreeNode]:
+        """Fetch root tree nodes (all projects, no client_id filter)"""
         logger.info("fetch_roots вызван")
 
         def _sync_fetch():
             logger.info("_sync_fetch: получение клиента...")
             client = self._get_client()
             logger.info("_sync_fetch: выполнение запроса к tree_nodes...")
+            # Не фильтруем по client_id - показываем все корневые проекты
             response = (
                 client.table("tree_nodes")
                 .select("*")
@@ -52,15 +53,15 @@ class SupabaseRepo:
         logger.info(f"fetch_roots завершён: {len(result)} корневых узлов")
         return result
 
-    async def fetch_children(self, client_id: str, parent_id: str) -> list[TreeNode]:
-        """Fetch child nodes for given parent"""
+    async def fetch_children(self, parent_id: str) -> list[TreeNode]:
+        """Fetch child nodes for given parent (no client_id filter)"""
 
         def _sync_fetch():
             client = self._get_client()
+            # Не фильтруем по client_id - дочерние узлы уже привязаны к родителю
             response = (
                 client.table("tree_nodes")
                 .select("*")
-                .eq("client_id", client_id)
                 .eq("parent_id", parent_id)
                 .order("sort_order")
                 .order("name")
@@ -267,6 +268,7 @@ class SupabaseRepo:
         source_node_file_id: Optional[str] = None,
         source_r2_key: Optional[str] = None,
         expires_at: Optional[str] = None,
+        client_id: str = "default",
     ) -> dict:
         """Upsert Gemini File cache entry"""
 
@@ -274,7 +276,7 @@ class SupabaseRepo:
             client = self._get_client()
             now = datetime.utcnow().isoformat()
             data = {
-                "client_id": "default",
+                "client_id": client_id,
                 "gemini_name": gemini_name,
                 "gemini_uri": gemini_uri,
                 "display_name": display_name,

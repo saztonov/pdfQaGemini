@@ -66,6 +66,18 @@ class SettingsDialog(QDialog):
         group = QGroupBox("Общие настройки")
         form = QFormLayout(group)
 
+        self.client_id_edit = QLineEdit()
+        self.client_id_edit.setPlaceholderText("default")
+        form.addRow("Client ID:", self.client_id_edit)
+
+        # Info label for client_id
+        info = QLabel(
+            "⚠️ Client ID должен совпадать с client_id в таблице tree_nodes БД"
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #ff9800; font-size: 11px; padding: 5px;")
+        form.addRow(info)
+
         self.cache_dir_edit = QLineEdit()
         self.cache_dir_edit.setPlaceholderText("./cache")
         form.addRow("Папка кэша:", self.cache_dir_edit)
@@ -171,6 +183,7 @@ class SettingsDialog(QDialog):
     def _load_settings(self):
         """Load settings from QSettings"""
         # General
+        self.client_id_edit.setText(self.settings.value("general/client_id", "default"))
         self.cache_dir_edit.setText(self.settings.value("general/cache_dir", "./cache"))
         self.cache_size_edit.setText(self.settings.value("general/cache_size_mb", "500"))
 
@@ -191,6 +204,7 @@ class SettingsDialog(QDialog):
     def _save_settings(self):
         """Save settings to QSettings"""
         # General
+        self.settings.setValue("general/client_id", self.client_id_edit.text().strip() or "default")
         self.settings.setValue("general/cache_dir", self.cache_dir_edit.text().strip())
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
 
@@ -222,6 +236,7 @@ class SettingsDialog(QDialog):
         r2_endpoint = f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
 
         return {
+            "client_id": settings.value("general/client_id", "default"),
             "cache_dir": settings.value("general/cache_dir", "./cache"),
             "cache_size_mb": int(settings.value("general/cache_size_mb", "500")),
             "supabase_url": settings.value("supabase/url", ""),

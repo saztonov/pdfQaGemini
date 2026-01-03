@@ -125,6 +125,7 @@ class MainWindowHandlers:
                     source_node_file_id=source_node_file_id,
                     source_r2_key=None,
                     expires_at=None,
+                    client_id=self.client_id,
                 )
 
                 # Store crop_index in metadata for later use
@@ -234,6 +235,7 @@ class MainWindowHandlers:
                             source_node_file_id=node_file_id,
                             source_r2_key=r2_key,
                             expires_at=None,  # Will be updated on next list
+                            client_id=self.client_id,
                         )
                         logger.info(f"  Метаданные сохранены в БД для {gemini_name}")
 

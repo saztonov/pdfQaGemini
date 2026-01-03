@@ -54,6 +54,7 @@ class RightContextPanel(QWidget):
         self.trace_store = trace_store
 
         # State
+        self.client_id: str = "default"  # Will be set from MainWindow
         self.conversation_id: Optional[str] = None
         self.gemini_files: list[dict] = []
         self._selected_for_request: set[str] = set()  # file names selected for request
@@ -694,12 +695,13 @@ class RightContextPanel(QWidget):
         """Connect signals"""
         pass
 
-    def set_services(self, supabase_repo, gemini_client: GeminiClient, r2_client, toast_manager):
+    def set_services(self, supabase_repo, gemini_client: GeminiClient, r2_client, toast_manager, client_id: str = "default"):
         """Set service dependencies"""
         self.supabase_repo = supabase_repo
         self.gemini_client = gemini_client
         self.r2_client = r2_client
         self.toast_manager = toast_manager
+        self.client_id = client_id
 
     def _on_cell_changed(self, row: int, col: int):
         """Handle checkbox change"""
@@ -1019,6 +1021,7 @@ class RightContextPanel(QWidget):
                             source_node_file_id=file_metadata.get("source_node_file_id"),
                             source_r2_key=r2_key,
                             expires_at=None,  # Will be updated on next list
+                            client_id=self.client_id,
                         )
                     except Exception as e:
                         logger.error(f"Не удалось обновить метаданные в БД: {e}")
@@ -1128,7 +1131,7 @@ class RightContextPanel(QWidget):
             return
 
         try:
-            conversations = await self.supabase_repo.qa_list_conversations()
+            conversations = await self.supabase_repo.qa_list_conversations(client_id=self.client_id)
 
             self.chats_list.clear()
 
@@ -1199,7 +1202,7 @@ class RightContextPanel(QWidget):
         if ok and title:
             try:
                 conv = await self.supabase_repo.qa_create_conversation(
-                    client_id="default", title=title
+                    client_id=self.client_id, title=title
                 )
                 await self.refresh_chats()
 

@@ -64,6 +64,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
         self._expanded_nodes: set = set()
         self._restoring_state = False
         self._adding_to_context = False
+        self._client_id: str = "default"  # Will be set from MainWindow
 
         self._setup_ui()
         self._connect_signals()
@@ -294,9 +295,12 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             self._expanded_nodes.discard(str(node_id))
             self._save_expanded_state()
 
-    async def load_roots(self):
+    async def load_roots(self, client_id: str = "default"):
         """Load root nodes"""
-        logger.info("=== ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ ===")
+        logger.info(f"=== ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ для client_id={client_id} ===")
+
+        # Save client_id for use in child loading
+        self._client_id = client_id
 
         if not self.supabase_repo:
             logger.error("ОШИБКА: supabase_repo не установлен!")
@@ -309,10 +313,10 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
         self._project_count = 0
 
         if self.toast_manager:
-            self.toast_manager.info("Загрузка корневых узлов...")
+            self.toast_manager.info(f"Загрузка корневых узлов (client_id={client_id})...")
 
         try:
-            roots = await self.supabase_repo.fetch_roots()
+            roots = await self.supabase_repo.fetch_roots(client_id=client_id)
             logger.info(f"Получено {len(roots)} корневых узлов")
 
             roots_sorted = sorted(roots, key=lambda n: n.name.lower())
@@ -412,7 +416,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                     if len(crops) <= 10:
                         crops_item.setExpanded(True)
             else:
-                children = await self.supabase_repo.fetch_children("default", parent_id)
+                children = await self.supabase_repo.fetch_children(parent_id)
 
                 children_sorted = sorted(children, key=lambda n: n.name.lower())
 
