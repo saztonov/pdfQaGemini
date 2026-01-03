@@ -3,7 +3,7 @@ import asyncio
 import logging
 from typing import Optional
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 from supabase import create_client, Client
 from app.models.schemas import TreeNode, NodeFile, Conversation, ConversationWithStats, Message
 
@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 class SupabaseRepo:
     """Async Supabase data access layer"""
-    
+
     def __init__(self, url: str, key: str):
         logger.info(f"Инициализация SupabaseRepo: url={url[:30]}...")
         self.url = url
         self.key = key
         self._client: Optional[Client] = None
-    
+
     def _get_client(self) -> Client:
         """Lazy init Supabase client"""
         if self._client is None:
@@ -26,13 +26,13 @@ class SupabaseRepo:
             self._client = create_client(self.url, self.key)
             logger.info("Supabase клиент создан успешно")
         return self._client
-    
+
     # Tree operations
-    
+
     async def fetch_roots(self) -> list[TreeNode]:
         """Fetch root tree nodes"""
-        logger.info(f"fetch_roots вызван")
-        
+        logger.info("fetch_roots вызван")
+
         def _sync_fetch():
             logger.info("_sync_fetch: получение клиента...")
             client = self._get_client()
@@ -47,13 +47,14 @@ class SupabaseRepo:
             )
             logger.info(f"_sync_fetch: получено {len(response.data)} записей")
             return [TreeNode(**row) for row in response.data]
-        
+
         result = await asyncio.to_thread(_sync_fetch)
         logger.info(f"fetch_roots завершён: {len(result)} корневых узлов")
         return result
-    
+
     async def fetch_children(self, client_id: str, parent_id: str) -> list[TreeNode]:
         """Fetch child nodes for given parent"""
+
         def _sync_fetch():
             client = self._get_client()
             response = (
@@ -65,16 +66,14 @@ class SupabaseRepo:
                 .execute()
             )
             return [TreeNode(**row) for row in response.data]
-        
+
         return await asyncio.to_thread(_sync_fetch)
-    
+
     async def get_descendant_documents(
-        self,
-        client_id: str,
-        root_ids: list[str],
-        node_types: Optional[list[str]] = None
+        self, client_id: str, root_ids: list[str], node_types: Optional[list[str]] = None
     ) -> list[TreeNode]:
         """Get descendant nodes via RPC, optionally filtered by node_type"""
+
         def _sync_fetch():
             client = self._get_client()
             params = {
@@ -83,7 +82,7 @@ class SupabaseRepo:
             }
             if node_types:
                 params["p_node_types"] = node_types
-            
+
             logger.info(f"RPC qa_get_descendants: params={params}")
             response = client.rpc("qa_get_descendants", params).execute()
             logger.info(f"RPC qa_get_descendants: returned {len(response.data)} rows")
@@ -92,39 +91,35 @@ class SupabaseRepo:
             # RPC doesn't return client_id, add it manually
             cid = client_id or "default"
             return [TreeNode(**{**row, "client_id": cid}) for row in response.data]
-        
+
         return await asyncio.to_thread(_sync_fetch)
-    
+
     async def fetch_node_files(self, node_ids: list[str]) -> list[NodeFile]:
         """Fetch files for multiple nodes (chunked to 200)"""
         if not node_ids:
             return []
-        
+
         def _sync_fetch(chunk: list[str]):
             client = self._get_client()
-            response = (
-                client.table("node_files")
-                .select("*")
-                .in_("node_id", chunk)
-                .execute()
-            )
+            response = client.table("node_files").select("*").in_("node_id", chunk).execute()
             return [NodeFile(**row) for row in response.data]
-        
+
         # Chunk requests
         chunk_size = 200
-        chunks = [node_ids[i:i+chunk_size] for i in range(0, len(node_ids), chunk_size)]
-        
+        chunks = [node_ids[i : i + chunk_size] for i in range(0, len(node_ids), chunk_size)]
+
         tasks = [asyncio.to_thread(_sync_fetch, chunk) for chunk in chunks]
         results = await asyncio.gather(*tasks)
-        
+
         # Flatten
         all_files = []
         for result in results:
             all_files.extend(result)
         return all_files
-    
+
     async def fetch_node_files_single(self, node_id: str) -> list[NodeFile]:
         """Fetch files for single node"""
+
         def _sync_fetch():
             client = self._get_client()
             response = (
@@ -135,16 +130,17 @@ class SupabaseRepo:
                 .execute()
             )
             return [NodeFile(**row) for row in response.data]
-        
+
         return await asyncio.to_thread(_sync_fetch)
-    
+
     # QA Conversations
-    
+
     async def qa_create_conversation(
         self,
         title: str = "",
     ) -> Conversation:
         """Create new conversation"""
+
         def _sync_create():
             client = self._get_client()
             now = datetime.utcnow().isoformat()
@@ -155,20 +151,16 @@ class SupabaseRepo:
                 "created_at": now,
                 "updated_at": now,
             }
-            response = (
-                client.table("qa_conversations")
-                .insert(data)
-                .execute()
-            )
+            response = client.table("qa_conversations").insert(data).execute()
             return Conversation(**response.data[0])
-        
+
         return await asyncio.to_thread(_sync_create)
-    
+
     async def qa_add_nodes(self, conversation_id: str, node_ids: list[str]) -> None:
         """Add nodes to conversation context (upsert)"""
         if not node_ids:
             return
-        
+
         def _sync_add():
             client = self._get_client()
             now = datetime.utcnow().isoformat()
@@ -182,20 +174,16 @@ class SupabaseRepo:
                 for node_id in node_ids
             ]
             client.table("qa_conversation_nodes").upsert(
-                records,
-                on_conflict="conversation_id,node_id"
+                records, on_conflict="conversation_id,node_id"
             ).execute()
-        
+
         await asyncio.to_thread(_sync_add)
-    
+
     async def qa_add_message(
-        self,
-        conversation_id: str,
-        role: str,
-        content: str,
-        meta: Optional[dict] = None
+        self, conversation_id: str, role: str, content: str, meta: Optional[dict] = None
     ) -> Message:
         """Add message to conversation"""
+
         def _sync_add():
             client = self._get_client()
             data = {
@@ -206,17 +194,14 @@ class SupabaseRepo:
                 "meta": meta or {},
                 "created_at": datetime.utcnow().isoformat(),
             }
-            response = (
-                client.table("qa_messages")
-                .insert(data)
-                .execute()
-            )
+            response = client.table("qa_messages").insert(data).execute()
             return Message(**response.data[0])
-        
+
         return await asyncio.to_thread(_sync_add)
-    
+
     async def qa_list_messages(self, conversation_id: str) -> list[Message]:
         """List messages in conversation"""
+
         def _sync_list():
             client = self._get_client()
             response = (
@@ -227,11 +212,11 @@ class SupabaseRepo:
                 .execute()
             )
             return [Message(**row) for row in response.data]
-        
+
         return await asyncio.to_thread(_sync_list)
-    
+
     # Gemini Files
-    
+
     async def qa_upsert_gemini_file(
         self,
         gemini_name: str,
@@ -245,6 +230,7 @@ class SupabaseRepo:
         expires_at: Optional[str] = None,
     ) -> dict:
         """Upsert Gemini File cache entry"""
+
         def _sync_upsert():
             client = self._get_client()
             now = datetime.utcnow().isoformat()
@@ -262,20 +248,15 @@ class SupabaseRepo:
                 "updated_at": now,
             }
             response = (
-                client.table("qa_gemini_files")
-                .upsert(data, on_conflict="gemini_name")
-                .execute()
+                client.table("qa_gemini_files").upsert(data, on_conflict="gemini_name").execute()
             )
             return response.data[0]
-        
+
         return await asyncio.to_thread(_sync_upsert)
-    
-    async def qa_attach_gemini_file(
-        self,
-        conversation_id: str,
-        gemini_file_id: str
-    ) -> None:
+
+    async def qa_attach_gemini_file(self, conversation_id: str, gemini_file_id: str) -> None:
         """Attach Gemini file to conversation"""
+
         def _sync_attach():
             client = self._get_client()
             data = {
@@ -285,14 +266,13 @@ class SupabaseRepo:
                 "added_at": datetime.utcnow().isoformat(),
             }
             client.table("qa_conversation_gemini_files").upsert(
-                data,
-                on_conflict="conversation_id,gemini_file_id"
+                data, on_conflict="conversation_id,gemini_file_id"
             ).execute()
-        
+
         await asyncio.to_thread(_sync_attach)
-    
+
     # Context files (для восстановления состояния контекста)
-    
+
     async def qa_save_context_file(
         self,
         conversation_id: str,
@@ -302,6 +282,7 @@ class SupabaseRepo:
         status: str = "local",
     ) -> dict:
         """Сохранить файл контекста с его статусом"""
+
         def _sync_save():
             client = self._get_client()
             data = {
@@ -318,11 +299,12 @@ class SupabaseRepo:
                 .execute()
             )
             return response.data[0]
-        
+
         return await asyncio.to_thread(_sync_save)
-    
+
     async def qa_load_context_files(self, conversation_id: str) -> list[dict]:
         """Загрузить все файлы контекста для диалога"""
+
         def _sync_load():
             client = self._get_client()
             response = (
@@ -332,25 +314,22 @@ class SupabaseRepo:
                 .execute()
             )
             return response.data
-        
+
         return await asyncio.to_thread(_sync_load)
-    
-    async def qa_delete_context_file(
-        self,
-        conversation_id: str,
-        node_file_id: str
-    ) -> None:
+
+    async def qa_delete_context_file(self, conversation_id: str, node_file_id: str) -> None:
         """Удалить файл из контекста"""
+
         def _sync_delete():
             client = self._get_client()
             client.table("qa_conversation_context_files").delete().eq(
                 "conversation_id", conversation_id
             ).eq("node_file_id", node_file_id).execute()
-        
+
         await asyncio.to_thread(_sync_delete)
-    
+
     # Artifacts
-    
+
     async def qa_add_artifact(
         self,
         conversation_id: str,
@@ -362,6 +341,7 @@ class SupabaseRepo:
         metadata: Optional[dict] = None,
     ) -> None:
         """Add artifact to conversation"""
+
         def _sync_add():
             client = self._get_client()
             data = {
@@ -376,41 +356,42 @@ class SupabaseRepo:
                 "created_at": datetime.utcnow().isoformat(),
             }
             client.table("qa_artifacts").insert(data).execute()
-        
+
         await asyncio.to_thread(_sync_add)
-    
+
     # Chat management
-    
-    async def qa_list_conversations(self, client_id: str = "default", limit: int = 50) -> list[ConversationWithStats]:
+
+    async def qa_list_conversations(
+        self, client_id: str = "default", limit: int = 50
+    ) -> list[ConversationWithStats]:
         """List conversations with statistics (optimized with single query)"""
+
         def _sync_list():
             client = self._get_client()
-            
+
             # Use RPC function for efficient aggregation
             # If RPC not available, fallback to basic query without stats
             try:
                 # Try to use RPC function (if exists)
                 response = client.rpc(
-                    "qa_list_conversations_with_stats",
-                    {
-                        "p_client_id": client_id,
-                        "p_limit": limit
-                    }
+                    "qa_list_conversations_with_stats", {"p_client_id": client_id, "p_limit": limit}
                 ).execute()
-                
+
                 conversations = []
                 for row in response.data:
                     conv_data = {
                         **row,
-                        "last_message_at": datetime.fromisoformat(row["last_message_at"]) if row.get("last_message_at") else None
+                        "last_message_at": datetime.fromisoformat(row["last_message_at"])
+                        if row.get("last_message_at")
+                        else None,
                     }
                     conversations.append(ConversationWithStats(**conv_data))
-                
+
                 return conversations
-            
+
             except Exception as e:
                 logger.warning(f"RPC not available, using fallback query: {e}")
-                
+
                 # Fallback: just return conversations without detailed stats
                 response = (
                     client.table("qa_conversations")
@@ -420,7 +401,7 @@ class SupabaseRepo:
                     .limit(limit)
                     .execute()
                 )
-                
+
                 conversations = []
                 for row in response.data:
                     # Basic conversation without stats
@@ -428,16 +409,17 @@ class SupabaseRepo:
                         **row,
                         "message_count": 0,
                         "file_count": 0,
-                        "last_message_at": None
+                        "last_message_at": None,
                     }
                     conversations.append(ConversationWithStats(**conv_data))
-                
+
                 return conversations
-        
+
         return await asyncio.to_thread(_sync_list)
-    
+
     async def qa_get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         """Get conversation by ID"""
+
         def _sync_get():
             client = self._get_client()
             response = (
@@ -450,116 +432,126 @@ class SupabaseRepo:
             if response.data:
                 return Conversation(**response.data[0])
             return None
-        
+
         return await asyncio.to_thread(_sync_get)
-    
+
     async def qa_update_conversation(
         self,
         conversation_id: str,
         title: Optional[str] = None,
         model_default: Optional[str] = None,
-        update_timestamp: bool = True
+        update_timestamp: bool = True,
     ) -> Conversation:
         """Update conversation"""
+
         def _sync_update():
             client = self._get_client()
             data = {}
-            
+
             if update_timestamp:
                 data["updated_at"] = datetime.utcnow().isoformat()
-            
+
             if title is not None:
                 data["title"] = title
-            
+
             if model_default is not None:
                 data["model_default"] = model_default
-            
+
             # If no fields to update except timestamp, still update timestamp
             if not data and update_timestamp:
                 data["updated_at"] = datetime.utcnow().isoformat()
-            
+
             response = (
-                client.table("qa_conversations")
-                .update(data)
-                .eq("id", conversation_id)
-                .execute()
+                client.table("qa_conversations").update(data).eq("id", conversation_id).execute()
             )
             return Conversation(**response.data[0])
-        
+
         return await asyncio.to_thread(_sync_update)
-    
+
     async def qa_delete_conversation(self, conversation_id: str) -> None:
         """Delete conversation and all related data"""
+
         def _sync_delete():
             client = self._get_client()
-            
+
             # Delete messages
             client.table("qa_messages").delete().eq("conversation_id", conversation_id).execute()
-            
+
             # Delete nodes links
-            client.table("qa_conversation_nodes").delete().eq("conversation_id", conversation_id).execute()
-            
+            client.table("qa_conversation_nodes").delete().eq(
+                "conversation_id", conversation_id
+            ).execute()
+
             # Delete gemini files links
-            client.table("qa_conversation_gemini_files").delete().eq("conversation_id", conversation_id).execute()
-            
+            client.table("qa_conversation_gemini_files").delete().eq(
+                "conversation_id", conversation_id
+            ).execute()
+
             # Delete context files
-            client.table("qa_conversation_context_files").delete().eq("conversation_id", conversation_id).execute()
-            
+            client.table("qa_conversation_context_files").delete().eq(
+                "conversation_id", conversation_id
+            ).execute()
+
             # Delete artifacts
             client.table("qa_artifacts").delete().eq("conversation_id", conversation_id).execute()
-            
+
             # Delete conversation
             client.table("qa_conversations").delete().eq("id", conversation_id).execute()
-        
+
         await asyncio.to_thread(_sync_delete)
-    
+
     async def qa_delete_all_conversations(self, client_id: str = "default") -> None:
         """Delete all conversations and related data for client"""
+
         def _sync_delete_all():
             client = self._get_client()
-            
+
             # Get all conversation IDs for this client
             response = (
-                client.table("qa_conversations")
-                .select("id")
-                .eq("client_id", client_id)
-                .execute()
+                client.table("qa_conversations").select("id").eq("client_id", client_id).execute()
             )
-            
+
             conversation_ids = [row["id"] for row in response.data]
-            
+
             if not conversation_ids:
                 return
-            
+
             logger.info(f"Удаление {len(conversation_ids)} чатов для client_id={client_id}")
-            
+
             # Delete all related data for these conversations
             # Using .in_() for batch deletion
-            
+
             # Delete messages
             client.table("qa_messages").delete().in_("conversation_id", conversation_ids).execute()
-            
+
             # Delete nodes links
-            client.table("qa_conversation_nodes").delete().in_("conversation_id", conversation_ids).execute()
-            
+            client.table("qa_conversation_nodes").delete().in_(
+                "conversation_id", conversation_ids
+            ).execute()
+
             # Delete gemini files links
-            client.table("qa_conversation_gemini_files").delete().in_("conversation_id", conversation_ids).execute()
-            
+            client.table("qa_conversation_gemini_files").delete().in_(
+                "conversation_id", conversation_ids
+            ).execute()
+
             # Delete context files
-            client.table("qa_conversation_context_files").delete().in_("conversation_id", conversation_ids).execute()
-            
+            client.table("qa_conversation_context_files").delete().in_(
+                "conversation_id", conversation_ids
+            ).execute()
+
             # Delete artifacts
             client.table("qa_artifacts").delete().in_("conversation_id", conversation_ids).execute()
-            
+
             # Delete all conversations
             client.table("qa_conversations").delete().eq("client_id", client_id).execute()
-            
-            logger.info(f"Удалены все чаты и связанные данные")
-        
+
+            logger.info("Удалены все чаты и связанные данные")
+
         await asyncio.to_thread(_sync_delete_all)
-    
+
     async def qa_get_conversation_files(self, conversation_id: str) -> list[dict]:
         """Get all Gemini files attached to conversation"""
+
         def _sync_get():
             client = self._get_client()
             response = (
@@ -568,20 +560,21 @@ class SupabaseRepo:
                 .eq("conversation_id", conversation_id)
                 .execute()
             )
-            
+
             files = []
             for row in response.data:
                 gemini_file = row.get("qa_gemini_files")
                 if gemini_file:
                     files.append(gemini_file)
             return files
-        
+
         return await asyncio.to_thread(_sync_get)
-    
+
     # User Prompts
-    
+
     async def prompts_list(self, client_id: str = "default") -> list[dict]:
         """List all prompts for client"""
+
         def _sync_list():
             client = self._get_client()
             response = (
@@ -592,18 +585,19 @@ class SupabaseRepo:
                 .execute()
             )
             return response.data
-        
+
         return await asyncio.to_thread(_sync_list)
-    
+
     async def prompts_create(
         self,
         title: str,
         system_prompt: str,
         user_text: str,
         r2_key: Optional[str] = None,
-        client_id: str = "default"
+        client_id: str = "default",
     ) -> dict:
         """Create new prompt"""
+
         def _sync_create():
             client = self._get_client()
             now = datetime.utcnow().isoformat()
@@ -617,28 +611,25 @@ class SupabaseRepo:
                 "created_at": now,
                 "updated_at": now,
             }
-            response = (
-                client.table("user_prompts")
-                .insert(data)
-                .execute()
-            )
+            response = client.table("user_prompts").insert(data).execute()
             return response.data[0]
-        
+
         return await asyncio.to_thread(_sync_create)
-    
+
     async def prompts_update(
         self,
         prompt_id: str,
         title: Optional[str] = None,
         system_prompt: Optional[str] = None,
         user_text: Optional[str] = None,
-        r2_key: Optional[str] = None
+        r2_key: Optional[str] = None,
     ) -> dict:
         """Update prompt"""
+
         def _sync_update():
             client = self._get_client()
             data = {"updated_at": datetime.utcnow().isoformat()}
-            
+
             if title is not None:
                 data["title"] = title
             if system_prompt is not None:
@@ -647,38 +638,31 @@ class SupabaseRepo:
                 data["user_text"] = user_text
             if r2_key is not None:
                 data["r2_key"] = r2_key
-            
-            response = (
-                client.table("user_prompts")
-                .update(data)
-                .eq("id", prompt_id)
-                .execute()
-            )
+
+            response = client.table("user_prompts").update(data).eq("id", prompt_id).execute()
             return response.data[0]
-        
+
         return await asyncio.to_thread(_sync_update)
-    
+
     async def prompts_delete(self, prompt_id: str) -> None:
         """Delete prompt"""
+
         def _sync_delete():
             client = self._get_client()
             client.table("user_prompts").delete().eq("id", prompt_id).execute()
-        
+
         await asyncio.to_thread(_sync_delete)
-    
+
     async def prompts_get(self, prompt_id: str) -> Optional[dict]:
         """Get single prompt by ID"""
+
         def _sync_get():
             client = self._get_client()
             response = (
-                client.table("user_prompts")
-                .select("*")
-                .eq("id", prompt_id)
-                .limit(1)
-                .execute()
+                client.table("user_prompts").select("*").eq("id", prompt_id).limit(1).execute()
             )
             if response.data:
                 return response.data[0]
             return None
-        
+
         return await asyncio.to_thread(_sync_get)

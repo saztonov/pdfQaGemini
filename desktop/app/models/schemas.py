@@ -26,10 +26,10 @@ AVAILABLE_MODELS = [
 
 # Thinking budget presets
 THINKING_BUDGET_PRESETS = {
-    "low": 512,      # Быстрое рассуждение
+    "low": 512,  # Быстрое рассуждение
     "medium": 2048,  # Средняя глубина
-    "high": 8192,    # Глубокое рассуждение
-    "max": 16384,    # Максимальная глубина
+    "high": 8192,  # Глубокое рассуждение
+    "max": 16384,  # Максимальная глубина
 }
 
 # Модель по умолчанию
@@ -48,11 +48,12 @@ MODEL_DEFAULT_THINKING: dict[str, str] = {
 
 class FileType(str, Enum):
     """Типы файлов в node_files"""
-    PDF = "pdf"                 # Исходный PDF
-    ANNOTATION = "annotation"   # Разметка блоков ({name}_annotation.json)
-    OCR_HTML = "ocr_html"       # HTML результат ({name}_ocr.html)
-    RESULT_JSON = "result_json" # Полный результат ({name}_result.json)
-    CROP = "crop"               # Кропы изображений (в папке crops/)
+
+    PDF = "pdf"  # Исходный PDF
+    ANNOTATION = "annotation"  # Разметка блоков ({name}_annotation.json)
+    OCR_HTML = "ocr_html"  # HTML результат ({name}_ocr.html)
+    RESULT_JSON = "result_json"  # Полный результат ({name}_result.json)
+    CROP = "crop"  # Кропы изображений (в папке crops/)
 
 
 # Иконки для типов файлов
@@ -86,7 +87,7 @@ class TreeNode(BaseModel):
     status: str
     attributes: dict[str, Any] = Field(default_factory=dict)
     sort_order: int = 0
-    
+
     class Config:
         from_attributes = True
 
@@ -100,7 +101,7 @@ class NodeFile(BaseModel):
     file_size: int
     mime_type: str
     metadata: dict[str, Any] = Field(default_factory=dict)
-    
+
     class Config:
         from_attributes = True
 
@@ -113,13 +114,14 @@ class Conversation(BaseModel):
     model_default: Optional[str] = None  # deprecated, loaded from API
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class ConversationWithStats(BaseModel):
     """Conversation with additional statistics"""
+
     id: UUID
     client_id: str
     title: str = ""
@@ -129,7 +131,7 @@ class ConversationWithStats(BaseModel):
     message_count: int = 0
     file_count: int = 0
     last_message_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -141,14 +143,14 @@ class Message(BaseModel):
     content: str
     meta: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
-    
+
     @field_validator("content")
     @classmethod
     def content_not_empty(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("content cannot be empty")
         return v
-    
+
     class Config:
         from_attributes = True
 
@@ -165,7 +167,7 @@ class ContextItem(BaseModel):
     status: Literal["local", "downloaded", "uploaded"] = "local"
     gemini_name: Optional[str] = None
     gemini_uri: Optional[str] = None
-    
+
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
@@ -185,7 +187,7 @@ class ModelReply(BaseModel):
     assistant_text: str
     actions: list[ModelAction] = Field(default_factory=list)
     is_final: bool = False
-    
+
     @field_validator("assistant_text")
     @classmethod
     def text_not_empty(cls, v: str) -> str:

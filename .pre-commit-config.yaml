@@ -25,10 +25,9 @@ repos:
         args: [--markdown-linebreak-ext=md]
       # Проверка merge конфликтов
       - id: check-merge-conflict
-      # Запретить коммит в main/master напрямую
-      - id: no-commit-to-branch
-        args: ['--branch', 'main', '--branch', 'master']
-        stages: [commit]
+      # Запретить коммит в main/master напрямую (отключено для solo dev)
+      # - id: no-commit-to-branch
+      #   args: ['--branch', 'main', '--branch', 'master']
       # Проверка что Python файлы валидны
       - id: check-ast
       # Проверка docstring в первой строке
@@ -49,7 +48,6 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        language_version: python3.10
         args: ['--line-length=100']
 
   # Python линтер ruff
@@ -59,12 +57,12 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
 
-  # Проверка безопасности зависимостей
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-    rev: v1.3.3
-    hooks:
-      - id: python-safety-dependencies-check
-        files: requirements.txt
+  # Проверка безопасности зависимостей (опционально - требует requirements.txt)
+  # - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+  #   rev: v1.3.3
+  #   hooks:
+  #     - id: python-safety-dependencies-check
+  #       files: requirements.txt
 
   # Jupyter notebooks - очистка output
   - repo: https://github.com/kynan/nbstripout
