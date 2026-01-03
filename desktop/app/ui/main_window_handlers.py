@@ -315,11 +315,12 @@ class MainWindowHandlers:
         """Legacy handler - no longer used"""
         pass
 
-    @asyncSlot(str, str, str, str, object, list)
+    @asyncSlot(str, str, str, str, str, object, list)
     async def _on_ask_model(
         self: "MainWindow",
         user_text: str,
         system_prompt: str,
+        user_text_template: str,
         model_name: str,
         thinking_level: str,
         thinking_budget: int,
@@ -328,6 +329,7 @@ class MainWindowHandlers:
         """Handle ask model request - agentic loop with structured output"""
         logger.info("=== _on_ask_model (agentic) ===")
         logger.info(f"  user_text: {user_text[:50]}...")
+        logger.info(f"  user_text_template: {user_text_template[:50]}..." if user_text_template else "  user_text_template: (none)")
         logger.info(f"  model_name: {model_name}, thinking: {thinking_level}")
         logger.info(f"  file_refs: {len(file_refs)}")
 
@@ -354,6 +356,7 @@ class MainWindowHandlers:
             await self._run_agentic(
                 question=user_text,
                 system_prompt=system_prompt,
+                user_text_template=user_text_template,
                 model_name=model_name,
                 thinking_level=thinking_level,
                 thinking_budget=thinking_budget,
@@ -372,6 +375,7 @@ class MainWindowHandlers:
         self: "MainWindow",
         question: str,
         system_prompt: str,
+        user_text_template: str,
         model_name: str,
         thinking_level: str,
         thinking_budget: int,
@@ -395,7 +399,8 @@ class MainWindowHandlers:
 
             # Build prompt with catalog (only first iteration)
             if iteration == 0:
-                user_prompt = build_user_prompt(question, context_catalog_json)
+                # Use user_text_template if provided, otherwise use default
+                user_prompt = build_user_prompt(question, context_catalog_json, user_text_template)
             else:
                 user_prompt = question  # Follow-up iterations use original question
 

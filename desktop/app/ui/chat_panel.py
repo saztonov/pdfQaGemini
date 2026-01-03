@@ -134,8 +134,8 @@ class ChatPanel(QWidget):
 
     # Signals
     askModelRequested = Signal(
-        str, str, str, str, object, list
-    )  # user_text, system_prompt, model_name, thinking_level, thinking_budget, file_refs
+        str, str, str, str, str, object, list
+    )  # user_text, system_prompt, user_text_template, model_name, thinking_level, thinking_budget, file_refs
     editPromptRequested = Signal(str)  # prompt_id
 
     def __init__(self):
@@ -148,6 +148,7 @@ class ChatPanel(QWidget):
         self._selected_files: dict[str, dict] = {}  # name -> file_info
         self._available_prompts: list[dict] = []  # user prompts
         self._current_system_prompt: str = ""
+        self._current_user_text_template: str = ""  # Template with {question} and {context_catalog_json}
         self._setup_ui()
 
     def _setup_ui(self):
@@ -594,16 +595,17 @@ class ChatPanel(QWidget):
         thinking_budget = self.budget_combo.currentData()  # None = auto
         file_refs = self.get_selected_file_refs()
         system_prompt = self._current_system_prompt
+        user_text_template = self._current_user_text_template
 
         logger.info(
-            f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}, system_prompt_len={len(system_prompt)}"
+            f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}, system_prompt_len={len(system_prompt)}, user_text_template_len={len(user_text_template)}"
         )
         if not model_name:
             logger.warning("No model selected!")
             return
 
         self.askModelRequested.emit(
-            text, system_prompt, model_name, thinking_level, thinking_budget, file_refs
+            text, system_prompt, user_text_template, model_name, thinking_level, thinking_budget, file_refs
         )
         self.input_field.clear()
 
@@ -835,7 +837,13 @@ class ChatPanel(QWidget):
         if prompt_id is None:
             # No prompt selected
             self._current_system_prompt = ""
+            self._current_user_text_template = ""
             self.btn_edit_prompt.setEnabled(False)
+            # Clear input field and restore default placeholder
+            self.input_field.clear()
+            self.input_field.setPlaceholderText(
+                "Задайте вопрос... (Enter - отправить, Shift+Enter - новая строка)"
+            )
             return
 
         # Find prompt
@@ -843,14 +851,17 @@ class ChatPanel(QWidget):
         if prompt:
             self._current_system_prompt = prompt.get("system_prompt", "")
             user_text = prompt.get("user_text", "")
+            
+            # Save user_text as template (with placeholders)
+            self._current_user_text_template = user_text
 
-            # Fill user text if not empty
-            if user_text:
-                self.input_field.setPlainText(user_text)
+            # Clear input field - user will type their question
+            self.input_field.clear()
+            self.input_field.setPlaceholderText("Введите ваш вопрос...")
 
             self.btn_edit_prompt.setEnabled(True)
             logger.info(
-                f"Prompt applied: {prompt.get('title')}, system_prompt_len={len(self._current_system_prompt)}, user_text_len={len(user_text)}"
+                f"Prompt applied: {prompt.get('title')}, system_prompt_len={len(self._current_system_prompt)}, user_text_template_len={len(user_text)}"
             )
 
     def _on_edit_prompt(self):
