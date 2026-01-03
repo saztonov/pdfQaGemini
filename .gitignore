@@ -1,3 +1,24 @@
+# IDE
 /.idea
+.vscode/
+
+# Python
 /.venv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Кэш и временные файлы
 /cache
+*.log
+.DS_Store
+
+# Локальные настройки (если будут)
+.env
+.env.local
+local_settings.py
+
+# База данных (экспорты)
+/desktop/app/db/exports/
+/desktop/app/db/ai_context/
