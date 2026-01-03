@@ -62,7 +62,7 @@ class GeminiClient:
         client = self._get_client()
         try:
             result = []
-            async for file in client.aio.files.list():
+            async for file in await client.aio.files.list():
                 file_info = {
                     "name": file.name,
                     "uri": file.uri,

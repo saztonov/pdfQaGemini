@@ -726,7 +726,7 @@ class RightContextPanel(QWidget):
         else:
             self._selected_for_request.discard(file_name)
 
-        self._update_footer()
+        self._update_files_count()
         self._emit_selection()
 
     def _emit_selection(self):
@@ -764,6 +764,7 @@ class RightContextPanel(QWidget):
                 self.gemini_files = all_files
 
             self._update_table()
+            self._update_files_count()
 
         except Exception as e:
             logger.error(f"Ошибка загрузки Gemini Files: {e}", exc_info=True)
@@ -894,7 +895,11 @@ class RightContextPanel(QWidget):
                 await self.gemini_client.delete_file(name)
                 self._selected_for_request.discard(name)
 
-            await self.refresh_files()
+            # Refresh files list with current conversation filter
+            await self.refresh_files(conversation_id=self.conversation_id)
+            
+            # Refresh chats list to update file counts
+            await self.refresh_chats()
 
             if self.toast_manager:
                 self.toast_manager.success(f"Удалено {len(file_names)} файлов")
@@ -1038,8 +1043,11 @@ class RightContextPanel(QWidget):
                     status_item.setForeground(Qt.red)
                 failed_count += 1
 
-        # Refresh files list
-        await self.refresh_files()
+        # Refresh files list with current conversation filter
+        await self.refresh_files(conversation_id=self.conversation_id)
+        
+        # Refresh chats list to update file counts
+        await self.refresh_chats()
 
         # Show result
         if success_count > 0 and failed_count == 0:
@@ -1116,7 +1124,7 @@ class RightContextPanel(QWidget):
         pass
 
     async def load_context_from_db(self):
-        await self.refresh_files()
+        await self.refresh_files(conversation_id=self.conversation_id)
 
     def update_context_item_status(self, item_id: str, status: str, gemini_name: str = None):
         pass
@@ -1363,8 +1371,8 @@ class RightContextPanel(QWidget):
                     if conv_id:
                         conversation_ids.append(conv_id)
 
-                # Delete all conversations
-                await self.supabase_repo.qa_delete_all_conversations()
+                # Delete all conversations (pass client_id)
+                await self.supabase_repo.qa_delete_all_conversations(client_id=self.client_id)
 
                 # Delete all chat folders from R2
                 if self.r2_client:
