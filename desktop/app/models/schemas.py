@@ -118,6 +118,22 @@ class Conversation(BaseModel):
         from_attributes = True
 
 
+class ConversationWithStats(BaseModel):
+    """Conversation with additional statistics"""
+    id: UUID
+    client_id: str
+    title: str = ""
+    model_default: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+    file_count: int = 0
+    last_message_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class Message(BaseModel):
     id: UUID
     conversation_id: UUID

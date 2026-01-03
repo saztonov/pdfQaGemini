@@ -1,49 +1,201 @@
-"""Right panel - Gemini Files"""
+"""Right panel - Chats, Gemini Files and Request Inspector"""
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLabel, QFrame,
-    QCheckBox, QAbstractItemView
+    QCheckBox, QAbstractItemView, QTabWidget, QListWidget, QListWidgetItem,
+    QPlainTextEdit, QSplitter, QInputDialog
 )
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtGui import QFont
 from qasync import asyncSlot
 from app.services.gemini_client import GeminiClient
+from app.services.trace import TraceStore, ModelTrace
+import json
 
 logger = logging.getLogger(__name__)
 
 
 class RightContextPanel(QWidget):
-    """Gemini Files panel - shows uploaded files"""
+    """Right panel with tabs: Chats, Gemini Files and Request Inspector"""
     
     # Signals
     refreshGeminiRequested = Signal()
     filesSelectionChanged = Signal(list)  # list[dict] selected files
+    chatSelected = Signal(str)  # conversation_id
+    chatCreated = Signal(str, str)  # conversation_id, title
+    chatDeleted = Signal(str)  # conversation_id
     
     def __init__(
         self,
         supabase_repo=None,
         gemini_client: Optional[GeminiClient] = None,
         r2_client=None,
-        toast_manager=None
+        toast_manager=None,
+        trace_store: Optional[TraceStore] = None
     ):
         super().__init__()
         self.supabase_repo = supabase_repo
         self.gemini_client = gemini_client
         self.r2_client = r2_client
         self.toast_manager = toast_manager
+        self.trace_store = trace_store
         
         # State
         self.conversation_id: Optional[str] = None
         self.gemini_files: list[dict] = []
         self._selected_for_request: set[str] = set()  # file names selected for request
+        self.current_trace: Optional[ModelTrace] = None
         
         self._setup_ui()
         self._connect_signals()
+        self._setup_inspector_refresh()
     
     def _setup_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: none;
+                background-color: #1e1e1e;
+            }
+            QTabBar::tab {
+                background-color: #252526;
+                color: #cccccc;
+                padding: 8px 16px;
+                border: none;
+                border-bottom: 2px solid transparent;
+            }
+            QTabBar::tab:selected {
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border-bottom: 2px solid #0e639c;
+            }
+            QTabBar::tab:hover {
+                background-color: #2d2d2d;
+            }
+        """)
+        
+        # Add tabs
+        self.chats_tab = self._create_chats_tab()
+        self.files_tab = self._create_files_tab()
+        self.inspector_tab = self._create_inspector_tab()
+        
+        self.tab_widget.addTab(self.chats_tab, "💬 Чаты")
+        self.tab_widget.addTab(self.files_tab, "📁 Файлы")
+        self.tab_widget.addTab(self.inspector_tab, "🔍 Инспектор")
+        
+        layout.addWidget(self.tab_widget)
+    
+    def _create_chats_tab(self) -> QWidget:
+        """Create Chats tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Header
+        header = QWidget()
+        header.setStyleSheet("background-color: #252526; border-bottom: 1px solid #3e3e42;")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(10, 10, 10, 10)
+        header_layout.setSpacing(8)
+        
+        header_label = QLabel("ЧАТЫ")
+        header_label.setStyleSheet("color: #bbbbbb; font-weight: bold; font-size: 9pt;")
+        header_layout.addWidget(header_label)
+        
+        # Toolbar
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(8)
+        
+        self.btn_new_chat = QPushButton("+ Новый чат")
+        self.btn_new_chat.setCursor(Qt.PointingHandCursor)
+        self.btn_new_chat.setStyleSheet(self._button_style())
+        toolbar_layout.addWidget(self.btn_new_chat)
+        
+        self.btn_delete_chat = QPushButton("🗑 Удалить")
+        self.btn_delete_chat.setCursor(Qt.PointingHandCursor)
+        self.btn_delete_chat.setEnabled(False)
+        self.btn_delete_chat.setStyleSheet(self._button_style())
+        toolbar_layout.addWidget(self.btn_delete_chat)
+        
+        self.btn_refresh_chats = QPushButton("↻ Обновить")
+        self.btn_refresh_chats.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh_chats.setStyleSheet(self._button_style())
+        toolbar_layout.addWidget(self.btn_refresh_chats)
+        
+        toolbar_layout.addStretch()
+        
+        self.btn_delete_all_chats = QPushButton("🗑 Все")
+        self.btn_delete_all_chats.setCursor(Qt.PointingHandCursor)
+        self.btn_delete_all_chats.setStyleSheet("""
+            QPushButton {
+                background-color: #5a1a1a;
+                color: #cccccc;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover { background-color: #7a2020; color: #ffffff; }
+            QPushButton:pressed { background-color: #3a0a0a; }
+            QPushButton:disabled { background-color: #2d2d2d; color: #666; }
+        """)
+        self.btn_delete_all_chats.setToolTip("Удалить все чаты")
+        toolbar_layout.addWidget(self.btn_delete_all_chats)
+        
+        header_layout.addLayout(toolbar_layout)
+        
+        layout.addWidget(header)
+        
+        # Chats list
+        self.chats_list = QListWidget()
+        self.chats_list.setStyleSheet("""
+            QListWidget {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: none;
+                font-size: 12px;
+            }
+            QListWidget::item {
+                padding: 12px;
+                border-bottom: 1px solid #2d2d2d;
+            }
+            QListWidget::item:selected {
+                background-color: #094771;
+            }
+            QListWidget::item:hover {
+                background-color: #2a2a2a;
+            }
+        """)
+        self.chats_list.itemClicked.connect(self._on_chat_selected)
+        self.chats_list.itemDoubleClicked.connect(self._on_chat_double_clicked)
+        layout.addWidget(self.chats_list, 1)
+        
+        # Footer
+        self.chats_footer_label = QLabel("Чатов: 0")
+        self.chats_footer_label.setStyleSheet("color: #666; font-size: 8pt; padding: 4px 10px;")
+        layout.addWidget(self.chats_footer_label)
+        
+        # Connect signals
+        self.btn_new_chat.clicked.connect(self._on_new_chat_clicked)
+        self.btn_delete_chat.clicked.connect(self._on_delete_chat_clicked)
+        self.btn_refresh_chats.clicked.connect(self._on_refresh_chats_clicked)
+        self.btn_delete_all_chats.clicked.connect(self._on_delete_all_chats_clicked)
+        
+        return widget
+    
+    def _create_files_tab(self) -> QWidget:
+        """Create Gemini Files tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
@@ -135,6 +287,207 @@ class RightContextPanel(QWidget):
         self.footer_label = QLabel("Файлов: 0 | Выбрано для запроса: 0")
         self.footer_label.setStyleSheet("color: #666; font-size: 8pt; padding: 4px 10px;")
         layout.addWidget(self.footer_label)
+        
+        return widget
+    
+    def _create_inspector_tab(self) -> QWidget:
+        """Create Request Inspector tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Header
+        header = QWidget()
+        header.setStyleSheet("background-color: #252526; border-bottom: 1px solid #3e3e42;")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(10, 10, 10, 10)
+        header_layout.setSpacing(8)
+        
+        header_label = QLabel("ИНСПЕКТОР ЗАПРОСОВ")
+        header_label.setStyleSheet("color: #bbbbbb; font-weight: bold; font-size: 9pt;")
+        header_layout.addWidget(header_label)
+        
+        # Toolbar
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setSpacing(8)
+        
+        self.btn_inspector_refresh = QPushButton("↻ Обновить")
+        self.btn_inspector_refresh.setCursor(Qt.PointingHandCursor)
+        self.btn_inspector_refresh.setStyleSheet(self._button_style())
+        self.btn_inspector_refresh.clicked.connect(self._refresh_inspector)
+        toolbar_layout.addWidget(self.btn_inspector_refresh)
+        
+        self.btn_inspector_clear = QPushButton("🗑 Очистить")
+        self.btn_inspector_clear.setCursor(Qt.PointingHandCursor)
+        self.btn_inspector_clear.setStyleSheet(self._button_style())
+        self.btn_inspector_clear.clicked.connect(self._clear_inspector)
+        toolbar_layout.addWidget(self.btn_inspector_clear)
+        
+        toolbar_layout.addStretch()
+        
+        self.trace_count_label = QLabel("Запросов: 0")
+        self.trace_count_label.setStyleSheet("color: #888; font-size: 9pt;")
+        toolbar_layout.addWidget(self.trace_count_label)
+        
+        header_layout.addLayout(toolbar_layout)
+        layout.addWidget(header)
+        
+        # Splitter for list and details
+        splitter = QSplitter(Qt.Vertical)
+        
+        # Trace list
+        self.trace_list = QListWidget()
+        self.trace_list.setStyleSheet("""
+            QListWidget {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: none;
+                font-size: 10px;
+                font-family: 'Consolas', 'Courier New', monospace;
+            }
+            QListWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #2d2d2d;
+            }
+            QListWidget::item:selected {
+                background-color: #094771;
+            }
+            QListWidget::item:hover {
+                background-color: #2a2a2a;
+            }
+        """)
+        self.trace_list.itemClicked.connect(self._on_trace_selected)
+        splitter.addWidget(self.trace_list)
+        
+        # Details view
+        details_widget = QWidget()
+        details_layout = QVBoxLayout(details_widget)
+        details_layout.setContentsMargins(8, 8, 8, 8)
+        details_layout.setSpacing(4)
+        
+        self.trace_details_label = QLabel("Выберите запрос для просмотра деталей")
+        self.trace_details_label.setStyleSheet("color: #888; font-size: 9pt;")
+        self.trace_details_label.setWordWrap(True)
+        details_layout.addWidget(self.trace_details_label)
+        
+        self.trace_details = QPlainTextEdit()
+        self.trace_details.setReadOnly(True)
+        self.trace_details.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #3e3e42;
+                border-radius: 4px;
+                font-size: 10px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                padding: 8px;
+            }
+        """)
+        font = QFont("Consolas", 9)
+        self.trace_details.setFont(font)
+        details_layout.addWidget(self.trace_details)
+        
+        splitter.addWidget(details_widget)
+        splitter.setSizes([200, 300])
+        
+        layout.addWidget(splitter, 1)
+        
+        return widget
+    
+    def _setup_inspector_refresh(self):
+        """Setup auto-refresh timer for inspector"""
+        self.inspector_timer = QTimer(self)
+        self.inspector_timer.timeout.connect(self._refresh_inspector)
+        self.inspector_timer.start(2000)  # Refresh every 2 seconds
+    
+    def _refresh_inspector(self):
+        """Refresh inspector trace list"""
+        if not self.trace_store:
+            return
+        
+        traces = self.trace_store.list()
+        self.trace_count_label.setText(f"Запросов: {len(traces)}")
+        
+        # Update list
+        current_count = self.trace_list.count()
+        if current_count != len(traces):
+            self.trace_list.clear()
+            
+            for trace in traces:  # list() already returns newest first
+                timestamp = trace.ts.strftime("%H:%M:%S")
+                model = trace.model.replace("gemini-3-", "").replace("-preview", "")
+                status = "✓" if trace.is_final else "○"
+                latency = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "?"
+                
+                item_text = f"{status} {timestamp} | {model} | {latency}"
+                if trace.errors:
+                    item_text += " | ❌"
+                
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.UserRole, trace.id)
+                self.trace_list.addItem(item)
+    
+    def _on_trace_selected(self, item: QListWidgetItem):
+        """Handle trace selection"""
+        if not self.trace_store:
+            return
+        
+        trace_id = item.data(Qt.UserRole)
+        trace = self.trace_store.get(trace_id)
+        
+        if trace:
+            self.current_trace = trace
+            self._display_trace_details(trace)
+    
+    def _display_trace_details(self, trace: ModelTrace):
+        """Display trace details"""
+        details = []
+        
+        details.append(f"═══ ЗАПРОС {trace.id[:8]} ═══\n")
+        details.append(f"⏱️ Время: {trace.ts.strftime('%Y-%m-%d %H:%M:%S')}")
+        details.append(f"🤖 Модель: {trace.model}")
+        details.append(f"💭 Thinking Level: {trace.thinking_level}")
+        details.append(f"⚡ Latency: {trace.latency_ms:.1f}ms" if trace.latency_ms else "⚡ Latency: ?")
+        details.append(f"✅ Финальный: {'Да' if trace.is_final else 'Нет'}")
+        details.append(f"📁 Файлов: {len(trace.input_files)}")
+        
+        if trace.errors:
+            details.append(f"\n❌ ОШИБКИ:")
+            for err in trace.errors:
+                details.append(f"  • {err}")
+        
+        details.append(f"\n📝 SYSTEM PROMPT:\n{trace.system_prompt[:200]}..." if len(trace.system_prompt) > 200 else f"\n📝 SYSTEM PROMPT:\n{trace.system_prompt}")
+        
+        details.append(f"\n👤 USER TEXT:\n{trace.user_text[:300]}..." if len(trace.user_text) > 300 else f"\n👤 USER TEXT:\n{trace.user_text}")
+        
+        if trace.response_json:
+            details.append(f"\n📤 RESPONSE JSON:")
+            try:
+                response_text = json.dumps(trace.response_json, ensure_ascii=False, indent=2)
+                if len(response_text) > 500:
+                    details.append(response_text[:500] + "\n...")
+                else:
+                    details.append(response_text)
+            except:
+                details.append(str(trace.response_json)[:500])
+        
+        if trace.parsed_actions:
+            details.append(f"\n⚙️ ACTIONS ({len(trace.parsed_actions)}):")
+            for i, action in enumerate(trace.parsed_actions[:5], 1):
+                details.append(f"  {i}. {action.get('type', '?')}")
+        
+        self.trace_details_label.setText(f"Запрос: {trace.model} | {trace.ts.strftime('%H:%M:%S')}")
+        self.trace_details.setPlainText("\n".join(details))
+    
+    def _clear_inspector(self):
+        """Clear all traces"""
+        if self.trace_store:
+            self.trace_store.clear()
+            self.trace_list.clear()
+            self.trace_details.clear()
+            self.trace_details_label.setText("Все запросы очищены")
+            self.trace_count_label.setText("Запросов: 0")
     
     def _button_style(self) -> str:
         return """
@@ -248,8 +601,8 @@ class RightContextPanel(QWidget):
         """Handle reload click"""
         await self.reload_selected_files()
     
-    async def refresh_files(self):
-        """Refresh Gemini Files list"""
+    async def refresh_files(self, conversation_id: Optional[str] = None):
+        """Refresh Gemini Files list (filtered by conversation if provided)"""
         if not self.gemini_client:
             if self.toast_manager:
                 self.toast_manager.error("Клиент Gemini не инициализирован")
@@ -259,11 +612,34 @@ class RightContextPanel(QWidget):
             self.toast_manager.info("Обновление Gemini Files...")
         
         try:
-            self.gemini_files = await self.gemini_client.list_files()
+            all_files = await self.gemini_client.list_files()
+            
+            # Filter files by conversation if specified
+            if conversation_id and self.supabase_repo:
+                try:
+                    conv_files = await self.supabase_repo.qa_get_conversation_files(conversation_id)
+                    conv_file_names = {f.get("gemini_name") for f in conv_files if f.get("gemini_name")}
+                    
+                    # Filter to only files attached to this conversation
+                    self.gemini_files = [
+                        f for f in all_files
+                        if f.get("name") in conv_file_names
+                    ]
+                    
+                    logger.info(f"Отфильтровано {len(self.gemini_files)} из {len(all_files)} файлов для чата {conversation_id}")
+                except Exception as e:
+                    logger.error(f"Ошибка фильтрации файлов по чату: {e}", exc_info=True)
+                    self.gemini_files = all_files
+            else:
+                self.gemini_files = all_files
+            
             self._update_table()
             
             if self.toast_manager:
-                self.toast_manager.success(f"Загружено {len(self.gemini_files)} файлов")
+                if conversation_id:
+                    self.toast_manager.success(f"Загружено {len(self.gemini_files)} файлов чата")
+                else:
+                    self.toast_manager.success(f"Загружено {len(self.gemini_files)} файлов")
         
         except Exception as e:
             logger.error(f"Ошибка загрузки Gemini Files: {e}", exc_info=True)
@@ -640,3 +1016,267 @@ class RightContextPanel(QWidget):
     
     def update_context_item_status(self, item_id: str, status: str, gemini_name: str = None):
         pass
+    
+    # Chats tab methods
+    
+    async def refresh_chats(self):
+        """Refresh chats list"""
+        if not self.supabase_repo:
+            if self.toast_manager:
+                self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        try:
+            from app.models.schemas import ConversationWithStats
+            conversations = await self.supabase_repo.qa_list_conversations()
+            
+            self.chats_list.clear()
+            
+            for conv in conversations:
+                item_text = self._format_chat_item(conv)
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.UserRole, str(conv.id))
+                self.chats_list.addItem(item)
+            
+            self.chats_footer_label.setText(f"Чатов: {len(conversations)}")
+        
+        except Exception as e:
+            logger.error(f"Ошибка загрузки чатов: {e}", exc_info=True)
+            if self.toast_manager:
+                self.toast_manager.error(f"Ошибка: {e}")
+    
+    def _format_chat_item(self, conv) -> str:
+        """Format chat item text"""
+        from datetime import datetime
+        
+        title = conv.title or "Новый чат"
+        msg_count = conv.message_count
+        file_count = conv.file_count
+        
+        # Format time - use updated_at or last_message_at
+        time_to_show = conv.last_message_at or conv.updated_at
+        
+        if time_to_show:
+            # Format: 03.01.26 14:27
+            time_str = time_to_show.strftime("%d.%m.%y %H:%M")
+        else:
+            time_str = conv.created_at.strftime("%d.%m.%y %H:%M")
+        
+        return f"{title}\n📝 {msg_count} сообщений | 📎 {file_count} файлов | ⏰ {time_str}"
+    
+    def _on_chat_selected(self, item: QListWidgetItem):
+        """Handle chat selection"""
+        conversation_id = item.data(Qt.UserRole)
+        if conversation_id:
+            self.btn_delete_chat.setEnabled(True)
+            self.chatSelected.emit(conversation_id)
+    
+    @asyncSlot()
+    async def _on_new_chat_clicked(self):
+        """Handle new chat button"""
+        if not self.supabase_repo:
+            if self.toast_manager:
+                self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        # Generate default title with timestamp
+        from datetime import datetime
+        default_title = f"Чат {datetime.now().strftime('%d.%m.%y %H:%M')}"
+        
+        # Ask for chat title
+        title, ok = QInputDialog.getText(
+            self,
+            "Новый чат",
+            "Введите название чата:",
+            text=default_title
+        )
+        
+        if ok and title:
+            try:
+                conv = await self.supabase_repo.qa_create_conversation(title=title)
+                await self.refresh_chats()
+                
+                if self.toast_manager:
+                    self.toast_manager.success(f"Чат '{title}' создан")
+                
+                self.chatCreated.emit(str(conv.id), title)
+            
+            except Exception as e:
+                logger.error(f"Ошибка создания чата: {e}", exc_info=True)
+                if self.toast_manager:
+                    self.toast_manager.error(f"Ошибка: {e}")
+    
+    @asyncSlot()
+    async def _on_delete_chat_clicked(self):
+        """Handle delete chat button"""
+        if not self.supabase_repo:
+            if self.toast_manager:
+                self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        current_item = self.chats_list.currentItem()
+        if not current_item:
+            if self.toast_manager:
+                self.toast_manager.warning("Выберите чат для удаления")
+            return
+        
+        conversation_id = current_item.data(Qt.UserRole)
+        if not conversation_id:
+            return
+        
+        # Confirm deletion
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Удаление чата",
+            "Вы уверены, что хотите удалить этот чат?\nВсе сообщения и привязанные файлы будут удалены.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                await self.supabase_repo.qa_delete_conversation(conversation_id)
+                
+                # Delete chat folder from R2
+                if self.r2_client:
+                    try:
+                        await self.r2_client.delete_chat_folder(conversation_id)
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить папку чата из R2: {e}")
+                
+                await self.refresh_chats()
+                
+                if self.toast_manager:
+                    self.toast_manager.success("Чат удален")
+                
+                self.chatDeleted.emit(conversation_id)
+                self.btn_delete_chat.setEnabled(False)
+            
+            except Exception as e:
+                logger.error(f"Ошибка удаления чата: {e}", exc_info=True)
+                if self.toast_manager:
+                    self.toast_manager.error(f"Ошибка: {e}")
+    
+    @asyncSlot()
+    async def _on_refresh_chats_clicked(self):
+        """Handle refresh chats button"""
+        await self.refresh_chats()
+    
+    def _on_chat_double_clicked(self, item: QListWidgetItem):
+        """Handle chat double click for renaming"""
+        conversation_id = item.data(Qt.UserRole)
+        if not conversation_id:
+            return
+        
+        # Get current title from text (first line)
+        current_text = item.text()
+        current_title = current_text.split("\n")[0] if "\n" in current_text else current_text
+        
+        # Ask for new title
+        new_title, ok = QInputDialog.getText(
+            self,
+            "Переименовать чат",
+            "Введите новое название чата:",
+            text=current_title
+        )
+        
+        if ok and new_title and new_title != current_title:
+            # Update title in database
+            import asyncio
+            asyncio.create_task(self._rename_chat(conversation_id, new_title))
+    
+    async def _rename_chat(self, conversation_id: str, new_title: str):
+        """Rename chat in database"""
+        if not self.supabase_repo:
+            if self.toast_manager:
+                self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        try:
+            await self.supabase_repo.qa_update_conversation(
+                conversation_id=conversation_id,
+                title=new_title
+            )
+            
+            # Refresh list
+            await self.refresh_chats()
+            
+            if self.toast_manager:
+                self.toast_manager.success(f"Чат переименован: {new_title}")
+        
+        except Exception as e:
+            logger.error(f"Ошибка переименования чата: {e}", exc_info=True)
+            if self.toast_manager:
+                self.toast_manager.error(f"Ошибка: {e}")
+    
+    @asyncSlot()
+    async def _on_delete_all_chats_clicked(self):
+        """Handle delete all chats button"""
+        if not self.supabase_repo:
+            if self.toast_manager:
+                self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        # Get chats count
+        chat_count = self.chats_list.count()
+        
+        if chat_count == 0:
+            if self.toast_manager:
+                self.toast_manager.info("Нет чатов для удаления")
+            return
+        
+        # Confirm deletion
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "Удаление всех чатов",
+            f"Вы уверены, что хотите удалить ВСЕ чаты ({chat_count} шт.)?\n\n"
+            "⚠️ Будут удалены:\n"
+            "• Все сообщения\n"
+            "• Все связи с файлами\n"
+            "• Все данные на R2\n\n"
+            "Это действие необратимо!",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                if self.toast_manager:
+                    self.toast_manager.info(f"Удаление {chat_count} чатов...")
+                
+                # Get all conversation IDs
+                conversation_ids = []
+                for i in range(self.chats_list.count()):
+                    item = self.chats_list.item(i)
+                    conv_id = item.data(Qt.UserRole)
+                    if conv_id:
+                        conversation_ids.append(conv_id)
+                
+                # Delete all conversations
+                await self.supabase_repo.qa_delete_all_conversations()
+                
+                # Delete all chat folders from R2
+                if self.r2_client:
+                    try:
+                        for conv_id in conversation_ids:
+                            await self.r2_client.delete_chat_folder(conv_id)
+                        logger.info(f"Удалены папки {len(conversation_ids)} чатов из R2")
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить папки чатов из R2: {e}")
+                
+                # Refresh list
+                await self.refresh_chats()
+                
+                # Notify about deletion
+                self.chatDeleted.emit("")  # Empty string means all deleted
+                self.btn_delete_chat.setEnabled(False)
+                
+                if self.toast_manager:
+                    self.toast_manager.success(f"✓ Удалено {len(conversation_ids)} чатов")
+            
+            except Exception as e:
+                logger.error(f"Ошибка удаления всех чатов: {e}", exc_info=True)
+                if self.toast_manager:
+                    self.toast_manager.error(f"Ошибка: {e}")

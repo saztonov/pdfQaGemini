@@ -41,21 +41,21 @@ class MessageRenderer:
     
     def _render_user_message(self, content: str, timestamp: str) -> str:
         return f"""
-            <div style="margin: 12px 0; padding: 12px 16px; background-color: #2d4a6d; border-radius: 16px;">
-                <div style="font-weight: bold; color: #7cb3ff; margin-bottom: 6px; font-size: 12px;">
-                    Вы <span style="color: #888; font-weight: normal;">{timestamp}</span>
+            <div style="margin: 12px 0; padding: 12px 16px; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 16px;">
+                <div style="font-weight: bold; color: #1976d2; margin-bottom: 6px; font-size: 12px;">
+                    Вы <span style="color: #666; font-weight: normal;">{timestamp}</span>
                 </div>
-                <div style="color: #e0e0e0; font-size: 14px; line-height: 1.5;">{self._escape_html(content)}</div>
+                <div style="color: #1a1a1a; font-size: 14px; line-height: 1.5;">{self._escape_html(content)}</div>
             </div>
         """
     
     def _render_thinking_message(self, content: str, timestamp: str, index: int) -> str:
         is_collapsed = index in self._collapsed_thoughts
         arrow = "▶" if is_collapsed else "▼"
-        content_html = "" if is_collapsed else f"""<div style="color: #aaa; font-style: italic; font-size: 13px; line-height: 1.4; margin-top: 8px;">{self._format_markdown(content)}</div>"""
+        content_html = "" if is_collapsed else f"""<div style="color: #555; font-style: italic; font-size: 13px; line-height: 1.4; margin-top: 8px; background-color: #fafafa; padding: 8px; border-radius: 6px;">{self._format_markdown(content)}</div>"""
         return f"""
-            <div style="margin: 8px 0; padding: 10px 14px; background-color: #3d3d2d; border-radius: 12px; border-left: 3px solid #8bc34a;">
-                <a href="toggle_thought:{index}" style="text-decoration: none; color: #8bc34a; font-size: 12px; cursor: pointer;">
+            <div style="margin: 8px 0; padding: 10px 14px; background-color: #f5f9f5; border: 1px solid #c8e6c9; border-radius: 12px; border-left: 3px solid #66bb6a;">
+                <a href="toggle_thought:{index}" style="text-decoration: none; color: #43a047; font-size: 12px; cursor: pointer; font-weight: 500;">
                     {arrow} 💭 Размышления
                 </a>
                 {content_html}
@@ -65,9 +65,9 @@ class MessageRenderer:
     def _render_assistant_message(self, content: str, timestamp: str, meta: dict) -> str:
         meta_html = self._render_meta(meta)
         return f"""
-            <div style="margin: 12px 0; padding: 12px 16px; background-color: #ffffff; border-radius: 16px;">
+            <div style="margin: 12px 0; padding: 12px 16px; background-color: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 16px;">
                 <div style="font-weight: bold; color: #2e7d32; margin-bottom: 6px; font-size: 12px;">
-                    Gemini <span style="color: #888; font-weight: normal;">{timestamp}</span>
+                    Gemini <span style="color: #666; font-weight: normal;">{timestamp}</span>
                 </div>
                 <div style="color: #1a1a1a; font-size: 14px; line-height: 1.5;">{self._format_markdown(content)}</div>
                 {meta_html}
@@ -76,27 +76,27 @@ class MessageRenderer:
     
     def _render_system_message(self, content: str, timestamp: str, level: str) -> str:
         colors = {
-            "info": ("#4285f4", "#1e3a5f"),
-            "success": ("#8bc34a", "#2d3d1e"),
-            "warning": ("#ffc107", "#3d3d1e"),
-            "error": ("#f44336", "#3d1e1e"),
+            "info": ("#1976d2", "#e3f2fd", "#1a1a1a"),
+            "success": ("#388e3c", "#e8f5e9", "#1a1a1a"),
+            "warning": ("#f57c00", "#fff3e0", "#1a1a1a"),
+            "error": ("#d32f2f", "#ffebee", "#1a1a1a"),
         }
-        text_color, bg_color = colors.get(level, colors["info"])
+        border_color, bg_color, text_color = colors.get(level, colors["info"])
         return f"""
-            <div style="margin: 8px 0; padding: 8px 12px; background-color: {bg_color}; border-radius: 8px;">
-                <div style="font-size: 12px; color: {text_color};">
+            <div style="margin: 8px 0; padding: 8px 12px; background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px;">
+                <div style="font-size: 12px; color: {border_color};">
                     <span style="font-weight: bold;">Система</span> 
-                    <span style="color: #888; font-size: 11px;">{timestamp}</span>
+                    <span style="color: #666; font-size: 11px;">{timestamp}</span>
                 </div>
-                <div style="color: #ccc; font-size: 13px; margin-top: 4px;">{self._escape_html(content)}</div>
+                <div style="color: {text_color}; font-size: 13px; margin-top: 4px;">{self._escape_html(content)}</div>
             </div>
         """
     
     def _render_thinking_progress(self, timestamp: str) -> str:
         return f"""
-            <div style="margin: 8px 0; padding: 10px 14px; background-color: #3d3d2d; border-radius: 12px; border-left: 3px solid #ffc107;">
-                <div style="font-size: 12px; color: #ffc107; margin-bottom: 4px;">
-                    💭 Размышляю... <span style="color: #888;">{timestamp}</span>
+            <div style="margin: 8px 0; padding: 10px 14px; background-color: #fffbf0; border: 1px solid #ffe082; border-radius: 12px; border-left: 3px solid #ffa726;">
+                <div style="font-size: 12px; color: #ef6c00; margin-bottom: 4px;">
+                    💭 Размышляю... <span style="color: #666;">{timestamp}</span>
                 </div>
             </div>
         """
@@ -125,9 +125,9 @@ class MessageRenderer:
         # Italic: *text*
         text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)
         # Inline code: `code`
-        text = re.sub(r'`([^`]+)`', r'<code style="background-color: #f0f0f0; padding: 2px 4px; border-radius: 3px; color: #333;">\1</code>', text)
+        text = re.sub(r'`([^`]+)`', r'<code style="background-color: #f5f5f5; padding: 2px 4px; border-radius: 3px; color: #d32f2f; border: 1px solid #e0e0e0;">\1</code>', text)
         # Links: [text](url)
-        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" style="color: #1a73e8;">\1</a>', text)
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" style="color: #1976d2; text-decoration: underline;">\1</a>', text)
         return text
     
     def _escape_html(self, text: str) -> str:

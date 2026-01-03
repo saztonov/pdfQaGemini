@@ -85,7 +85,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             supabase_repo=self.supabase_repo,
             gemini_client=self.gemini_client,
             r2_client=self.r2_client,
-            toast_manager=self.toast_manager
+            toast_manager=self.toast_manager,
+            trace_store=self.trace_store
         )
         
         splitter.addWidget(self.left_panel)
@@ -152,6 +153,9 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         if self.right_panel:
             self.right_panel.refreshGeminiRequested.connect(self._on_refresh_gemini_async)
             self.right_panel.filesSelectionChanged.connect(self._on_files_selection_changed)
+            self.right_panel.chatSelected.connect(self._on_chat_selected)
+            self.right_panel.chatCreated.connect(self._on_chat_created)
+            self.right_panel.chatDeleted.connect(self._on_chat_deleted)
         
         if self.chat_panel:
             self.chat_panel.askModelRequested.connect(self._on_ask_model)
@@ -250,13 +254,19 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             
             if self.right_panel:
                 self.right_panel.set_services(self.supabase_repo, self.gemini_client, self.r2_client, self.toast_manager)
+                self.right_panel.trace_store = self.trace_store
             
-            # Create/load conversation
-            await self._ensure_conversation()
+            # Load chats list
+            if self.right_panel:
+                await self.right_panel.refresh_chats()
+            
+            # Don't create conversation automatically - it will be created on first message
+            # Just load files
             
             # Load Gemini files and sync to chat
             if self.right_panel:
-                await self.right_panel.refresh_files()
+                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+                await self.right_panel.refresh_files(conversation_id=conv_id)
                 self._sync_files_to_chat()
             
             self._enable_actions()
@@ -278,12 +288,20 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         """Ensure conversation exists"""
         if not self.current_conversation_id and self.supabase_repo:
             try:
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%d.%m.%y %H:%M")
                 conv = await self.supabase_repo.qa_create_conversation(
-                    title="Новый чат",
+                    title=f"Чат {timestamp}",
                 )
                 self.current_conversation_id = conv.id
-                self.toast_manager.info(f"Создан диалог")
+                
+                # Refresh chats list
+                if self.right_panel:
+                    await self.right_panel.refresh_chats()
+                
+                self.toast_manager.info(f"Создан новый чат")
             except Exception as e:
+                logger.error(f"Ошибка создания разговора: {e}", exc_info=True)
                 self.toast_manager.error(f"Ошибка создания разговора: {e}")
     
     def _enable_actions(self):
@@ -310,7 +328,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
     async def _on_refresh_gemini(self):
         """Refresh Gemini Files list"""
         if self.right_panel:
-            await self.right_panel.refresh_files()
+            conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+            await self.right_panel.refresh_files(conversation_id=conv_id)
             self._sync_files_to_chat()
     
     def _on_open_inspector(self):
@@ -342,3 +361,82 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
     async def _process_model_actions(self, actions: list):
         """Process model actions (delegated to mixin)"""
         await self.process_model_actions(actions)
+    
+    # Chat management
+    
+    @asyncSlot(str)
+    async def _on_chat_selected(self, conversation_id: str):
+        """Handle chat selection"""
+        logger.info(f"Переключение на чат: {conversation_id}")
+        
+        if not self.supabase_repo:
+            self.toast_manager.error("Репозиторий не инициализирован")
+            return
+        
+        try:
+            # Update current conversation
+            self.current_conversation_id = UUID(conversation_id)
+            
+            # Load chat messages
+            messages = await self.supabase_repo.qa_list_messages(conversation_id)
+            
+            # Convert to chat panel format
+            chat_messages = []
+            for msg in messages:
+                chat_messages.append({
+                    "role": msg.role,
+                    "content": msg.content,
+                    "meta": msg.meta,
+                    "timestamp": msg.created_at.strftime("%H:%M:%S") if msg.created_at else "",
+                })
+            
+            # Load history to chat panel
+            if self.chat_panel:
+                self.chat_panel.load_history(chat_messages)
+            
+            # Refresh Gemini files (filtered by current chat)
+            if self.right_panel:
+                await self.right_panel.refresh_files(conversation_id=conversation_id)
+                self._sync_files_to_chat()
+            
+            self.toast_manager.success(f"Чат загружен: {len(messages)} сообщений")
+        
+        except Exception as e:
+            logger.error(f"Ошибка переключения чата: {e}", exc_info=True)
+            self.toast_manager.error(f"Ошибка: {e}")
+    
+    @asyncSlot(str, str)
+    async def _on_chat_created(self, conversation_id: str, title: str):
+        """Handle chat creation"""
+        logger.info(f"Создан новый чат: {conversation_id} - {title}")
+        
+        # Switch to new chat
+        await self._on_chat_selected(conversation_id)
+    
+    @asyncSlot(str)
+    async def _on_chat_deleted(self, conversation_id: str):
+        """Handle chat deletion"""
+        logger.info(f"Удален чат: {conversation_id}")
+        
+        # If empty string - all chats deleted
+        if not conversation_id:
+            logger.info("Удалены все чаты")
+            self.current_conversation_id = None
+            
+            # Clear chat panel
+            if self.chat_panel:
+                self.chat_panel.clear_chat()
+            
+            # Don't create new conversation automatically
+            return
+        
+        # If current chat was deleted, clear it
+        if self.current_conversation_id and str(self.current_conversation_id) == conversation_id:
+            self.current_conversation_id = None
+            
+            # Clear chat panel
+            if self.chat_panel:
+                self.chat_panel.clear_chat()
+            
+            # Don't create new conversation automatically
+            # It will be created on first message

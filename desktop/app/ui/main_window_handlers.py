@@ -111,7 +111,7 @@ class MainWindowHandlers:
                 if self.supabase_repo and gemini_name:
                     try:
                         node_file_id = file_info.get("id")
-                        await self.supabase_repo.qa_upsert_gemini_file(
+                        gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
                             gemini_name=gemini_name,
                             gemini_uri=gemini_uri,
                             display_name=file_name,
@@ -122,6 +122,33 @@ class MainWindowHandlers:
                             expires_at=None,  # Will be updated on next list
                         )
                         logger.info(f"  Метаданные сохранены в БД для {gemini_name}")
+                        
+                        # Attach file to current conversation
+                        if self.current_conversation_id and gemini_file_result:
+                            gemini_file_id = gemini_file_result.get("id")
+                            if gemini_file_id:
+                                try:
+                                    await self.supabase_repo.qa_attach_gemini_file(
+                                        conversation_id=str(self.current_conversation_id),
+                                        gemini_file_id=gemini_file_id
+                                    )
+                                    logger.info(f"  Файл привязан к чату {self.current_conversation_id}")
+                                except Exception as e:
+                                    logger.error(f"  Не удалось привязать файл к чату: {e}")
+                        
+                        # Save file copy to R2 chat folder
+                        if self.current_conversation_id and self.r2_client:
+                            try:
+                                await self.r2_client.save_chat_file(
+                                    conversation_id=str(self.current_conversation_id),
+                                    file_name=file_name,
+                                    file_path=cached_path,
+                                    mime_type=mime_type
+                                )
+                                logger.info(f"  Файл сохранен в папку чата на R2")
+                            except Exception as e:
+                                logger.error(f"  Не удалось сохранить файл в папку чата: {e}")
+                    
                     except Exception as e:
                         logger.error(f"  Не удалось сохранить метаданные в БД: {e}")
                 
@@ -179,9 +206,12 @@ class MainWindowHandlers:
             self.toast_manager.error("Агент не инициализирован. Нажмите 'Подключиться'.")
             return
         
+        # Create conversation on first message if not exists
         if not self.current_conversation_id:
-            self.toast_manager.warning("Нет активного разговора")
-            return
+            await self._ensure_conversation()
+            if not self.current_conversation_id:
+                self.toast_manager.error("Не удалось создать разговор")
+                return
         
         if self.chat_panel:
             self.chat_panel.set_input_enabled(False)
@@ -227,6 +257,11 @@ class MainWindowHandlers:
                 elif chunk_type == "error":
                     raise Exception(content)
             
+            # Filter out JSON at the end if present
+            import re
+            json_pattern = r'\s*\{\s*"assistant_text"\s*:.*?\}\s*$'
+            full_answer = re.sub(json_pattern, '', full_answer, flags=re.DOTALL).strip()
+            
             if self.chat_panel:
                 if has_thoughts:
                     self.chat_panel.finish_thinking_block()
@@ -240,6 +275,34 @@ class MainWindowHandlers:
                 self.chat_panel.add_assistant_message(full_answer, meta)
             
             self.toast_manager.success("✓ Ответ получен")
+            
+            # Update conversation timestamp
+            if self.current_conversation_id and self.supabase_repo:
+                try:
+                    await self.supabase_repo.qa_update_conversation(
+                        conversation_id=str(self.current_conversation_id)
+                    )
+                except Exception as e:
+                    logger.warning(f"Не удалось обновить timestamp чата: {e}")
+            
+            # Save chat messages to R2
+            if self.current_conversation_id and self.supabase_repo and self.r2_client:
+                try:
+                    messages = await self.supabase_repo.qa_list_messages(str(self.current_conversation_id))
+                    messages_data = [
+                        {
+                            "id": str(msg.id),
+                            "role": msg.role,
+                            "content": msg.content,
+                            "meta": msg.meta,
+                            "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                        }
+                        for msg in messages
+                    ]
+                    await self.r2_client.save_chat_messages(str(self.current_conversation_id), messages_data)
+                    logger.info(f"Переписка сохранена на R2 для чата {self.current_conversation_id}")
+                except Exception as e:
+                    logger.error(f"Не удалось сохранить переписку на R2: {e}")
         
         except Exception as e:
             logger.error(f"Ошибка запроса: {e}", exc_info=True)

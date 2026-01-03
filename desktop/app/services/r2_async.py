@@ -201,3 +201,74 @@ class R2AsyncClient:
         if self._http_client:
             await self._http_client.aclose()
             self._http_client = None
+    
+    # Chat storage methods
+    
+    async def save_chat_messages(self, conversation_id: str, messages: list[dict]) -> str:
+        """
+        Save chat messages to R2 as JSON.
+        Returns R2 key.
+        """
+        import json
+        
+        r2_key = f"chats/{conversation_id}/messages.json"
+        data = json.dumps(messages, ensure_ascii=False, indent=2).encode("utf-8")
+        
+        await self.upload_bytes(r2_key, data, content_type="application/json")
+        return r2_key
+    
+    async def load_chat_messages(self, conversation_id: str) -> Optional[list[dict]]:
+        """
+        Load chat messages from R2.
+        Returns list of messages or None if not found.
+        """
+        import json
+        
+        r2_key = f"chats/{conversation_id}/messages.json"
+        
+        try:
+            exists = await self.object_exists(r2_key)
+            if not exists:
+                return None
+            
+            data = await self.download_bytes(r2_key)
+            return json.loads(data.decode("utf-8"))
+        except Exception as e:
+            logger.error(f"Error loading chat messages: {e}")
+            return None
+    
+    async def save_chat_file(
+        self,
+        conversation_id: str,
+        file_name: str,
+        file_path: Path,
+        mime_type: str = "application/octet-stream"
+    ) -> str:
+        """
+        Save file to chat folder on R2.
+        Returns R2 key.
+        """
+        r2_key = f"chats/{conversation_id}/files/{file_name}"
+        await self.upload_file(r2_key, file_path, content_type=mime_type)
+        return r2_key
+    
+    async def delete_chat_folder(self, conversation_id: str) -> None:
+        """Delete entire chat folder from R2"""
+        def _sync_delete():
+            s3 = self._get_s3_client()
+            
+            # List all objects in chat folder
+            prefix = f"chats/{conversation_id}/"
+            response = s3.list_objects_v2(Bucket=self.bucket, Prefix=prefix)
+            
+            # Delete all objects
+            objects = response.get("Contents", [])
+            if objects:
+                delete_keys = [{"Key": obj["Key"]} for obj in objects]
+                s3.delete_objects(
+                    Bucket=self.bucket,
+                    Delete={"Objects": delete_keys}
+                )
+                logger.info(f"Deleted {len(delete_keys)} objects from chat {conversation_id}")
+        
+        await asyncio.to_thread(_sync_delete)

@@ -2360,6 +2360,13 @@
         "default": "now()",
         "data_type": "timestamp with time zone",
         "is_nullable": false
+      },
+      {
+        "name": "stamp_model",
+        "comment": "Модель для распознавания штампов (IMAGE блоки с code=stamp)",
+        "default": "''::text",
+        "data_type": "text",
+        "is_nullable": true
       }
     ],
     "constraints": [
@@ -3531,6 +3538,34 @@
         "default": "now()",
         "data_type": "timestamp with time zone",
         "is_nullable": false
+      },
+      {
+        "name": "pdf_status",
+        "comment": null,
+        "default": "'unknown'::text",
+        "data_type": "text",
+        "is_nullable": true
+      },
+      {
+        "name": "pdf_status_message",
+        "comment": null,
+        "default": null,
+        "data_type": "text",
+        "is_nullable": true
+      },
+      {
+        "name": "pdf_status_updated_at",
+        "comment": null,
+        "default": null,
+        "data_type": "timestamp with time zone",
+        "is_nullable": true
+      },
+      {
+        "name": "is_locked",
+        "comment": "Флаг блокировки документа от изменений (удаление, переименование, изменение блоков, запуск OCR)",
+        "default": "false",
+        "data_type": "boolean",
+        "is_nullable": true
       }
     ],
     "constraints": [

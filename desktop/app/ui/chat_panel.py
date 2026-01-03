@@ -145,13 +145,13 @@ class ChatPanel(QWidget):
         self.chat_history.anchorClicked.connect(self._on_link_clicked)
         self.chat_history.setStyleSheet("""
             QTextBrowser {
-                background-color: #1a1a1a;
-                border: none;
+                background-color: #ffffff;
+                border: 1px solid #e0e0e0;
                 border-radius: 8px;
                 padding: 12px;
                 font-family: 'Segoe UI', Arial, sans-serif;
                 font-size: 14px;
-                color: #e0e0e0;
+                color: #1a1a1a;
             }
         """)
         layout.addWidget(self.chat_history, 1)
@@ -387,8 +387,8 @@ class ChatPanel(QWidget):
     def _show_welcome(self):
         """Show welcome message"""
         self.chat_history.setHtml("""
-            <div style="color: #888; padding: 40px; text-align: center;">
-                <h2 style="color: #e0e0e0; margin-bottom: 16px;">pdfQaGemini</h2>
+            <div style="color: #666; padding: 40px; text-align: center;">
+                <h2 style="color: #1a1a1a; margin-bottom: 16px;">pdfQaGemini</h2>
                 <p style="font-size: 14px; line-height: 1.6;">
                     1. Выберите файлы в дереве проектов слева<br>
                     2. Они автоматически загрузятся в Gemini Files<br>
