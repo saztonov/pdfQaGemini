@@ -57,8 +57,8 @@ class ToastWidget(QFrame):
             QFrame {{
                 background-color: {self._bg_color};
                 color: white;
-                border-radius: 10px;
-                border: 2px solid {self._border_color};
+                border-radius: 6px;
+                border: 1px solid {self._border_color};
             }}
         """)
         
@@ -67,7 +67,7 @@ class ToastWidget(QFrame):
         
         # Layout
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 22, 14)
+        layout.setContentsMargins(8, 6, 10, 6)
         layout.setSpacing(0)
         
         # Label for text
@@ -77,13 +77,13 @@ class ToastWidget(QFrame):
         
         # Font
         font = QFont()
-        font.setPixelSize(13)
-        font.setWeight(QFont.Medium)
+        font.setPixelSize(11)
+        font.setWeight(QFont.Normal)
         self.label.setFont(font)
         
         # Size
-        self.label.setMinimumWidth(250)
-        self.label.setMaximumWidth(380)
+        self.label.setMinimumWidth(180)
+        self.label.setMaximumWidth(280)
         self.label.setWordWrap(True)
         
         layout.addWidget(self.label)
@@ -148,7 +148,7 @@ class ToastWidget(QFrame):
 class ToastManager:
     """Manages toast notification queue"""
     
-    SPACING = 12  # Vertical spacing between toasts
+    SPACING = 8  # Vertical spacing between toasts
     MARGIN_TOP = 50  # Below window title bar
     MARGIN_RIGHT = 20
     
@@ -156,11 +156,11 @@ class ToastManager:
         self.parent = parent
         self.toasts: list[ToastWidget] = []
     
-    def info(self, message: str, duration: int = 3000):
+    def info(self, message: str, duration: int = 2000):
         """Show info notification"""
         self._show_toast(message, ToastType.INFO, duration)
     
-    def success(self, message: str, duration: int = 3000):
+    def success(self, message: str, duration: int = 2000):
         """Show success notification"""
         self._show_toast(message, ToastType.SUCCESS, duration)
     

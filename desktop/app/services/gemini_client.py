@@ -6,9 +6,17 @@ from typing import Optional, AsyncIterator
 from google import genai
 from google.genai import types
 from app.utils.errors import ServiceError
+from app.utils.retry import retry_async
 from app.models.schemas import AVAILABLE_MODELS
 
 logger = logging.getLogger(__name__)
+
+# Exceptions that should trigger retries
+RETRYABLE_EXCEPTIONS = (
+    ConnectionError,
+    TimeoutError,
+    # Add more exceptions as needed (e.g., specific Google API errors)
+)
 
 
 class GeminiClient:
@@ -32,6 +40,12 @@ class GeminiClient:
         logger.info("Возвращаем фиксированный список моделей Gemini 3")
         return AVAILABLE_MODELS.copy()
     
+    @retry_async(
+        max_attempts=3,
+        initial_delay=1.0,
+        exceptions=RETRYABLE_EXCEPTIONS,
+        log_prefix="[GeminiClient] "
+    )
     async def list_files(self) -> list[dict]:
         """
         List uploaded files in Gemini Files API.
@@ -55,13 +69,23 @@ class GeminiClient:
                         "sha256_hash": getattr(file, "sha256_hash", None),
                     }
                     result.append(file_info)
+                    
+                    # Log file info for debugging
+                    logger.debug(f"Gemini file: name={file.name}, display_name={getattr(file, 'display_name', None)}, uri={file.uri}")
                 
+                logger.info(f"Список файлов Gemini: всего {len(result)} файлов")
                 return result
             except Exception as e:
                 raise ServiceError(f"Failed to list Gemini files: {e}")
         
         return await asyncio.to_thread(_sync_list)
     
+    @retry_async(
+        max_attempts=3,
+        initial_delay=2.0,
+        exceptions=RETRYABLE_EXCEPTIONS,
+        log_prefix="[GeminiClient] "
+    )
     async def upload_file(
         self,
         path: Path,
@@ -159,6 +183,13 @@ class GeminiClient:
         
         await asyncio.to_thread(_sync_delete)
     
+    @retry_async(
+        max_attempts=3,
+        initial_delay=2.0,
+        max_delay=10.0,
+        exceptions=RETRYABLE_EXCEPTIONS,
+        log_prefix="[GeminiClient] "
+    )
     async def generate_structured(
         self,
         model: str,
@@ -167,6 +198,7 @@ class GeminiClient:
         file_refs: list[dict],
         schema: dict,
         thinking_level: str = "low",
+        thinking_budget: Optional[int] = None,
     ) -> dict:
         """
         Generate structured output using JSON schema.
@@ -178,6 +210,7 @@ class GeminiClient:
             file_refs: List of dicts with 'uri' and 'mime_type' keys
             schema: JSON schema for structured output
             thinking_level: "low", "medium", or "high" for reasoning depth
+            thinking_budget: Optional max thinking tokens (overrides level default)
         
         Returns:
             Parsed JSON dict matching schema
@@ -288,6 +321,12 @@ class GeminiClient:
         
         return await asyncio.to_thread(_sync_generate)
     
+    @retry_async(
+        max_attempts=3,
+        initial_delay=2.0,
+        exceptions=RETRYABLE_EXCEPTIONS,
+        log_prefix="[GeminiClient] "
+    )
     async def generate_simple(
         self,
         model: str,
@@ -371,6 +410,7 @@ class GeminiClient:
         user_text: str,
         file_refs: list[dict],
         thinking_level: str = "medium",
+        thinking_budget: Optional[int] = None,
     ) -> AsyncIterator[dict]:
         """
         Generate content with streaming and thought summaries.
@@ -379,6 +419,7 @@ class GeminiClient:
             - type: "thought" | "text" | "done"
             - content: str (text chunk)
             - finished: bool (for thought - whether thought is complete)
+            - thought_signature: str (optional debug info)
         
         Args:
             model: Model name
@@ -386,6 +427,7 @@ class GeminiClient:
             user_text: User message
             file_refs: List of dicts with 'uri' and 'mime_type'
             thinking_level: "low", "medium", or "high"
+            thinking_budget: Optional max thinking tokens
         """
         import queue
         import threading
@@ -420,20 +462,26 @@ class GeminiClient:
                 if user_text:
                     contents_list.append(user_text)
                 
+                # Build thinking config with optional budget
+                thinking_config_params = {
+                    "thinking_level": thinking_level,
+                    "include_thoughts": True,
+                }
+                if thinking_budget is not None:
+                    thinking_config_params["thinking_budget"] = thinking_budget
+                    logger.info(f"  Using custom thinking_budget={thinking_budget} for streaming")
+                
                 # Config with thinking and include_thoughts
                 config = types.GenerateContentConfig(
                     system_instruction=system_prompt if system_prompt else None,
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level=thinking_level,
-                        include_thoughts=True,
-                    ),
+                    thinking_config=types.ThinkingConfig(**thinking_config_params),
                 )
                 
                 model_id = model
                 if model_id.startswith("models/"):
                     model_id = model_id[7:]
                 
-                logger.info(f"Streaming with thoughts: model={model_id}, thinking_level={thinking_level}")
+                logger.info(f"Streaming with thoughts: model={model_id}, thinking_level={thinking_level}, budget={thinking_budget}")
                 
                 # Stream
                 for chunk in client.models.generate_content_stream(
@@ -449,10 +497,16 @@ class GeminiClient:
                             continue
                         
                         if part.thought:
+                            # Get thought_signature for debugging
+                            thought_sig = getattr(part, 'thought_signature', None)
+                            if thought_sig:
+                                logger.debug(f"[Thought] signature: {thought_sig}")
+                            
                             result_queue.put({
                                 "type": "thought",
                                 "content": part.text,
                                 "finished": False,
+                                "thought_signature": str(thought_sig) if thought_sig else None,
                             })
                         else:
                             result_queue.put({

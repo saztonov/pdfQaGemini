@@ -94,6 +94,7 @@ class Agent:
         file_refs: list[dict],
         model: str,
         thinking_level: str = "low",
+        thinking_budget: Optional[int] = None,
     ) -> ModelReply:
         """
         Ask question to Gemini with structured output.
@@ -103,13 +104,16 @@ class Agent:
             user_text: User question
             file_refs: List of dicts with 'uri' and 'mime_type' keys
             model: Model name (required)
-            thinking_level: "low" or "high"
+            thinking_level: "low", "medium", or "high"
+            thinking_budget: Optional max thinking tokens
         
         Returns:
             ModelReply with assistant text and actions
         """
         logger.info(f"=== Agent.ask ===")
         logger.info(f"  model: {model}")
+        logger.info(f"  thinking_level: {thinking_level}")
+        logger.info(f"  thinking_budget: {thinking_budget}")
         logger.info(f"  file_refs count: {len(file_refs)}")
         for i, fr in enumerate(file_refs[:3]):
             logger.info(f"    [{i}] uri={fr.get('uri')}, mime={fr.get('mime_type')}")
@@ -146,6 +150,7 @@ class Agent:
                 file_refs=file_refs,
                 schema=MODEL_REPLY_SCHEMA,
                 thinking_level=thinking_level,
+                thinking_budget=thinking_budget,
             )
             
             # Calculate latency
@@ -216,6 +221,7 @@ class Agent:
         file_refs: list[dict],
         model: str,
         thinking_level: str = "medium",
+        thinking_budget: Optional[int] = None,
     ) -> AsyncIterator[dict]:
         """
         Ask question with streaming response including thoughts.
@@ -230,9 +236,10 @@ class Agent:
             file_refs: List of dicts with 'uri' and 'mime_type'
             model: Model name
             thinking_level: "low", "medium", or "high"
+            thinking_budget: Optional max thinking tokens
         """
         logger.info(f"=== Agent.ask_stream ===")
-        logger.info(f"  model: {model}, thinking: {thinking_level}")
+        logger.info(f"  model: {model}, thinking: {thinking_level}, budget: {thinking_budget}")
         logger.info(f"  file_refs count: {len(file_refs)}")
         
         start_time = time.perf_counter()
@@ -259,6 +266,7 @@ class Agent:
                 user_text=user_text,
                 file_refs=file_refs,
                 thinking_level=thinking_level,
+                thinking_budget=thinking_budget,
             ):
                 chunk_type = chunk.get("type", "")
                 content = chunk.get("content", "")

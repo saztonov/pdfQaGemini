@@ -8,7 +8,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Signal, Qt, Slot, QUrl
 from PySide6.QtGui import QTextCursor, QKeyEvent
 from datetime import datetime
-from app.models.schemas import MODEL_THINKING_LEVELS, MODEL_DEFAULT_THINKING, DEFAULT_MODEL
+from app.models.schemas import (
+    MODEL_THINKING_LEVELS, MODEL_DEFAULT_THINKING, DEFAULT_MODEL,
+    THINKING_BUDGET_PRESETS
+)
 from app.ui.message_renderer import MessageRenderer
 
 logger = logging.getLogger(__name__)
@@ -117,7 +120,7 @@ class ChatPanel(QWidget):
     """Chat panel with message history and input"""
     
     # Signals
-    askModelRequested = Signal(str, str, str, list)  # user_text, model_name, thinking_level, file_refs
+    askModelRequested = Signal(str, str, str, object, list)  # user_text, model_name, thinking_level, thinking_budget, file_refs
     
     def __init__(self):
         super().__init__()
@@ -280,8 +283,19 @@ class ChatPanel(QWidget):
         self.thinking_combo.setFixedWidth(100)
         self.thinking_combo.setStyleSheet(self._combo_style())
         
+        # Thinking budget selector
+        self.budget_combo = QComboBox()
+        self.budget_combo.setToolTip("Бюджет токенов для рассуждения (опционально)")
+        self.budget_combo.setFixedWidth(120)
+        self.budget_combo.setStyleSheet(self._combo_style())
+        self.budget_combo.addItem("🎯 Авто", None)  # Auto = use thinking_level default
+        for preset_name, tokens in THINKING_BUDGET_PRESETS.items():
+            display = f"{preset_name.capitalize()}: {tokens}"
+            self.budget_combo.addItem(display, tokens)
+        
         toolbar_layout.addWidget(self.model_combo)
         toolbar_layout.addWidget(self.thinking_combo)
+        toolbar_layout.addWidget(self.budget_combo)
         toolbar_layout.addStretch()
         
         # Send button
@@ -487,14 +501,15 @@ class ChatPanel(QWidget):
         
         model_name = self.model_combo.currentData()
         thinking_level = self.thinking_combo.currentData() or "medium"
+        thinking_budget = self.budget_combo.currentData()  # None = auto
         file_refs = self.get_selected_file_refs()
         
-        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}, files={len(file_refs)}")
+        logger.info(f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}")
         if not model_name:
             logger.warning("No model selected!")
             return
         
-        self.askModelRequested.emit(text, model_name, thinking_level, file_refs)
+        self.askModelRequested.emit(text, model_name, thinking_level, thinking_budget, file_refs)
         self.input_field.clear()
     
     def _on_model_changed(self, index: int):

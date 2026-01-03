@@ -13,14 +13,24 @@ AVAILABLE_MODELS = [
         "display_name": "Flash",
         "thinking_levels": ["low", "medium", "high"],
         "default_thinking": "medium",
+        "supports_thinking_budget": True,
     },
     {
         "name": "gemini-3-pro-preview",
         "display_name": "Pro",
         "thinking_levels": ["low", "high"],
         "default_thinking": "high",
+        "supports_thinking_budget": True,
     },
 ]
+
+# Thinking budget presets
+THINKING_BUDGET_PRESETS = {
+    "low": 512,      # Быстрое рассуждение
+    "medium": 2048,  # Средняя глубина
+    "high": 8192,    # Глубокое рассуждение
+    "max": 16384,    # Максимальная глубина
+}
 
 # Модель по умолчанию
 DEFAULT_MODEL = "gemini-3-flash-preview"

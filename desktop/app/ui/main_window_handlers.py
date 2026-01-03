@@ -104,7 +104,26 @@ class MainWindowHandlers:
                 )
                 
                 gemini_name = result.get("name")
+                gemini_uri = result.get("uri", "")
                 logger.info(f"[{idx}/{len(files_info)}] ✓ Загружен: {gemini_name}")
+                
+                # Save metadata to database
+                if self.supabase_repo and gemini_name:
+                    try:
+                        node_file_id = file_info.get("id")
+                        await self.supabase_repo.qa_upsert_gemini_file(
+                            gemini_name=gemini_name,
+                            gemini_uri=gemini_uri,
+                            display_name=file_name,
+                            mime_type=mime_type,
+                            size_bytes=result.get("size_bytes"),
+                            source_node_file_id=node_file_id,
+                            source_r2_key=r2_key,
+                            expires_at=None,  # Will be updated on next list
+                        )
+                        logger.info(f"  Метаданные сохранены в БД для {gemini_name}")
+                    except Exception as e:
+                        logger.error(f"  Не удалось сохранить метаданные в БД: {e}")
                 
                 uploaded_count += 1
                 if gemini_name:
@@ -142,13 +161,14 @@ class MainWindowHandlers:
         """Legacy handler - no longer used"""
         pass
     
-    @asyncSlot(str, str, str, list)
-    async def _on_ask_model(self: "MainWindow", user_text: str, model_name: str, thinking_level: str, file_refs: list):
+    @asyncSlot(str, str, str, object, list)
+    async def _on_ask_model(self: "MainWindow", user_text: str, model_name: str, thinking_level: str, thinking_budget: int, file_refs: list):
         """Handle ask model request with streaming thoughts"""
         logger.info(f"=== _on_ask_model ===")
         logger.info(f"  user_text: {user_text[:50]}...")
         logger.info(f"  model_name: {model_name}")
         logger.info(f"  thinking_level: {thinking_level}")
+        logger.info(f"  thinking_budget: {thinking_budget}")
         logger.info(f"  file_refs: {len(file_refs)}")
         
         if not user_text.strip():
@@ -186,6 +206,7 @@ class MainWindowHandlers:
                 file_refs=file_refs,
                 model=model_name,
                 thinking_level=thinking_level,
+                thinking_budget=thinking_budget,
             ):
                 chunk_type = chunk.get("type", "")
                 content = chunk.get("content", "")
