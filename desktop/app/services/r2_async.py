@@ -200,6 +200,61 @@ class R2AsyncClient:
             await self._http_client.aclose()
             self._http_client = None
 
+    async def save_trace_history(self, client_id: str, traces: list) -> str:
+        """Save trace history to R2"""
+        import json
+        from datetime import datetime
+
+        try:
+            # Serialize traces to JSON
+            traces_data = []
+            for trace in traces:
+                trace_dict = {
+                    "id": trace.id,
+                    "ts": trace.ts.isoformat() if trace.ts else None,
+                    "conversation_id": str(trace.conversation_id),
+                    "model": trace.model,
+                    "thinking_level": trace.thinking_level,
+                    "system_prompt": trace.system_prompt,
+                    "user_text": trace.user_text,
+                    "input_files": trace.input_files,
+                    "response_json": trace.response_json,
+                    "parsed_actions": trace.parsed_actions,
+                    "latency_ms": trace.latency_ms,
+                    "errors": trace.errors,
+                    "is_final": trace.is_final,
+                    "assistant_text": trace.assistant_text,
+                    "full_thoughts": trace.full_thoughts,
+                    "input_tokens": trace.input_tokens,
+                    "output_tokens": trace.output_tokens,
+                    "total_tokens": trace.total_tokens,
+                }
+                traces_data.append(trace_dict)
+
+            # Create JSON content
+            content = json.dumps(traces_data, indent=2, ensure_ascii=False)
+            content_bytes = content.encode("utf-8")
+
+            # Save to R2
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            r2_key = f"{client_id}/traces/traces_{timestamp}.json"
+
+            s3_client = self._get_s3_client()
+            await asyncio.to_thread(
+                s3_client.put_object,
+                Bucket=self.bucket,
+                Key=r2_key,
+                Body=content_bytes,
+                ContentType="application/json",
+            )
+
+            logger.info(f"Saved {len(traces)} traces to R2: {r2_key}")
+            return r2_key
+
+        except Exception as e:
+            logger.error(f"Failed to save trace history to R2: {e}", exc_info=True)
+            raise
+
     # Chat storage methods
 
     async def save_chat_messages(self, conversation_id: str, messages: list[dict]) -> str:

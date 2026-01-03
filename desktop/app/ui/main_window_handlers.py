@@ -1,4 +1,5 @@
 """Event handlers for MainWindow"""
+import json
 import logging
 import tempfile
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING
 from qasync import asyncSlot
 
 from app.services.bundle_builder import DocumentBundleBuilder
+from app.services.agent import build_user_prompt
 from app.models.schemas import FileType
 
 if TYPE_CHECKING:
@@ -346,7 +348,7 @@ class MainWindowHandlers:
 
         if self.chat_panel:
             self.chat_panel.set_input_enabled(False)
-            self.chat_panel.add_user_message(user_text)
+            self.chat_panel.add_user_message(user_text, file_refs)
 
         try:
             await self._run_agentic(
@@ -375,12 +377,13 @@ class MainWindowHandlers:
         thinking_budget: int,
         initial_file_refs: list,
     ):
-        """Run agentic loop: PLAN → FETCH → ANSWER → ROI → FINAL"""
-        MAX_ITER = 4
+        """Run agentic loop: request_files → request_roi → final"""
+        MAX_ITER = 5
         current_file_refs = list(initial_file_refs)
 
         # Build context catalog from available crops
         context_catalog = self._build_context_catalog()
+        context_catalog_json = json.dumps(context_catalog, ensure_ascii=False, indent=2)
 
         if not current_file_refs:
             self.toast_manager.warning("⚠️ Нет файлов. Модель ответит без контекста.")
@@ -390,8 +393,11 @@ class MainWindowHandlers:
         for iteration in range(MAX_ITER):
             logger.info(f"=== Agentic iteration {iteration + 1}/{MAX_ITER} ===")
 
-            # Build prompt with catalog
-            user_prompt = self._build_agentic_prompt(question, context_catalog, iteration)
+            # Build prompt with catalog (only first iteration)
+            if iteration == 0:
+                user_prompt = build_user_prompt(question, context_catalog_json)
+            else:
+                user_prompt = question  # Follow-up iterations use original question
 
             # Call agent with structured output
             reply = await self.agent.ask_question(
@@ -414,12 +420,21 @@ class MainWindowHandlers:
                 logger.info(f"  Action: {action_type}")
 
                 if action_type == "request_files":
-                    items = action.payload.get("items", [])
-                    if items:
+                    # Parse payload for items
+                    payload = action.get_request_files_payload()
+                    if payload and payload.items:
+                        items = [
+                            {
+                                "context_item_id": item.context_item_id,
+                                "kind": item.kind,
+                                "reason": item.reason,
+                                "priority": item.priority or "medium",
+                            }
+                            for item in payload.items
+                        ]
                         self.toast_manager.info(f"Докачиваю {len(items)} файлов...")
                         new_refs, uploaded_file_infos = await self._fetch_and_upload_crops(items)
                         current_file_refs.extend(new_refs)
-                        # Update right panel and auto-select in chat
                         if uploaded_file_infos:
                             if self.right_panel:
                                 conv_id = (
@@ -431,19 +446,31 @@ class MainWindowHandlers:
                             if self.chat_panel:
                                 self.chat_panel.add_selected_files(uploaded_file_infos)
                         should_continue = True
+                    else:
+                        logger.warning("request_files action without valid payload")
 
                 elif action_type == "request_roi":
-                    self.toast_manager.info("Рендерю ROI...")
-                    roi_ref = await self._handle_roi_action_agentic(action)
-                    if roi_ref:
-                        # Mark ROI for high resolution processing
-                        roi_ref["is_roi"] = True
-                        current_file_refs.append(roi_ref)
-                        should_continue = True
+                    payload = action.get_request_roi_payload()
+                    if payload:
+                        self.toast_manager.info("Рендерю ROI...")
+                        roi_ref = await self._handle_roi_action_agentic(action, payload)
+                        if roi_ref:
+                            roi_ref["is_roi"] = True
+                            current_file_refs.append(roi_ref)
+                            should_continue = True
+                    else:
+                        logger.warning("request_roi action without valid payload")
+
+                elif action_type == "open_image":
+                    payload = action.get_open_image_payload()
+                    if payload:
+                        self.toast_manager.info(f"Открываю изображение: {payload.context_item_id}")
+                        # Just log, actual viewing handled elsewhere if needed
 
                 elif action_type == "final":
                     # Show final answer in chat
                     if self.chat_panel:
+                        final_payload = action.get_final_payload()
                         meta = {
                             "model": model_name,
                             "thinking_level": thinking_level,
@@ -451,11 +478,29 @@ class MainWindowHandlers:
                             "iterations": iteration + 1,
                             "files_count": len(current_file_refs),
                         }
+                        if final_payload:
+                            meta["confidence"] = final_payload.confidence
+                            meta["used_context_item_ids"] = final_payload.used_context_item_ids
                         self.chat_panel.add_assistant_message(reply.assistant_text, meta)
 
                     self.toast_manager.success(f"✓ Ответ получен (итераций: {iteration + 1})")
                     await self._save_conversation_state()
                     return
+
+            # If is_final but no explicit final action, still finish
+            if reply.is_final:
+                if self.chat_panel:
+                    meta = {
+                        "model": model_name,
+                        "thinking_level": thinking_level,
+                        "is_final": True,
+                        "iterations": iteration + 1,
+                        "files_count": len(current_file_refs),
+                    }
+                    self.chat_panel.add_assistant_message(reply.assistant_text, meta)
+                self.toast_manager.success(f"✓ Ответ получен (итераций: {iteration + 1})")
+                await self._save_conversation_state()
+                return
 
             # If no continue actions, show response and exit
             if not should_continue:
@@ -500,20 +545,6 @@ class MainWindowHandlers:
 
         return catalog
 
-    def _build_agentic_prompt(
-        self: "MainWindow", question: str, catalog: dict, iteration: int
-    ) -> str:
-        """Build user prompt with context catalog"""
-        import json
-
-        prompt_parts = [question]
-
-        if iteration == 0 and (catalog["crops"] or catalog["text_files"]):
-            prompt_parts.append("\n\n--- CONTEXT CATALOG ---")
-            prompt_parts.append(json.dumps(catalog, ensure_ascii=False, indent=2))
-            prompt_parts.append("--- END CATALOG ---")
-
-        return "\n".join(prompt_parts)
 
     async def _fetch_and_upload_crops(
         self: "MainWindow", items: list[dict]
@@ -579,19 +610,15 @@ class MainWindowHandlers:
 
         return new_refs, uploaded_file_infos
 
-    async def _handle_roi_action_agentic(self: "MainWindow", action) -> dict | None:
+    async def _handle_roi_action_agentic(
+        self: "MainWindow", action, payload
+    ) -> dict | None:
         """Handle ROI action in agentic mode, return file_ref or None"""
         from app.ui.image_viewer import ImageViewerDialog
-        import tempfile
         from datetime import datetime
         import asyncio
 
-        payload = action.payload
-        image_ref = payload.get("image_ref", {})
-        context_item_id = (
-            image_ref.get("context_item_id") if isinstance(image_ref, dict) else image_ref
-        )
-
+        context_item_id = payload.image_ref.context_item_id
         if not context_item_id:
             return None
 
@@ -604,9 +631,11 @@ class MainWindowHandlers:
                     break
 
         if not context_item or not context_item.r2_key:
+            self.toast_manager.warning(f"Context item не найден: {context_item_id}")
             return None
 
         if not self.r2_client or not self.gemini_client or not self.pdf_renderer:
+            self.toast_manager.error("Сервисы не инициализированы")
             return None
 
         try:
@@ -623,11 +652,30 @@ class MainWindowHandlers:
 
             dialog = ImageViewerDialog(self)
             dialog.load_image(preview_image)
-            dialog.set_model_suggestions([action])
+
+            # Build suggestion dict for viewer
+            suggestion = {
+                "type": action.type,
+                "goal": payload.goal,
+                "note": action.note or payload.goal,
+            }
+            if payload.suggested_bbox_norm:
+                suggestion["suggested_bbox_norm"] = {
+                    "x1": payload.suggested_bbox_norm.x1,
+                    "y1": payload.suggested_bbox_norm.y1,
+                    "x2": payload.suggested_bbox_norm.x2,
+                    "y2": payload.suggested_bbox_norm.y2,
+                }
+            dialog.set_model_suggestions([suggestion])
+
+            # DPI from payload
+            target_dpi = payload.dpi or 400
 
             async def on_roi_selected(bbox, note):
-                # Render ROI at high DPI
-                roi_png = self.pdf_renderer.render_roi(cached_path, bbox, page_num=0, dpi=400)
+                # Render ROI at target DPI
+                roi_png = self.pdf_renderer.render_roi(
+                    cached_path, bbox, page_num=0, dpi=target_dpi
+                )
 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 roi_filename = f"roi_{timestamp}.png"
@@ -644,12 +692,14 @@ class MainWindowHandlers:
                     gemini_uri = upload_result.get("uri")
                     if gemini_uri:
                         result_ref["value"] = {"uri": gemini_uri, "mime_type": "image/png"}
+                        self.toast_manager.success(f"ROI загружен: {roi_filename}")
                 finally:
                     tmp_path.unlink(missing_ok=True)
 
                 event.set()
 
             def on_rejected(reason):
+                self.toast_manager.info("ROI отклонён пользователем")
                 event.set()
 
             dialog.roiSelected.connect(
@@ -665,6 +715,7 @@ class MainWindowHandlers:
 
         except Exception as e:
             logger.error(f"ROI action failed: {e}")
+            self.toast_manager.error(f"Ошибка ROI: {e}")
             return None
 
     async def _save_conversation_state(self: "MainWindow"):

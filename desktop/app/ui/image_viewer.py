@@ -276,7 +276,9 @@ class ImageViewerDialog(QDialog):
         for i, suggestion in enumerate(suggestions):
             action_type = suggestion.get("type", "")
             note = suggestion.get("note", "")
-            hint = suggestion.get("payload", {}).get("hint_text", "")
+            # Поддержка новой плоской структуры (goal) и старой (payload.hint_text)
+            goal = suggestion.get("goal", "")
+            hint = suggestion.get("payload", {}).get("hint_text", "") if not goal else goal
 
             text = f"[{action_type}] {note or hint}"
             self.suggestions_list.addItem(text)
@@ -325,7 +327,9 @@ class ImageViewerDialog(QDialog):
 
             # Auto-populate note
             note = suggestion.get("note", "")
-            hint = suggestion.get("payload", {}).get("hint_text", "")
+            # Поддержка новой плоской структуры (goal) и старой (payload.hint_text)
+            goal = suggestion.get("goal", "")
+            hint = suggestion.get("payload", {}).get("hint_text", "") if not goal else goal
 
             if note or hint:
                 self.note_edit.setPlainText(note or hint)

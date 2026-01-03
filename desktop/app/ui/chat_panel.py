@@ -663,20 +663,18 @@ class ChatPanel(QWidget):
 
         self._on_model_changed(self.model_combo.currentIndex())
 
-    def add_user_message(self, text: str):
-        """Add user message to chat"""
+    def add_user_message(self, text: str, file_refs: list = None):
+        """Add user message to chat with file attachments"""
         from app.utils.time_utils import format_time
 
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-        # files_info = ""  # Reserved for future use
-        # if self._selected_files:
-        #     files_info = f" [{len(self._selected_files)} файлов]"
         self._messages.append(
             {
                 "role": "user",
                 "content": text,
                 "timestamp": timestamp,
-                "files_count": len(self._selected_files),
+                "files_count": len(file_refs) if file_refs else 0,
+                "meta": {"file_refs": file_refs or []},
             }
         )
         self._rerender_messages()

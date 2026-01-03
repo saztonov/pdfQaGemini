@@ -27,7 +27,8 @@ class MessageRenderer:
         meta = msg.get("meta", {})
 
         if role == "user":
-            return self._render_user_message(content, timestamp)
+            files_info = meta.get("file_refs", []) if meta else []
+            return self._render_user_message(content, timestamp, files_info)
         elif role == "thinking":
             return self._render_thinking_message(content, timestamp, index)
         elif role == "assistant":
@@ -39,13 +40,51 @@ class MessageRenderer:
             return self._render_thinking_progress(timestamp)
         return ""
 
-    def _render_user_message(self, content: str, timestamp: str) -> str:
+    def _render_user_message(self, content: str, timestamp: str, files_info: list = None) -> str:
+        """Render user message with optional file attachments"""
+        files_html = ""
+        if files_info and len(files_info) > 0:
+            files_html = '<div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;">'
+            for file_info in files_info:
+                mime_type = file_info.get("mime_type", "")
+                display_name = file_info.get("display_name") or file_info.get("name", "file")
+                
+                # Определяем иконку по mime_type
+                if mime_type.startswith("image/"):
+                    icon = "🖼️"
+                    color = "#e3f2fd"
+                    border_color = "#90caf9"
+                elif mime_type.startswith("text/"):
+                    icon = "📝"
+                    color = "#f3e5f5"
+                    border_color = "#ce93d8"
+                elif mime_type == "application/pdf":
+                    icon = "📄"
+                    color = "#ffebee"
+                    border_color = "#ef9a9a"
+                else:
+                    icon = "📎"
+                    color = "#f5f5f5"
+                    border_color = "#bdbdbd"
+                
+                # Обрезаем длинное имя
+                short_name = display_name[:25] + "..." if len(display_name) > 28 else display_name
+                
+                files_html += f'''
+                    <div style="border: 1px solid {border_color}; border-radius: 6px; padding: 6px 10px; background: {color}; display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 16px;">{icon}</span>
+                        <span style="font-size: 11px; color: #444;">{self._escape_html(short_name)}</span>
+                    </div>
+                '''
+            files_html += '</div>'
+        
         return f"""
             <div style="margin: 12px 0; padding: 12px 16px; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 16px;">
                 <div style="font-weight: bold; color: #1976d2; margin-bottom: 6px; font-size: 12px;">
                     Вы <span style="color: #666; font-weight: normal;">{timestamp}</span>
                 </div>
                 <div style="color: #1a1a1a; font-size: 14px; line-height: 1.5;">{self._escape_html(content)}</div>
+                {files_html}
             </div>
         """
 
@@ -106,17 +145,26 @@ class MessageRenderer:
         """
 
     def _render_meta(self, meta: dict) -> str:
-        """Render meta info"""
+        """Render meta info with tokens"""
         if not meta:
             return ""
         model = meta.get("model", "")
         thinking = meta.get("thinking_level", "")
+        input_tokens = meta.get("input_tokens")
+        output_tokens = meta.get("output_tokens")
+        
         meta_parts = []
         if model:
             short_model = model.replace("gemini-3-", "").replace("-preview", "").title()
             meta_parts.append(short_model)
         if thinking:
             meta_parts.append(thinking.title())
+        
+        # Add tokens info
+        if input_tokens is not None and output_tokens is not None:
+            meta_parts.append(f"📥 {input_tokens:,} токенов")
+            meta_parts.append(f"📤 {output_tokens:,} токенов")
+        
         if meta_parts:
             return f"""<div style="font-size: 11px; color: #666; margin-top: 8px;">{' · '.join(meta_parts)}</div>"""
         return ""

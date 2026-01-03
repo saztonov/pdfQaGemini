@@ -1,4 +1,5 @@
 """Prompts management dialog"""
+import asyncio
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (
@@ -195,9 +196,12 @@ class PromptsDialog(QDialog):
         self.btn_delete.setEnabled(False)
         self.prompts_list.clearSelection()
 
-    @asyncSlot()
-    async def _on_save_prompt(self):
-        """Handle save prompt"""
+    def _on_save_prompt(self):
+        """Handle save prompt - creates async task"""
+        asyncio.create_task(self._save_prompt_async())
+
+    async def _save_prompt_async(self):
+        """Async save prompt implementation"""
         title = self.title_edit.text().strip()
         system_prompt = self.system_prompt_edit.toPlainText().strip()
         user_text = self.user_text_edit.toPlainText().strip()
@@ -255,9 +259,8 @@ class PromptsDialog(QDialog):
             logger.error(f"Error saving prompt: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка сохранения: {e}")
 
-    @asyncSlot()
-    async def _on_delete_prompt(self):
-        """Handle delete prompt"""
+    def _on_delete_prompt(self):
+        """Handle delete prompt - creates async task"""
         if not self.current_prompt_id:
             return
 
@@ -273,6 +276,10 @@ class PromptsDialog(QDialog):
         if reply != QMessageBox.Yes:
             return
 
+        asyncio.create_task(self._delete_prompt_async())
+
+    async def _delete_prompt_async(self):
+        """Async delete prompt implementation"""
         try:
             # Delete from R2
             if self.r2_client:

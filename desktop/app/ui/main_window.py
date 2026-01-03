@@ -47,7 +47,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.gemini_client = None
         self.agent = None
         self.pdf_renderer = PDFRenderer()
-        self.trace_store = TraceStore(maxsize=200)
+        self.trace_store = TraceStore(maxsize=200)  # R2 client will be set in connect
 
         # Inspector window (singleton)
         self.inspector_window: Optional[ModelInspectorWindow] = None
@@ -143,9 +143,9 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         view_menu.addSeparator()
 
-        self.action_model_inspector = QAction("Инспектор модели", self)
+        self.action_model_inspector = QAction("🔍 Инспектор модели", self)
         self.action_model_inspector.setShortcut("Ctrl+I")
-        self.action_model_inspector.setToolTip("Открыть инспектор логов модели")
+        self.action_model_inspector.setToolTip("Открыть инспектор модели с полными логами, мыслями и токенами")
         self.action_model_inspector.triggered.connect(self._on_open_inspector)
         view_menu.addAction(self.action_model_inspector)
 
@@ -333,6 +333,10 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
                 )
             else:
                 self.toast_manager.warning("R2 не настроен")
+
+            # Update trace store with R2 client
+            self.trace_store.r2_client = self.r2_client
+            self.trace_store.client_id = self.client_id
 
             self.agent = Agent(
                 self.gemini_client,

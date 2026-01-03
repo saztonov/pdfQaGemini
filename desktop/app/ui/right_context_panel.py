@@ -109,7 +109,7 @@ class RightContextPanel(QWidget):
         self.inspector_tab = self._create_inspector_tab()
 
         self.tab_widget.addTab(self.chats_tab, "💬 Чаты")
-        self.tab_widget.addTab(self.inspector_tab, "🔍 Инспектор")
+        self.tab_widget.addTab(self.inspector_tab, "🔍 Инспектор модели")
 
         layout.addWidget(self.tab_widget)
 
@@ -471,7 +471,7 @@ class RightContextPanel(QWidget):
         header_layout.setContentsMargins(10, 10, 10, 10)
         header_layout.setSpacing(8)
 
-        header_label = QLabel("ИНСПЕКТОР ЗАПРОСОВ")
+        header_label = QLabel("🔍 ИНСПЕКТОР МОДЕЛИ")
         header_label.setStyleSheet("color: #bbbbbb; font-weight: bold; font-size: 9pt;")
         header_layout.addWidget(header_label)
 
@@ -529,42 +529,106 @@ class RightContextPanel(QWidget):
         self.trace_list.itemClicked.connect(self._on_trace_selected)
         splitter.addWidget(self.trace_list)
 
-        # Details view
+        # Details view with tabs
         details_widget = QWidget()
         details_layout = QVBoxLayout(details_widget)
-        details_layout.setContentsMargins(8, 8, 8, 8)
-        details_layout.setSpacing(4)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(0)
 
-        self.trace_details_label = QLabel("Выберите запрос для просмотра деталей")
-        self.trace_details_label.setStyleSheet("color: #888; font-size: 9pt;")
-        self.trace_details_label.setWordWrap(True)
-        details_layout.addWidget(self.trace_details_label)
-
-        self.trace_details = QPlainTextEdit()
-        self.trace_details.setReadOnly(True)
-        self.trace_details.setStyleSheet(
+        # Tab widget for different views
+        self.inspector_tabs = QTabWidget()
+        self.inspector_tabs.setStyleSheet(
             """
-            QPlainTextEdit {
-                background-color: #1e1e1e;
-                color: #e0e0e0;
+            QTabWidget::pane {
                 border: 1px solid #3e3e42;
-                border-radius: 4px;
-                font-size: 10px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                padding: 8px;
+                background-color: #1e1e1e;
+            }
+            QTabBar::tab {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+                padding: 6px 12px;
+                border: 1px solid #3e3e42;
+                border-bottom: none;
+                font-size: 9pt;
+            }
+            QTabBar::tab:selected {
+                background-color: #1e1e1e;
+                border-bottom: 2px solid #007acc;
             }
         """
         )
-        font = QFont("Consolas", 9)
-        self.trace_details.setFont(font)
-        details_layout.addWidget(self.trace_details)
+
+        # Full Log tab
+        self.full_log_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.full_log_text, "📋 Полный лог")
+
+        # System Prompt tab
+        self.system_prompt_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.system_prompt_text, "📝 Системный промпт")
+
+        # User Request tab
+        self.user_request_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.user_request_text, "👤 Запрос")
+
+        # Thoughts tab
+        self.thoughts_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.thoughts_text, "🧠 Мысли модели")
+
+        # Response tab
+        self.response_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.response_text, "📥 Ответ модели")
+
+        # JSON tab
+        self.json_text = self._create_text_area()
+        self.inspector_tabs.addTab(self.json_text, "{ } JSON")
+
+        # Errors tab
+        self.errors_text = self._create_text_area(error=True)
+        self.inspector_tabs.addTab(self.errors_text, "⚠️ Ошибки")
+
+        details_layout.addWidget(self.inspector_tabs)
 
         splitter.addWidget(details_widget)
-        splitter.setSizes([200, 300])
+        splitter.setSizes([150, 400])
 
         layout.addWidget(splitter, 1)
 
         return widget
+
+    def _create_text_area(self, error: bool = False) -> QPlainTextEdit:
+        """Create styled text area for inspector tabs"""
+        text_edit = QPlainTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+
+        font = QFont("Consolas", 9)
+        font.setStyleHint(QFont.Monospace)
+        text_edit.setFont(font)
+
+        if error:
+            text_edit.setStyleSheet(
+                """
+                QPlainTextEdit {
+                    background-color: #2d1b1b;
+                    color: #f48771;
+                    border: none;
+                    padding: 8px;
+                }
+            """
+            )
+        else:
+            text_edit.setStyleSheet(
+                """
+                QPlainTextEdit {
+                    background-color: #1e1e1e;
+                    color: #d4d4d4;
+                    border: none;
+                    padding: 8px;
+                }
+            """
+            )
+
+        return text_edit
 
     def _setup_inspector_refresh(self):
         """Setup auto-refresh timer for inspector"""
@@ -614,66 +678,288 @@ class RightContextPanel(QWidget):
             self._display_trace_details(trace)
 
     def _display_trace_details(self, trace: ModelTrace):
-        """Display trace details"""
+        """Display trace details in all tabs"""
         from app.utils.time_utils import format_time
+        import json
 
-        details = []
+        time_str = format_time(trace.ts, "%Y-%m-%d %H:%M:%S")
 
-        details.append(f"═══ ЗАПРОС {trace.id[:8]} ═══\n")
-        details.append(f"⏱️ Время: {format_time(trace.ts, '%Y-%m-%d %H:%M:%S')}")
-        details.append(f"🤖 Модель: {trace.model}")
-        details.append(f"💭 Thinking Level: {trace.thinking_level}")
-        details.append(
-            f"⚡ Latency: {trace.latency_ms:.1f}ms" if trace.latency_ms else "⚡ Latency: ?"
-        )
-        details.append(f"✅ Финальный: {'Да' if trace.is_final else 'Нет'}")
-        details.append(f"📁 Файлов: {len(trace.input_files)}")
+        # === Full Log Tab ===
+        full_log = self._build_full_log(trace, time_str)
+        self.full_log_text.setPlainText(full_log)
 
-        if trace.errors:
-            details.append("\n❌ ОШИБКИ:")
-            for err in trace.errors:
-                details.append(f"  • {err}")
+        # === System Prompt Tab ===
+        self.system_prompt_text.setPlainText(trace.system_prompt or "(нет системного промпта)")
 
-        details.append(
-            f"\n📝 SYSTEM PROMPT:\n{trace.system_prompt[:200]}..."
-            if len(trace.system_prompt) > 200
-            else f"\n📝 SYSTEM PROMPT:\n{trace.system_prompt}"
-        )
+        # === User Request Tab ===
+        user_request = f"""═══════════════════════════════════════════════════════════
+                        ЗАПРОС ПОЛЬЗОВАТЕЛЯ
+═══════════════════════════════════════════════════════════
 
-        details.append(
-            f"\n👤 USER TEXT:\n{trace.user_text[:300]}..."
-            if len(trace.user_text) > 300
-            else f"\n👤 USER TEXT:\n{trace.user_text}"
-        )
+📅 Время: {time_str}
+📌 Модель: {trace.model}
+🧠 Уровень мышления: {trace.thinking_level}
+📁 Файлов: {len(trace.input_files)}
 
-        if trace.response_json:
-            details.append("\n📤 RESPONSE JSON:")
-            try:
-                response_text = json.dumps(trace.response_json, ensure_ascii=False, indent=2)
-                if len(response_text) > 500:
-                    details.append(response_text[:500] + "\n...")
-                else:
-                    details.append(response_text)
-            except Exception:
-                details.append(str(trace.response_json)[:500])
+───────────────────────────────────────────────────────────
+                         ТЕКСТ ЗАПРОСА
+───────────────────────────────────────────────────────────
 
+{trace.user_text}
+
+"""
+        if trace.input_files:
+            user_request += """───────────────────────────────────────────────────────────
+                       ПРИКРЕПЛЁННЫЕ ФАЙЛЫ
+───────────────────────────────────────────────────────────
+
+"""
+            for i, f in enumerate(trace.input_files, 1):
+                uri = f.get("uri", "—")
+                mime = f.get("mime_type", "—")
+                name = f.get("display_name") or f.get("name", "—")
+                user_request += f"  {i}. {name}\n     MIME: {mime}\n     URI: {uri}\n\n"
+
+        self.user_request_text.setPlainText(user_request)
+
+        # === Thoughts Tab ===
+        if trace.full_thoughts:
+            thoughts = f"""═══════════════════════════════════════════════════════════
+                        МЫСЛИ МОДЕЛИ (полностью)
+═══════════════════════════════════════════════════════════
+
+⏰ Время: {time_str}
+📌 Модель: {trace.model}
+🧠 Уровень мышления: {trace.thinking_level}
+
+───────────────────────────────────────────────────────────
+                         ПРОЦЕСС МЫШЛЕНИЯ
+───────────────────────────────────────────────────────────
+
+{trace.full_thoughts}
+
+───────────────────────────────────────────────────────────
+                            КОНЕЦ
+───────────────────────────────────────────────────────────
+"""
+        else:
+            thoughts = f"""═══════════════════════════════════════════════════════════
+                        МЫСЛИ МОДЕЛИ
+═══════════════════════════════════════════════════════════
+
+⏰ Время: {time_str}
+📌 Модель: {trace.model}
+🧠 Уровень мышления: {trace.thinking_level}
+
+───────────────────────────────────────────────────────────
+
+❌ Модель не использовала режим мышления, либо мысли не были записаны.
+
+Возможные причины:
+  • Thinking level был установлен в "low" (минимальное рассуждение)
+  • Модель решила задачу без необходимости глубоких размышлений
+  • Режим streaming был отключен (мысли доступны только в streaming)
+
+───────────────────────────────────────────────────────────
+"""
+        self.thoughts_text.setPlainText(thoughts)
+
+        # === Response Tab ===
+        response_text = trace.assistant_text or ""
+        if not response_text and trace.response_json:
+            response_text = trace.response_json.get("assistant_text", "")
+
+        # Format tokens
+        tokens_info = ""
+        if trace.input_tokens is not None:
+            tokens_info += f"📥 Токены входа: {trace.input_tokens:,}\n"
+        if trace.output_tokens is not None:
+            tokens_info += f"📤 Токены выхода: {trace.output_tokens:,}\n"
+        if trace.total_tokens is not None:
+            tokens_info += f"📊 Всего токенов: {trace.total_tokens:,}\n"
+
+        response = f"""═══════════════════════════════════════════════════════════
+                        ОТВЕТ МОДЕЛИ (полностью)
+═══════════════════════════════════════════════════════════
+
+⏱️ Задержка: {trace.latency_ms:.2f} мс
+✅ Финальный: {"Да" if trace.is_final else "Нет"}
+{tokens_info}
+───────────────────────────────────────────────────────────
+                         ТЕКСТ ОТВЕТА
+───────────────────────────────────────────────────────────
+
+{response_text}
+"""
+        self.response_text.setPlainText(response)
+
+        # === JSON Tab ===
+        json_data = {
+            "request": {
+                "model": trace.model,
+                "thinking_level": trace.thinking_level,
+                "system_prompt": trace.system_prompt,
+                "user_text": trace.user_text,
+                "input_files": trace.input_files,
+            },
+            "response": trace.response_json,
+            "meta": {
+                "trace_id": trace.id,
+                "conversation_id": str(trace.conversation_id),
+                "timestamp": time_str,
+                "latency_ms": trace.latency_ms,
+                "is_final": trace.is_final,
+            },
+        }
+        if trace.full_thoughts:
+            json_data["thoughts"] = trace.full_thoughts
         if trace.parsed_actions:
-            details.append(f"\n⚙️ ACTIONS ({len(trace.parsed_actions)}):")
-            for i, action in enumerate(trace.parsed_actions[:5], 1):
-                details.append(f"  {i}. {action.get('type', '?')}")
+            json_data["parsed_actions"] = trace.parsed_actions
+        if trace.errors:
+            json_data["errors"] = trace.errors
+        if trace.input_tokens:
+            json_data["meta"]["input_tokens"] = trace.input_tokens
+        if trace.output_tokens:
+            json_data["meta"]["output_tokens"] = trace.output_tokens
+        if trace.total_tokens:
+            json_data["meta"]["total_tokens"] = trace.total_tokens
 
-        self.trace_details_label.setText(
-            f"Запрос: {trace.model} | {format_time(trace.ts, '%H:%M:%S')}"
+        json_text = json.dumps(json_data, indent=2, ensure_ascii=False)
+        self.json_text.setPlainText(json_text)
+
+        # === Errors Tab ===
+        if trace.errors:
+            errors_text = "\n\n".join(trace.errors)
+        else:
+            errors_text = "✓ Ошибок нет"
+        self.errors_text.setPlainText(errors_text)
+
+    def _build_full_log(self, trace: ModelTrace, time_str: str) -> str:
+        """Build full chronological log text"""
+        import json
+        
+        lines = []
+
+        lines.append("╔═══════════════════════════════════════════════════════════╗")
+        lines.append("║              ПОЛНЫЙ ЛОГ ВЗАИМОДЕЙСТВИЯ С МОДЕЛЬЮ          ║")
+        lines.append("╚═══════════════════════════════════════════════════════════╝")
+        lines.append("")
+        lines.append(f"═══ ЗАПРОС {trace.id[:8]} ═══")
+        lines.append("")
+        lines.append(f"⏰ Время: {time_str}")
+        lines.append(f"📌 Модель: {trace.model}")
+        lines.append(f"🧠 Thinking Level: {trace.thinking_level}")
+        lines.append(
+            f"⏱️ Latency: {trace.latency_ms:.2f} мс" if trace.latency_ms else "⏱️ Latency: —"
         )
-        self.trace_details.setPlainText("\n".join(details))
+        lines.append(f"✅ Финальный: {'Да' if trace.is_final else 'Нет'}")
+        lines.append(f"📁 Файлов: {len(trace.input_files)}")
+        if trace.input_tokens is not None:
+            lines.append(f"📥 Токены входа: {trace.input_tokens:,}")
+        if trace.output_tokens is not None:
+            lines.append(f"📤 Токены выхода: {trace.output_tokens:,}")
+        if trace.total_tokens is not None:
+            lines.append(f"📊 Всего токенов: {trace.total_tokens:,}")
+        lines.append("")
+
+        # System prompt
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 📝 SYSTEM PROMPT                                            │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        lines.append(trace.system_prompt or "(нет)")
+        lines.append("")
+
+        # User text
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 👤 USER TEXT                                                │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        lines.append(trace.user_text or "(нет)")
+        lines.append("")
+
+        # Input files
+        if trace.input_files:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 📁 INPUT FILES                                              │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            for i, f in enumerate(trace.input_files, 1):
+                lines.append(f"  {i}. {f.get('display_name') or f.get('name', '—')}")
+                lines.append(f"     mime: {f.get('mime_type', '—')}")
+                lines.append(f"     uri: {f.get('uri', '—')}")
+                lines.append("")
+
+        # Thoughts (full)
+        if trace.full_thoughts:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 🧠 MODEL THOUGHTS (полностью)                               │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(trace.full_thoughts)
+            lines.append("")
+
+        # Response
+        lines.append("┌─────────────────────────────────────────────────────────────┐")
+        lines.append("│ 📥 RESPONSE JSON                                            │")
+        lines.append("└─────────────────────────────────────────────────────────────┘")
+        lines.append("")
+        if trace.response_json:
+            lines.append(json.dumps(trace.response_json, indent=2, ensure_ascii=False))
+        else:
+            lines.append("(нет ответа)")
+        lines.append("")
+
+        # Assistant text (full)
+        response_text = trace.assistant_text or ""
+        if not response_text and trace.response_json:
+            response_text = trace.response_json.get("assistant_text", "")
+
+        if response_text:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ 💬 ASSISTANT TEXT (полностью)                               │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(response_text)
+            lines.append("")
+
+        # Parsed actions
+        if trace.parsed_actions:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ ⚡ PARSED ACTIONS                                           │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            lines.append(json.dumps(trace.parsed_actions, indent=2, ensure_ascii=False))
+            lines.append("")
+
+        # Errors
+        if trace.errors:
+            lines.append("┌─────────────────────────────────────────────────────────────┐")
+            lines.append("│ ⚠️ ERRORS                                                   │")
+            lines.append("└─────────────────────────────────────────────────────────────┘")
+            lines.append("")
+            for err in trace.errors:
+                lines.append(f"  ❌ {err}")
+            lines.append("")
+
+        lines.append("═══════════════════════════════════════════════════════════════")
+        lines.append("                        КОНЕЦ ЛОГА")
+        lines.append("═══════════════════════════════════════════════════════════════")
+
+        return "\n".join(lines)
 
     def _clear_inspector(self):
         """Clear all traces"""
         if self.trace_store:
             self.trace_store.clear()
             self.trace_list.clear()
-            self.trace_details.clear()
-            self.trace_details_label.setText("Все запросы очищены")
+            self.full_log_text.clear()
+            self.system_prompt_text.clear()
+            self.user_request_text.clear()
+            self.thoughts_text.clear()
+            self.response_text.clear()
+            self.json_text.clear()
+            self.errors_text.clear()
             self.trace_count_label.setText("Запросов: 0")
 
     def _button_style(self) -> str:

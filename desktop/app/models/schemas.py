@@ -176,52 +176,98 @@ class ContextItem(BaseModel):
         return v
 
 
-# Model outputs
+# Model outputs - Payload models
 
 
 class RequestFilesItem(BaseModel):
-    """Item for request_files action"""
-
+    """Single item in request_files payload"""
     context_item_id: str
     kind: Literal["crop", "text"]
     reason: str
-    priority: Literal["high", "medium", "low"] = "medium"
+    priority: Optional[Literal["high", "medium", "low"]] = "medium"
+    crop_id: Optional[str] = None
 
 
 class RequestFilesPayload(BaseModel):
     """Payload for request_files action"""
+    items: list[RequestFilesItem] = Field(default_factory=list, min_length=0, max_length=5)
 
-    items: list[RequestFilesItem] = Field(default_factory=list)
+
+class OpenImagePayload(BaseModel):
+    """Payload for open_image action"""
+    context_item_id: str
+    purpose: Optional[str] = None
 
 
 class ImageRef(BaseModel):
     """Reference to an image for ROI"""
-
     context_item_id: str
 
 
-class BboxNorm(BaseModel):
-    """Normalized bounding box"""
-
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+class SuggestedBboxNorm(BaseModel):
+    """Normalized bounding box coordinates"""
+    x1: float = Field(ge=0.0, le=1.0)
+    y1: float = Field(ge=0.0, le=1.0)
+    x2: float = Field(ge=0.0, le=1.0)
+    y2: float = Field(ge=0.0, le=1.0)
 
 
 class RequestRoiPayload(BaseModel):
     """Payload for request_roi action"""
-
     image_ref: ImageRef
     goal: str
-    dpi: int = 400
-    suggested_bbox_norm: Optional[BboxNorm] = None
+    dpi: Optional[int] = Field(default=400, ge=120, le=800)
+    suggested_bbox_norm: Optional[SuggestedBboxNorm] = None
+
+
+class FinalPayload(BaseModel):
+    """Payload for final action"""
+    confidence: Literal["low", "medium", "high"]
+    used_context_item_ids: list[str] = Field(default_factory=list)
 
 
 class ModelAction(BaseModel):
+    """Model action with typed payload"""
+    
     type: Literal["request_files", "open_image", "request_roi", "final"]
-    payload: dict[str, Any] = Field(default_factory=dict)
+    payload: Optional[dict] = None  # Parsed to specific payload type based on type
     note: Optional[str] = None
+
+    def get_request_files_payload(self) -> Optional[RequestFilesPayload]:
+        """Parse payload as RequestFilesPayload"""
+        if self.type != "request_files" or self.payload is None:
+            return None
+        try:
+            return RequestFilesPayload.model_validate(self.payload)
+        except Exception:
+            return None
+
+    def get_open_image_payload(self) -> Optional[OpenImagePayload]:
+        """Parse payload as OpenImagePayload"""
+        if self.type != "open_image" or self.payload is None:
+            return None
+        try:
+            return OpenImagePayload.model_validate(self.payload)
+        except Exception:
+            return None
+
+    def get_request_roi_payload(self) -> Optional[RequestRoiPayload]:
+        """Parse payload as RequestRoiPayload"""
+        if self.type != "request_roi" or self.payload is None:
+            return None
+        try:
+            return RequestRoiPayload.model_validate(self.payload)
+        except Exception:
+            return None
+
+    def get_final_payload(self) -> Optional[FinalPayload]:
+        """Parse payload as FinalPayload"""
+        if self.type != "final" or self.payload is None:
+            return None
+        try:
+            return FinalPayload.model_validate(self.payload)
+        except Exception:
+            return None
 
 
 class ModelReply(BaseModel):
@@ -229,9 +275,9 @@ class ModelReply(BaseModel):
     actions: list[ModelAction] = Field(default_factory=list)
     is_final: bool = False
 
-    @field_validator("assistant_text")
+    @field_validator("assistant_text", mode="before")
     @classmethod
     def text_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("assistant_text cannot be empty")
+        if not v or not v.strip():
+            return "Ответ пустой"
         return v

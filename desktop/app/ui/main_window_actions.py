@@ -34,8 +34,8 @@ class ModelActionsHandler:
         self.toast_manager.info("Открытие изображения...")
 
         try:
-            context_item_id = action.payload.get("context_item_id")
-            r2_key = action.payload.get("r2_key")
+            context_item_id = getattr(action, "context_item_id", None)
+            r2_key = getattr(action, "r2_key", None)
 
             context_item = None
             if context_item_id and self.right_panel:
@@ -67,7 +67,7 @@ class ModelActionsHandler:
         self.toast_manager.info("Модель запрашивает выбор области...")
 
         try:
-            image_ref = action.payload.get("image_ref") or action.payload.get("context_item_id")
+            image_ref = getattr(action, "context_item_id", None)
 
             if not image_ref:
                 self.toast_manager.warning("Нет ссылки на изображение в запросе")
@@ -206,14 +206,22 @@ class ModelActionsHandler:
                     )
 
                     if self.chat_panel:
+                        # Сериализуем actions - все поля из action
+                        actions_data = []
+                        for a in reply.actions:
+                            action_dict = {"type": a.type}
+                            for field in ["context_item_id", "kind", "reason", "priority", 
+                                         "r2_key", "goal", "dpi", "bbox_norm", "note"]:
+                                val = getattr(a, field, None)
+                                if val is not None:
+                                    action_dict[field] = val
+                            actions_data.append(action_dict)
+                        
                         meta = {
                             "model": current_model,
                             "thinking_level": "low",
                             "is_final": reply.is_final,
-                            "actions": [
-                                {"type": a.type, "payload": a.payload, "note": a.note}
-                                for a in reply.actions
-                            ],
+                            "actions": actions_data,
                         }
                         self.chat_panel.add_assistant_message(reply.assistant_text, meta)
                         self.chat_panel.set_input_enabled(True)

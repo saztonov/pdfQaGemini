@@ -233,19 +233,38 @@ class GeminiClient:
                 config=config,
             )
 
+            # Extract usage metadata
+            usage_metadata = getattr(response, "usage_metadata", None)
+            usage_dict = {}
+            if usage_metadata:
+                usage_dict = {
+                    "input_tokens": getattr(usage_metadata, "prompt_token_count", None),
+                    "output_tokens": getattr(usage_metadata, "candidates_token_count", None),
+                    "total_tokens": getattr(usage_metadata, "total_token_count", None),
+                }
+                logger.info(f"Usage: input={usage_dict['input_tokens']}, output={usage_dict['output_tokens']}")
+
             # Prefer SDK parsed output
             parsed = getattr(response, "parsed", None)
+            result = None
             if parsed is not None:
                 if isinstance(parsed, dict):
-                    return parsed
-                if hasattr(parsed, "model_dump"):
-                    return parsed.model_dump()
-                return dict(parsed)
+                    result = parsed
+                elif hasattr(parsed, "model_dump"):
+                    result = parsed.model_dump()
+                else:
+                    result = dict(parsed)
+            else:
+                # Fallback: parse JSON from text
+                result_text = getattr(response, "text", "") or ""
+                logger.info(f"Response received: {len(result_text)} chars")
+                result = json.loads(result_text)
 
-            # Fallback: parse JSON from text
-            result_text = getattr(response, "text", "") or ""
-            logger.info(f"Response received: {len(result_text)} chars")
-            return json.loads(result_text)
+            # Add usage to result
+            if usage_dict:
+                result["_usage"] = usage_dict
+
+            return result
 
         except Exception as e:
             logger.error(f"Generate error: {e}", exc_info=True)
@@ -314,6 +333,7 @@ class GeminiClient:
     ) -> AsyncIterator[dict]:
         """Generate content with streaming and thought summaries (native async)"""
         client = self._get_client()
+        accumulated_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         try:
             contents_list = []
 
@@ -366,6 +386,13 @@ class GeminiClient:
                 if not chunk.candidates:
                     continue
 
+                # Accumulate usage metadata from chunks
+                usage_metadata = getattr(chunk, "usage_metadata", None)
+                if usage_metadata:
+                    accumulated_usage["input_tokens"] = getattr(usage_metadata, "prompt_token_count", 0) or accumulated_usage["input_tokens"]
+                    accumulated_usage["output_tokens"] = getattr(usage_metadata, "candidates_token_count", 0) or accumulated_usage["output_tokens"]
+                    accumulated_usage["total_tokens"] = getattr(usage_metadata, "total_token_count", 0) or accumulated_usage["total_tokens"]
+
                 for part in chunk.candidates[0].content.parts:
                     if not part.text:
                         continue
@@ -380,6 +407,10 @@ class GeminiClient:
                         }
                     else:
                         yield {"type": "text", "content": part.text}
+
+            # Send final usage metadata
+            if any(accumulated_usage.values()):
+                yield {"type": "usage", "usage": accumulated_usage}
 
         except Exception as e:
             logger.error(f"Stream error: {e}", exc_info=True)
