@@ -64,37 +64,43 @@ class RightContextPanel(QWidget):
             QTabWidget::pane {
                 border: none;
                 background-color: #1e1e1e;
+                border-top: 2px solid #3e3e42;
             }
             QTabBar::tab {
-                background-color: #252526;
-                color: #cccccc;
-                padding: 8px 16px;
-                border: none;
-                border-bottom: 2px solid transparent;
+                background-color: #181818;
+                color: #8a8a8a;
+                padding: 10px 20px;
+                border: 1px solid #2d2d2d;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                margin-right: 2px;
+                font-weight: normal;
             }
             QTabBar::tab:selected {
                 background-color: #1e1e1e;
                 color: #ffffff;
-                border-bottom: 2px solid #0e639c;
+                border-bottom: 3px solid #0e639c;
+                font-weight: bold;
+                padding-bottom: 7px;
             }
-            QTabBar::tab:hover {
-                background-color: #2d2d2d;
+            QTabBar::tab:hover:!selected {
+                background-color: #242424;
+                color: #b8b8b8;
             }
         """)
         
         # Add tabs
         self.chats_tab = self._create_chats_tab()
-        self.files_tab = self._create_files_tab()
         self.inspector_tab = self._create_inspector_tab()
         
         self.tab_widget.addTab(self.chats_tab, "💬 Чаты")
-        self.tab_widget.addTab(self.files_tab, "📁 Файлы")
         self.tab_widget.addTab(self.inspector_tab, "🔍 Инспектор")
         
         layout.addWidget(self.tab_widget)
     
     def _create_chats_tab(self) -> QWidget:
-        """Create Chats tab"""
+        """Create Chats tab with expandable files table"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -179,6 +185,97 @@ class RightContextPanel(QWidget):
         self.chats_list.itemDoubleClicked.connect(self._on_chat_double_clicked)
         layout.addWidget(self.chats_list, 1)
         
+        # Expandable files section
+        self.files_section = QWidget()
+        self.files_section.setStyleSheet("background-color: #1e1e1e; border-top: 1px solid #3e3e42;")
+        files_section_layout = QVBoxLayout(self.files_section)
+        files_section_layout.setContentsMargins(0, 0, 0, 0)
+        files_section_layout.setSpacing(0)
+        
+        # Files header with expand button
+        files_header = QWidget()
+        files_header.setStyleSheet("background-color: #252526;")
+        files_header_layout = QHBoxLayout(files_header)
+        files_header_layout.setContentsMargins(10, 8, 10, 8)
+        
+        self.btn_toggle_files = QPushButton("▼ Файлы чата")
+        self.btn_toggle_files.setCursor(Qt.PointingHandCursor)
+        self.btn_toggle_files.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #bbbbbb;
+                border: none;
+                text-align: left;
+                font-size: 10pt;
+                font-weight: bold;
+            }
+            QPushButton:hover { color: #ffffff; }
+        """)
+        self.btn_toggle_files.clicked.connect(self._toggle_files_section)
+        files_header_layout.addWidget(self.btn_toggle_files)
+        
+        self.files_count_label = QLabel("0 файлов")
+        self.files_count_label.setStyleSheet("color: #888; font-size: 9pt;")
+        files_header_layout.addWidget(self.files_count_label)
+        
+        files_header_layout.addStretch()
+        
+        # Files toolbar buttons
+        self.btn_refresh_files = QPushButton("↻")
+        self.btn_refresh_files.setFixedSize(24, 24)
+        self.btn_refresh_files.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh_files.setToolTip("Обновить список файлов")
+        self.btn_refresh_files.setStyleSheet(self._icon_button_style())
+        self.btn_refresh_files.clicked.connect(self._on_refresh_files_clicked)
+        files_header_layout.addWidget(self.btn_refresh_files)
+        
+        self.btn_delete_files = QPushButton("🗑")
+        self.btn_delete_files.setFixedSize(24, 24)
+        self.btn_delete_files.setCursor(Qt.PointingHandCursor)
+        self.btn_delete_files.setToolTip("Удалить выбранные файлы")
+        self.btn_delete_files.setEnabled(False)
+        self.btn_delete_files.setStyleSheet(self._icon_button_style())
+        self.btn_delete_files.clicked.connect(self._on_delete_files_clicked)
+        files_header_layout.addWidget(self.btn_delete_files)
+        
+        files_section_layout.addWidget(files_header)
+        
+        # Files table
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels([
+            "✓", "Имя файла", "MIME", "Размер", "Истекает (ч)"
+        ])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.setColumnWidth(0, 40)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.table.setMaximumHeight(250)
+        self.table.setStyleSheet("""
+            QTableWidget {
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: none;
+                gridline-color: #3e3e42;
+            }
+            QTableWidget::item { padding: 4px; }
+            QTableWidget::item:selected { background-color: #094771; }
+            QHeaderView::section {
+                background-color: #252526;
+                color: #bbbbbb;
+                border: 1px solid #3e3e42;
+                padding: 4px;
+            }
+        """)
+        files_section_layout.addWidget(self.table)
+        
+        self.table.setVisible(False)  # Initially hidden
+        layout.addWidget(self.files_section)
+        
         # Footer
         self.chats_footer_label = QLabel("Чатов: 0")
         self.chats_footer_label.setStyleSheet("color: #666; font-size: 8pt; padding: 4px 10px;")
@@ -189,10 +286,48 @@ class RightContextPanel(QWidget):
         self.btn_delete_chat.clicked.connect(self._on_delete_chat_clicked)
         self.btn_refresh_chats.clicked.connect(self._on_refresh_chats_clicked)
         self.btn_delete_all_chats.clicked.connect(self._on_delete_all_chats_clicked)
+        self.table.itemSelectionChanged.connect(self._on_files_table_selection_changed)
+        self.table.cellChanged.connect(self._on_cell_changed)
         
         return widget
     
-    def _create_files_tab(self) -> QWidget:
+    def _icon_button_style(self) -> str:
+        return """
+            QPushButton {
+                background-color: #3e3e42;
+                color: #cccccc;
+                border: none;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #505054; color: #ffffff; }
+            QPushButton:pressed { background-color: #0e639c; }
+            QPushButton:disabled { background-color: #2d2d2d; color: #666; }
+        """
+    
+    def _toggle_files_section(self):
+        """Toggle files table visibility"""
+        is_visible = self.table.isVisible()
+        self.table.setVisible(not is_visible)
+        self.btn_toggle_files.setText("▲ Файлы чата" if not is_visible else "▼ Файлы чата")
+    
+    def _on_files_table_selection_changed(self):
+        """Handle files table selection change"""
+        selected = len(self.table.selectedItems()) > 0
+        self.btn_delete_files.setEnabled(selected)
+    
+    @asyncSlot()
+    async def _on_refresh_files_clicked(self):
+        """Handle refresh files button"""
+        if self.conversation_id:
+            await self.refresh_files(conversation_id=self.conversation_id)
+    
+    @asyncSlot()
+    async def _on_delete_files_clicked(self):
+        """Handle delete files button"""
+        await self.delete_selected_files()
+    
+    def _create_files_tab_DEPRECATED(self) -> QWidget:
         """Create Gemini Files tab"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -415,7 +550,8 @@ class RightContextPanel(QWidget):
             self.trace_list.clear()
             
             for trace in traces:  # list() already returns newest first
-                timestamp = trace.ts.strftime("%H:%M:%S")
+                from app.utils.time_utils import format_time
+                timestamp = format_time(trace.ts, "%H:%M:%S")
                 model = trace.model.replace("gemini-3-", "").replace("-preview", "")
                 status = "✓" if trace.is_final else "○"
                 latency = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "?"
@@ -442,10 +578,11 @@ class RightContextPanel(QWidget):
     
     def _display_trace_details(self, trace: ModelTrace):
         """Display trace details"""
+        from app.utils.time_utils import format_time
         details = []
         
         details.append(f"═══ ЗАПРОС {trace.id[:8]} ═══\n")
-        details.append(f"⏱️ Время: {trace.ts.strftime('%Y-%m-%d %H:%M:%S')}")
+        details.append(f"⏱️ Время: {format_time(trace.ts, '%Y-%m-%d %H:%M:%S')}")
         details.append(f"🤖 Модель: {trace.model}")
         details.append(f"💭 Thinking Level: {trace.thinking_level}")
         details.append(f"⚡ Latency: {trace.latency_ms:.1f}ms" if trace.latency_ms else "⚡ Latency: ?")
@@ -477,7 +614,7 @@ class RightContextPanel(QWidget):
             for i, action in enumerate(trace.parsed_actions[:5], 1):
                 details.append(f"  {i}. {action.get('type', '?')}")
         
-        self.trace_details_label.setText(f"Запрос: {trace.model} | {trace.ts.strftime('%H:%M:%S')}")
+        self.trace_details_label.setText(f"Запрос: {trace.model} | {format_time(trace.ts, '%H:%M:%S')}")
         self.trace_details.setPlainText("\n".join(details))
     
     def _clear_inspector(self):
@@ -506,13 +643,7 @@ class RightContextPanel(QWidget):
     
     def _connect_signals(self):
         """Connect signals"""
-        self.btn_refresh.clicked.connect(self._on_refresh_clicked)
-        self.btn_delete.clicked.connect(self._on_delete_clicked)
-        self.btn_reload.clicked.connect(self._on_reload_clicked)
-        self.btn_select_all.clicked.connect(self._on_select_all)
-        self.btn_deselect_all.clicked.connect(self._on_deselect_all)
-        self.table.itemSelectionChanged.connect(self._on_table_selection_changed)
-        self.table.cellChanged.connect(self._on_cell_changed)
+        pass
     
     def set_services(self, supabase_repo, gemini_client: GeminiClient, r2_client, toast_manager):
         """Set service dependencies"""
@@ -521,11 +652,6 @@ class RightContextPanel(QWidget):
         self.r2_client = r2_client
         self.toast_manager = toast_manager
     
-    def _on_table_selection_changed(self):
-        """Handle table selection change"""
-        selected = len(self.table.selectedItems()) > 0
-        self.btn_delete.setEnabled(selected)
-        self.btn_reload.setEnabled(selected)
     
     def _on_cell_changed(self, row: int, col: int):
         """Handle checkbox change"""
@@ -553,69 +679,24 @@ class RightContextPanel(QWidget):
         self._update_footer()
         self._emit_selection()
     
-    def _on_select_all(self):
-        """Select all files for request"""
-        self.table.blockSignals(True)
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                item.setCheckState(Qt.Checked)
-            name_item = self.table.item(row, 1)
-            if name_item:
-                file_name = name_item.data(Qt.UserRole)
-                if file_name:
-                    self._selected_for_request.add(file_name)
-        self.table.blockSignals(False)
-        self._update_footer()
-        self._emit_selection()
-    
-    def _on_deselect_all(self):
-        """Deselect all files"""
-        self.table.blockSignals(True)
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                item.setCheckState(Qt.Unchecked)
-        self._selected_for_request.clear()
-        self.table.blockSignals(False)
-        self._update_footer()
-        self._emit_selection()
     
     def _emit_selection(self):
         """Emit selected files for request"""
         selected = self.get_selected_files_for_request()
         self.filesSelectionChanged.emit(selected)
     
-    @asyncSlot()
-    async def _on_refresh_clicked(self):
-        """Handle refresh click"""
-        await self.refresh_files()
-    
-    @asyncSlot()
-    async def _on_delete_clicked(self):
-        """Handle delete click"""
-        await self.delete_selected_files()
-    
-    @asyncSlot()
-    async def _on_reload_clicked(self):
-        """Handle reload click"""
-        await self.reload_selected_files()
     
     async def refresh_files(self, conversation_id: Optional[str] = None):
         """Refresh Gemini Files list (filtered by conversation if provided)"""
         if not self.gemini_client:
-            if self.toast_manager:
-                self.toast_manager.error("Клиент Gemini не инициализирован")
             return
-        
-        if self.toast_manager:
-            self.toast_manager.info("Обновление Gemini Files...")
         
         try:
             all_files = await self.gemini_client.list_files()
             
             # Filter files by conversation if specified
             if conversation_id and self.supabase_repo:
+                self.conversation_id = conversation_id
                 try:
                     conv_files = await self.supabase_repo.qa_get_conversation_files(conversation_id)
                     conv_file_names = {f.get("gemini_name") for f in conv_files if f.get("gemini_name")}
@@ -634,17 +715,9 @@ class RightContextPanel(QWidget):
                 self.gemini_files = all_files
             
             self._update_table()
-            
-            if self.toast_manager:
-                if conversation_id:
-                    self.toast_manager.success(f"Загружено {len(self.gemini_files)} файлов чата")
-                else:
-                    self.toast_manager.success(f"Загружено {len(self.gemini_files)} файлов")
         
         except Exception as e:
             logger.error(f"Ошибка загрузки Gemini Files: {e}", exc_info=True)
-            if self.toast_manager:
-                self.toast_manager.error(f"Ошибка: {e}")
     
     def _update_table(self):
         """Update table with current files"""
@@ -673,12 +746,12 @@ class RightContextPanel(QWidget):
             name_item.setData(Qt.UserRole, gf.get("name"))
             name_item.setData(Qt.UserRole + 1, gf.get("uri"))
             name_item.setData(Qt.UserRole + 2, gf.get("mime_type"))
-            # Store full file info for reload
             name_item.setData(Qt.UserRole + 3, gf)
             self.table.setItem(row, 1, name_item)
             
             # MIME
-            self.table.setItem(row, 2, QTableWidgetItem(gf.get("mime_type", "")))
+            mime_type = gf.get("mime_type", "")[:30]  # Truncate long MIME types
+            self.table.setItem(row, 2, QTableWidgetItem(mime_type))
             
             # Size
             size_bytes = gf.get("size_bytes", 0)
@@ -697,15 +770,12 @@ class RightContextPanel(QWidget):
             expiration_time = gf.get("expiration_time")
             if expiration_time:
                 try:
-                    # Parse expiration_time
                     if isinstance(expiration_time, str):
-                        # Remove timezone info if present
                         exp_str = expiration_time.replace('Z', '+00:00')
                         exp_dt = datetime.fromisoformat(exp_str)
                     else:
                         exp_dt = expiration_time
                     
-                    # Calculate hours remaining
                     now = datetime.now(timezone.utc)
                     if exp_dt.tzinfo is None:
                         exp_dt = exp_dt.replace(tzinfo=timezone.utc)
@@ -716,7 +786,6 @@ class RightContextPanel(QWidget):
                     if hours_remaining > 0:
                         hours_str = f"{hours_remaining:.1f}"
                         hours_item = QTableWidgetItem(hours_str)
-                        # Color code based on time remaining
                         if hours_remaining < 1:
                             hours_item.setForeground(Qt.red)
                         elif hours_remaining < 12:
@@ -734,33 +803,19 @@ class RightContextPanel(QWidget):
                 hours_item = QTableWidgetItem("-")
             
             self.table.setItem(row, 4, hours_item)
-            
-            # Relative path - show the Google Files API path (files/xxxxx)
-            name = gf.get("name", "")
-            if name:
-                # Extract relative path from full name
-                # name format: "files/xxxxx" or full path
-                relative_path = name
-            else:
-                relative_path = "-"
-            
-            path_item = QTableWidgetItem(relative_path)
-            path_item.setToolTip(f"Google Files path: {relative_path}")
-            self.table.setItem(row, 5, path_item)
-            
-            # Status
-            status_item = QTableWidgetItem("✓ Загружен")
-            status_item.setForeground(Qt.green)
-            self.table.setItem(row, 6, status_item)
         
         self.table.blockSignals(False)
-        self._update_footer()
+        self._update_files_count()
     
-    def _update_footer(self):
-        """Update footer label"""
-        total = len(self.gemini_files)
+    def _update_files_count(self):
+        """Update files count label"""
+        count = len(self.gemini_files)
         selected = len(self._selected_for_request)
-        self.footer_label.setText(f"Файлов: {total} | Выбрано для запроса: {selected}")
+        if selected > 0:
+            self.files_count_label.setText(f"{count} файлов | {selected} выбрано")
+        else:
+            self.files_count_label.setText(f"{count} файлов")
+    
     
     async def delete_selected_files(self):
         """Delete selected files from Gemini"""
@@ -1048,6 +1103,7 @@ class RightContextPanel(QWidget):
     def _format_chat_item(self, conv) -> str:
         """Format chat item text"""
         from datetime import datetime
+        from app.utils.time_utils import format_time
         
         title = conv.title or "Новый чат"
         msg_count = conv.message_count
@@ -1058,9 +1114,9 @@ class RightContextPanel(QWidget):
         
         if time_to_show:
             # Format: 03.01.26 14:27
-            time_str = time_to_show.strftime("%d.%m.%y %H:%M")
+            time_str = format_time(time_to_show, "%d.%m.%y %H:%M")
         else:
-            time_str = conv.created_at.strftime("%d.%m.%y %H:%M")
+            time_str = format_time(conv.created_at, "%d.%m.%y %H:%M")
         
         return f"{title}\n📝 {msg_count} сообщений | 📎 {file_count} файлов | ⏰ {time_str}"
     
@@ -1069,6 +1125,11 @@ class RightContextPanel(QWidget):
         conversation_id = item.data(Qt.UserRole)
         if conversation_id:
             self.btn_delete_chat.setEnabled(True)
+            
+            # Auto-load files for selected chat
+            import asyncio
+            asyncio.create_task(self.refresh_files(conversation_id=conversation_id))
+            
             self.chatSelected.emit(conversation_id)
     
     @asyncSlot()
@@ -1081,7 +1142,8 @@ class RightContextPanel(QWidget):
         
         # Generate default title with timestamp
         from datetime import datetime
-        default_title = f"Чат {datetime.now().strftime('%d.%m.%y %H:%M')}"
+        from app.utils.time_utils import format_time
+        default_title = f"Чат {format_time(datetime.utcnow(), '%d.%m.%y %H:%M')}"
         
         # Ask for chat title
         title, ok = QInputDialog.getText(

@@ -162,7 +162,8 @@ class MainWindowHandlers:
         
         # Refresh Gemini Files panel
         if self.right_panel:
-            await self.right_panel.refresh_files()
+            conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+            await self.right_panel.refresh_files(conversation_id=conv_id)
             
             # Auto-select newly uploaded files
             for name in uploaded_names:
@@ -170,6 +171,9 @@ class MainWindowHandlers:
             
             # Sync to chat panel
             self._sync_files_to_chat()
+            
+            # Refresh chats list to update file count
+            await self.right_panel.refresh_chats()
         
         # Show result
         if uploaded_count > 0:
@@ -182,6 +186,7 @@ class MainWindowHandlers:
         if self.right_panel and self.chat_panel:
             files = self.right_panel.gemini_files
             self.chat_panel.set_available_files(files)
+            logger.info(f"Синхронизировано {len(files)} файлов с ChatPanel")
     
     @asyncSlot(list)
     async def _on_upload_context_items(self: "MainWindow", item_ids: list):

@@ -570,7 +570,8 @@ class ChatPanel(QWidget):
     
     def add_user_message(self, text: str):
         """Add user message to chat"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        from app.utils.time_utils import format_time
+        timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         files_info = ""
         if self._selected_files:
             files_info = f" [{len(self._selected_files)} файлов]"
@@ -584,7 +585,8 @@ class ChatPanel(QWidget):
     
     def add_assistant_message(self, text: str, meta: dict = None):
         """Add assistant message to chat"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        from app.utils.time_utils import format_time
+        timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         self._messages.append({
             "role": "assistant",
             "content": text,
@@ -597,7 +599,8 @@ class ChatPanel(QWidget):
     
     def start_thinking_block(self):
         """Start a new thinking block for streaming thoughts"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        from app.utils.time_utils import format_time
+        timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         self._current_thought_block_id = f"thought_{timestamp.replace(':', '')}"
         self._thought_text = ""
         self._messages.append({
@@ -616,8 +619,9 @@ class ChatPanel(QWidget):
     
     def finish_thinking_block(self):
         """Finish the thinking block and show complete thought"""
+        from app.utils.time_utils import format_time
         text = getattr(self, '_thought_text', '')
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         
         if self._messages and self._messages[-1].get("role") == "thinking_progress":
             self._messages.pop()
@@ -655,7 +659,8 @@ class ChatPanel(QWidget):
     
     def add_system_message(self, text: str, level: str = "info"):
         """Add system message (info/success/warning/error)"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
+        from app.utils.time_utils import format_time
+        timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         self._messages.append({
             "role": "system",
             "content": text,
@@ -678,6 +683,7 @@ class ChatPanel(QWidget):
     
     def load_history(self, messages: list[dict]):
         """Load message history"""
+        from app.utils.time_utils import format_time
         self._messages.clear()
         self._renderer._collapsed_thoughts.clear()
         
@@ -685,7 +691,7 @@ class ChatPanel(QWidget):
             role = msg.get("role")
             content = msg.get("content", "")
             meta = msg.get("meta", {})
-            timestamp = msg.get("timestamp", datetime.now().strftime("%H:%M:%S"))
+            timestamp = msg.get("timestamp", format_time(datetime.utcnow(), "%H:%M:%S"))
             
             if role == "user":
                 self._messages.append({"role": "user", "content": content, "timestamp": timestamp})

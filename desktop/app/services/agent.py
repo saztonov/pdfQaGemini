@@ -241,6 +241,16 @@ class Agent:
         logger.info(f"  model: {model}, thinking: {thinking_level}, budget: {thinking_budget}")
         logger.info(f"  file_refs count: {len(file_refs)}")
         
+        # Create trace
+        trace = ModelTrace(
+            conversation_id=conversation_id,
+            model=model,
+            thinking_level=thinking_level,
+            system_prompt=SYSTEM_PROMPT,
+            user_text=user_text,
+            input_files=file_refs,
+        )
+        
         start_time = time.perf_counter()
         
         # Save user message
@@ -280,6 +290,15 @@ class Agent:
             # Calculate latency
             latency_ms = (time.perf_counter() - start_time) * 1000
             
+            # Update trace
+            trace.response_json = {
+                "assistant_text": full_answer,
+                "thought_summary": full_thought[:500] if full_thought else None,
+            }
+            trace.parsed_actions = []
+            trace.latency_ms = latency_ms
+            trace.is_final = True
+            
             # Save assistant message
             await self.supabase_repo.qa_add_message(
                 conversation_id=str(conversation_id),
@@ -290,11 +309,23 @@ class Agent:
                     "thinking_level": thinking_level,
                     "thought_summary": full_thought[:500] if full_thought else None,
                     "latency_ms": latency_ms,
+                    "trace_id": trace.id,
                 }
             )
+            
+            # Store trace
+            if self.trace_store:
+                self.trace_store.add(trace)
             
             yield {"type": "done", "content": full_answer}
             
         except Exception as e:
+            # Record error
+            trace.errors.append(str(e))
+            trace.latency_ms = (time.perf_counter() - start_time) * 1000
+            
+            if self.trace_store:
+                self.trace_store.add(trace)
+            
             logger.error(f"ask_stream error: {e}", exc_info=True)
             yield {"type": "error", "content": str(e)}

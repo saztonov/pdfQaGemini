@@ -1,6 +1,7 @@
 """Left panel - Projects Tree"""
 from typing import Optional
 import logging
+import asyncio
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QTreeWidget, QTreeWidgetItem, QLabel, QFrame
@@ -200,6 +201,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
         self.tree.itemCollapsed.connect(self._on_item_collapsed)
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
         self.search_input.textChanged.connect(self._on_search_changed)
+        self.tree.customContextMenuRequested.connect(self._show_context_menu)
     
     def set_services(self, supabase_repo: SupabaseRepo, r2_client, toast_manager):
         """Set service dependencies"""
@@ -323,9 +325,10 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             while parent_item.childCount() > 0:
                 parent_item.removeChild(parent_item.child(0))
             
-            parent_node = self._node_cache.get(parent_id)
+            # Get parent node type from tree item
+            parent_node_type = parent_item.data(0, Qt.UserRole + 1)
             
-            if parent_node and parent_node.node_type == "document":
+            if parent_node_type == "document":
                 node_files = await self.supabase_repo.fetch_node_files_single(parent_id)
                 
                 if not node_files:
@@ -365,6 +368,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                     parent_item.addChild(file_item)
                 
                 if crops:
+                    logger.info(f"Создание папки кропов с {len(crops)} файлами для узла {parent_id}")
                     crops_item = QTreeWidgetItem()
                     crops_item.setText(0, f"✂️ Кропы ({len(crops)})")
                     crops_item.setForeground(0, QBrush(QColor("#9370DB")))
@@ -381,6 +385,10 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                         crop_item.setData(0, Qt.UserRole + 4, nf.r2_key)
                         crop_item.setData(0, Qt.UserRole + 5, FileType.CROP.value)
                         crops_item.addChild(crop_item)
+                    
+                    # Auto-expand crops folder if not too many files
+                    if len(crops) <= 10:
+                        crops_item.setExpanded(True)
             else:
                 children = await self.supabase_repo.fetch_children(
                     "default",
@@ -442,6 +450,42 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             parent.addChild(item)
         else:
             self.tree.addTopLevelItem(item)
+    
+    def _show_context_menu(self, position):
+        """Show context menu for tree items"""
+        from PySide6.QtWidgets import QMenu
+        
+        item = self.tree.itemAt(position)
+        if not item:
+            return
+        
+        menu = QMenu(self.tree)
+        
+        # Determine what was clicked
+        item_type = item.data(0, Qt.UserRole + 3)
+        node_id = item.data(0, Qt.UserRole)
+        
+        # Check if item can be added to Gemini
+        can_add = False
+        if item_type in ("file", "crops_folder"):
+            can_add = True
+        elif item_type not in ("file", "crops_folder", "files_folder") and node_id:
+            try:
+                from uuid import UUID
+                UUID(node_id)
+                can_add = True
+            except (ValueError, TypeError):
+                pass
+        
+        if can_add:
+            if item_type == "crops_folder":
+                action_add = menu.addAction(f"📤 Добавить все кропы в Gemini Files")
+            else:
+                action_add = menu.addAction("📤 Добавить в Gemini Files")
+            action_add.triggered.connect(lambda: asyncio.create_task(self.add_selected_to_context()))
+        
+        if not menu.isEmpty():
+            menu.exec_(self.tree.viewport().mapToGlobal(position))
     
     def eventFilter(self, obj, event):
         """Handle events for tree widget"""

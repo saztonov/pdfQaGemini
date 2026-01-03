@@ -2,7 +2,7 @@
 from typing import Optional
 from uuid import UUID
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QSplitter, QToolBar
+    QMainWindow, QWidget, QVBoxLayout, QSplitter
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
@@ -66,7 +66,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
     
     def _setup_ui(self):
         """Initialize UI components"""
-        self._create_toolbar()
+        self._create_menu()
         
         central = QWidget()
         self.setCentralWidget(central)
@@ -74,7 +74,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        splitter = QSplitter(Qt.Horizontal)
+        self.splitter = QSplitter(Qt.Horizontal)
         
         self.left_panel = LeftProjectsPanel(
             supabase_repo=self.supabase_repo,
@@ -89,60 +89,95 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             trace_store=self.trace_store
         )
         
-        splitter.addWidget(self.left_panel)
-        splitter.addWidget(self.chat_panel)
-        splitter.addWidget(self.right_panel)
+        self.splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.chat_panel)
+        self.splitter.addWidget(self.right_panel)
         
-        splitter.setSizes([280, 700, 420])
+        self.splitter.setSizes([280, 700, 420])
         
-        layout.addWidget(splitter)
+        layout.addWidget(self.splitter)
     
-    def _create_toolbar(self):
-        """Create main toolbar"""
-        toolbar = QToolBar("Панель инструментов")
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
+    def _create_menu(self):
+        """Create main menu"""
+        menubar = self.menuBar()
         
-        self.action_connect = QAction("🔌 Подключиться", self)
+        # Меню "Файл"
+        file_menu = menubar.addMenu("Файл")
+        
+        self.action_connect = QAction("Подключиться", self)
+        self.action_connect.setShortcut("F5")
         self.action_connect.setToolTip("Загрузить настройки и подключиться")
         self.action_connect.triggered.connect(self._on_connect)
-        toolbar.addAction(self.action_connect)
+        file_menu.addAction(self.action_connect)
         
-        toolbar.addSeparator()
+        file_menu.addSeparator()
         
-        self.action_refresh_tree = QAction("🔄 Дерево", self)
-        self.action_refresh_tree.setToolTip("Обновить дерево проектов")
-        self.action_refresh_tree.triggered.connect(self._on_refresh_tree)
-        self.action_refresh_tree.setEnabled(False)
-        toolbar.addAction(self.action_refresh_tree)
-        
-        self.action_upload = QAction("📤 Загрузить в Gemini", self)
+        self.action_upload = QAction("Загрузить в Gemini", self)
+        self.action_upload.setShortcut("Ctrl+U")
         self.action_upload.setToolTip("Загрузить выбранные файлы в Gemini Files")
         self.action_upload.triggered.connect(self._on_upload_selected)
         self.action_upload.setEnabled(False)
-        toolbar.addAction(self.action_upload)
+        file_menu.addAction(self.action_upload)
         
-        toolbar.addSeparator()
+        file_menu.addSeparator()
         
-        self.action_refresh_gemini = QAction("♻️ Gemini Files", self)
+        action_exit = QAction("Выход", self)
+        action_exit.setShortcut("Alt+F4")
+        action_exit.triggered.connect(self.close)
+        file_menu.addAction(action_exit)
+        
+        # Меню "Вид"
+        view_menu = menubar.addMenu("Вид")
+        
+        self.action_refresh_tree = QAction("Обновить дерево проектов", self)
+        self.action_refresh_tree.setShortcut("Ctrl+R")
+        self.action_refresh_tree.setToolTip("Обновить дерево проектов")
+        self.action_refresh_tree.triggered.connect(self._on_refresh_tree)
+        self.action_refresh_tree.setEnabled(False)
+        view_menu.addAction(self.action_refresh_tree)
+        
+        self.action_refresh_gemini = QAction("Обновить Gemini Files", self)
+        self.action_refresh_gemini.setShortcut("Ctrl+Shift+R")
         self.action_refresh_gemini.setToolTip("Обновить список Gemini Files")
         self.action_refresh_gemini.triggered.connect(self._on_refresh_gemini)
         self.action_refresh_gemini.setEnabled(False)
-        toolbar.addAction(self.action_refresh_gemini)
+        view_menu.addAction(self.action_refresh_gemini)
         
-        toolbar.addSeparator()
+        view_menu.addSeparator()
         
-        self.action_model_inspector = QAction("🔍 Инспектор", self)
+        self.action_model_inspector = QAction("Инспектор модели", self)
+        self.action_model_inspector.setShortcut("Ctrl+I")
         self.action_model_inspector.setToolTip("Открыть инспектор логов модели")
         self.action_model_inspector.triggered.connect(self._on_open_inspector)
-        toolbar.addAction(self.action_model_inspector)
+        view_menu.addAction(self.action_model_inspector)
         
-        toolbar.addSeparator()
+        view_menu.addSeparator()
         
-        self.action_settings = QAction("⚙️ Настройки", self)
+        # Подменю "Панели"
+        panels_menu = view_menu.addMenu("Панели")
+        
+        self.action_toggle_left = QAction("Панель проектов", self)
+        self.action_toggle_left.setCheckable(True)
+        self.action_toggle_left.setChecked(True)
+        self.action_toggle_left.setShortcut("Ctrl+1")
+        self.action_toggle_left.triggered.connect(self._toggle_left_panel)
+        panels_menu.addAction(self.action_toggle_left)
+        
+        self.action_toggle_right = QAction("Панель контекста", self)
+        self.action_toggle_right.setCheckable(True)
+        self.action_toggle_right.setChecked(True)
+        self.action_toggle_right.setShortcut("Ctrl+2")
+        self.action_toggle_right.triggered.connect(self._toggle_right_panel)
+        panels_menu.addAction(self.action_toggle_right)
+        
+        # Меню "Настройки"
+        settings_menu = menubar.addMenu("Настройки")
+        
+        self.action_settings = QAction("Настройки подключения", self)
+        self.action_settings.setShortcut("Ctrl+,")
         self.action_settings.setToolTip("Настройки подключения")
         self.action_settings.triggered.connect(self._on_open_settings)
-        toolbar.addAction(self.action_settings)
+        settings_menu.addAction(self.action_settings)
     
     def _connect_signals(self):
         """Connect panel signals"""
@@ -264,8 +299,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             # Just load files
             
             # Load Gemini files and sync to chat
-            if self.right_panel:
-                conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+            if self.right_panel and self.current_conversation_id:
+                conv_id = str(self.current_conversation_id)
                 await self.right_panel.refresh_files(conversation_id=conv_id)
                 self._sync_files_to_chat()
             
@@ -289,7 +324,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         if not self.current_conversation_id and self.supabase_repo:
             try:
                 from datetime import datetime
-                timestamp = datetime.now().strftime("%d.%m.%y %H:%M")
+                from app.utils.time_utils import format_time
+                timestamp = format_time(datetime.utcnow(), "%d.%m.%y %H:%M")
                 conv = await self.supabase_repo.qa_create_conversation(
                     title=f"Чат {timestamp}",
                 )
@@ -331,6 +367,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
             await self.right_panel.refresh_files(conversation_id=conv_id)
             self._sync_files_to_chat()
+            # Refresh chats list to update file count
+            await self.right_panel.refresh_chats()
     
     def _on_open_inspector(self):
         """Open Model Inspector window"""
@@ -340,6 +378,20 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.inspector_window.show()
         self.inspector_window.raise_()
         self.inspector_window.activateWindow()
+    
+    def _toggle_left_panel(self):
+        """Toggle left panel visibility"""
+        if self.left_panel:
+            is_visible = self.left_panel.isVisible()
+            self.left_panel.setVisible(not is_visible)
+            self.action_toggle_left.setChecked(not is_visible)
+    
+    def _toggle_right_panel(self):
+        """Toggle right panel visibility"""
+        if self.right_panel:
+            is_visible = self.right_panel.isVisible()
+            self.right_panel.setVisible(not is_visible)
+            self.action_toggle_right.setChecked(not is_visible)
     
     async def _load_gemini_models(self):
         """Load available Gemini models"""
@@ -381,13 +433,14 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             messages = await self.supabase_repo.qa_list_messages(conversation_id)
             
             # Convert to chat panel format
+            from app.utils.time_utils import format_time
             chat_messages = []
             for msg in messages:
                 chat_messages.append({
                     "role": msg.role,
                     "content": msg.content,
                     "meta": msg.meta,
-                    "timestamp": msg.created_at.strftime("%H:%M:%S") if msg.created_at else "",
+                    "timestamp": format_time(msg.created_at, "%H:%M:%S") if msg.created_at else "",
                 })
             
             # Load history to chat panel
@@ -399,7 +452,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
                 await self.right_panel.refresh_files(conversation_id=conversation_id)
                 self._sync_files_to_chat()
             
-            self.toast_manager.success(f"Чат загружен: {len(messages)} сообщений")
+            logger.info(f"Чат загружен: {len(messages)} сообщений")
         
         except Exception as e:
             logger.error(f"Ошибка переключения чата: {e}", exc_info=True)

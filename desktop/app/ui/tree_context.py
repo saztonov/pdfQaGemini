@@ -58,6 +58,7 @@ class TreeContextMixin:
             
             # Handle crops_folder - collect all crop files inside
             if item_type == "crops_folder":
+                crops_count = 0
                 for i in range(item.childCount()):
                     child = item.child(i)
                     child_type = child.data(0, Qt.UserRole + 3)
@@ -66,6 +67,8 @@ class TreeContextMixin:
                         file_info = self._extract_file_info_from_crop(child, item)
                         if file_info:
                             selected_files_info.append(file_info)
+                            crops_count += 1
+                logger.info(f"Выбрана папка кропов, добавлено {crops_count} файлов")
                 continue
             
             # Handle regular nodes

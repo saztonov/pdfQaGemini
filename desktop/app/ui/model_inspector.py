@@ -202,8 +202,9 @@ class ModelInspectorWindow(QMainWindow):
         self.trace_list.clear()
         traces = self.trace_store.list()
         
+        from app.utils.time_utils import format_time
         for trace in traces:
-            time_str = trace.ts.strftime("%H:%M:%S")
+            time_str = format_time(trace.ts, "%H:%M:%S")
             latency_str = f"{trace.latency_ms:.0f}ms" if trace.latency_ms else "—"
             files_count = len(trace.input_files)
             
@@ -265,12 +266,12 @@ class ModelInspectorWindow(QMainWindow):
 📁 Входных файлов:   {len(trace.input_files)}
 
 ═══════════════════════════════════════════════════════════
-                    ИДЕНТИФИКАТОРЫ
+                   ИДЕНТИФИКАТОРЫ
 ═══════════════════════════════════════════════════════════
 
 🆔 ID диалога:     {trace.conversation_id}
 🔖 ID трассировки: {trace.id}
-🕐 Время:          {trace.ts.isoformat()}
+🕐 Время:          {format_time(trace.ts, "%Y-%m-%d %H:%M:%S")}
 
 ═══════════════════════════════════════════════════════════
                     ВХОДНЫЕ ФАЙЛЫ
