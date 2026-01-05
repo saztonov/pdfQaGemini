@@ -53,6 +53,7 @@ class FileType(str, Enum):
     ANNOTATION = "annotation"  # Разметка блоков ({name}_annotation.json)
     OCR_HTML = "ocr_html"  # HTML результат ({name}_ocr.html)
     RESULT_JSON = "result_json"  # Полный результат ({name}_result.json)
+    RESULT_MD = "result_md"  # Markdown результат ({name}_document.md)
     CROP = "crop"  # Кропы изображений (в папке crops/)
 
 
@@ -62,6 +63,7 @@ FILE_TYPE_ICONS = {
     FileType.ANNOTATION: "📋",
     FileType.OCR_HTML: "📝",
     FileType.RESULT_JSON: "📊",
+    FileType.RESULT_MD: "📝",
     FileType.CROP: "🖼️",
 }
 
@@ -71,6 +73,7 @@ FILE_TYPE_COLORS = {
     FileType.ANNOTATION: "#FF69B4",
     FileType.OCR_HTML: "#FFD700",
     FileType.RESULT_JSON: "#32CD32",
+    FileType.RESULT_MD: "#87CEEB",
     FileType.CROP: "#9370DB",
 }
 

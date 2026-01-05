@@ -366,6 +366,8 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                 for nf in node_files:
                     if nf.file_type == FileType.PDF.value:
                         continue
+                    if nf.file_type == "crops_folder":  # Skip legacy crops_folder entries
+                        continue
                     if nf.file_type == FileType.CROP.value:
                         crops.append(nf)
                     else:
