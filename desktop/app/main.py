@@ -1,12 +1,38 @@
 """Application entry point"""
 import sys
+import os
 import asyncio
 import logging
+import shutil
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QDir
 import qasync
 from app.ui.main_window import MainWindow
+
+
+def clear_cache():
+    """Clear Python and Qt caches on startup"""
+    # Disable Python bytecode cache
+    sys.dont_write_bytecode = True
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    # Clear __pycache__ directories in app folder
+    app_dir = Path(__file__).parent
+    for pycache in app_dir.rglob("__pycache__"):
+        try:
+            shutil.rmtree(pycache)
+        except Exception:
+            pass
+
+    # Clear Qt cache directory
+    qt_cache = Path(QDir.tempPath()) / "pdfQaGemini"
+    if qt_cache.exists():
+        try:
+            shutil.rmtree(qt_cache)
+        except Exception:
+            pass
 
 
 def setup_logging():
@@ -39,6 +65,7 @@ def setup_logging():
 
 def main():
     """Main entry point with qasync integration"""
+    clear_cache()
     setup_logging()
 
     app = QApplication(sys.argv)
