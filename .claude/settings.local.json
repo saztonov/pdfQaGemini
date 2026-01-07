@@ -51,7 +51,12 @@
       "Bash(server/app/utils/errors.py )",
       "Bash(server/app/utils/retry.py )",
       "Bash(shared/)",
-      "Bash(dir \"C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini\\\\test\" /s)"
+      "Bash(dir \"C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini\\\\test\" /s)",
+      "WebFetch(domain:googleapis.github.io)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:developers.cloudflare.com)"
     ]
   }
 }
