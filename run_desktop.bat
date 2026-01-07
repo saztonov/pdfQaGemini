@@ -13,4 +13,3 @@ echo.
 
 cd /d "%~dp0desktop"
 python -B -m app.main
-pause
