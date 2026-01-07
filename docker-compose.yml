@@ -7,6 +7,7 @@ services:
       - "8888:8888"
     volumes:
       - ./server:/app
+      - ./shared:/shared
       - ./logs:/logs
     env_file:
       - ./server/.env
@@ -14,6 +15,7 @@ services:
       - REDIS_HOST=redis
       - HOST=0.0.0.0
       - PORT=8888
+      - PYTHONPATH=/
     depends_on:
       - redis
     command: uvicorn app.main:app --host 0.0.0.0 --port 8888 --reload
@@ -22,11 +24,13 @@ services:
     build: ./server
     volumes:
       - ./server:/app
+      - ./shared:/shared
       - ./logs:/logs
     env_file:
       - ./server/.env
     environment:
       - REDIS_HOST=redis
+      - PYTHONPATH=/
     depends_on:
       - redis
     command: watchfiles "python run_worker.py" /app
