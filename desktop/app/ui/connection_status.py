@@ -37,7 +37,12 @@ class ConnectionChecker(QObject):
         self._timer.stop()
 
     def _check_internet(self):
-        asyncio.create_task(self._async_check())
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self._async_check())
+        except RuntimeError:
+            pass
 
     async def _async_check(self):
         try:

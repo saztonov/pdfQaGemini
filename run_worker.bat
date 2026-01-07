@@ -6,5 +6,5 @@ echo ========================================
 echo.
 echo Logs: ..\logs\worker.log
 echo.
-arq app.worker.settings.WorkerSettings
+python run_worker.py
 pause
