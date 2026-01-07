@@ -33,13 +33,13 @@ NODE_ICONS = {
     "document": "📄",
 }
 
-# Node type colors
+# Node type colors - unified white for all types
 NODE_COLORS = {
-    "project": "#FFD700",
-    "section": "#FF69B4",
-    "subsection": "#9370DB",
-    "document_set": "#32CD32",
-    "document": "#FFFFFF",
+    "project": "#e0e0e0",
+    "section": "#e0e0e0",
+    "subsection": "#e0e0e0",
+    "document_set": "#e0e0e0",
+    "document": "#e0e0e0",
 }
 
 
@@ -187,10 +187,22 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
 
         layout.addWidget(self.tree, 1)
 
-        # Footer with project count
+        # Footer with statistics
+        footer_widget = QWidget()
+        footer_widget.setStyleSheet("background-color: #252526; border-top: 1px solid #3e3e42;")
+        footer_layout = QVBoxLayout(footer_widget)
+        footer_layout.setContentsMargins(8, 4, 8, 4)
+        footer_layout.setSpacing(2)
+
         self.footer_label = QLabel("Проектов: 0")
-        self.footer_label.setStyleSheet("color: #666; font-size: 8pt; padding: 4px;")
-        layout.addWidget(self.footer_label)
+        self.footer_label.setStyleSheet("color: #bbbbbb; font-size: 9pt;")
+        footer_layout.addWidget(self.footer_label)
+
+        self.stats_label = QLabel("📄 PDF: 0  |  📝 MD: 0  |  📦 Папок с PDF: 0")
+        self.stats_label.setStyleSheet("color: #888888; font-size: 8pt;")
+        footer_layout.addWidget(self.stats_label)
+
+        layout.addWidget(footer_widget)
 
     def _icon_button_style(self) -> str:
         return """
@@ -319,14 +331,24 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             roots = await self.supabase_repo.fetch_roots(client_id=client_id)
             logger.info(f"Получено {len(roots)} корневых узлов")
 
-            roots_sorted = sorted(roots, key=lambda n: n.name.lower())
-
-            for node in roots_sorted:
+            # Keep sort order from Supabase (sort_order, then name)
+            for node in roots:
                 self._add_node_item(None, node)
                 if node.node_type == "project":
                     self._project_count += 1
 
             self.footer_label.setText(f"Проектов: {self._project_count}")
+
+            # Load statistics
+            try:
+                stats = await self.supabase_repo.fetch_tree_stats()
+                self.stats_label.setText(
+                    f"📄 PDF: {stats['pdf_files']}  |  "
+                    f"📝 MD: {stats['md_files']}  |  "
+                    f"📦 Папок с PDF: {stats['document_sets']}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load stats: {e}")
 
             if self.toast_manager:
                 self.toast_manager.success(f"Загружено {len(roots)} корневых узлов")
@@ -353,76 +375,36 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             if parent_node_type == "document":
                 node_files = await self.supabase_repo.fetch_node_files_single(parent_id)
 
-                if not node_files:
+                # Filter: only show OCR_HTML and RESULT_MD files
+                allowed_types = {FileType.OCR_HTML.value, FileType.RESULT_MD.value}
+                visible_files = [nf for nf in node_files if nf.file_type in allowed_types]
+
+                if not visible_files:
                     no_files_item = QTreeWidgetItem()
                     no_files_item.setText(0, "Нет файлов")
                     no_files_item.setForeground(0, QBrush(QColor("#666")))
                     parent_item.addChild(no_files_item)
                     return
 
-                crops = []
-                main_files = []
+                # Sort: OCR_HTML first, then RESULT_MD
+                sort_order = {FileType.OCR_HTML.value: 0, FileType.RESULT_MD.value: 1}
+                visible_files.sort(key=lambda f: sort_order.get(f.file_type, 99))
 
-                for nf in node_files:
-                    if nf.file_type == FileType.PDF.value:
-                        continue
-                    if nf.file_type == "crops_folder":  # Skip legacy crops_folder entries
-                        continue
-                    if nf.file_type == FileType.CROP.value:
-                        crops.append(nf)
-                    else:
-                        main_files.append(nf)
-
-                for nf in sorted(main_files, key=lambda f: f.file_type):
-                    try:
-                        ft = FileType(nf.file_type)
-                        icon = FILE_TYPE_ICONS.get(ft, "📄")
-                        color = FILE_TYPE_COLORS.get(ft, "#FFFFFF")
-                    except ValueError:
-                        icon = "📄"
-                        color = "#FFFFFF"
-
+                for nf in visible_files:
                     file_item = QTreeWidgetItem()
-                    file_item.setText(0, f"{icon} {nf.file_name}")
-                    file_item.setForeground(0, QBrush(QColor(color)))
+                    file_item.setText(0, f"📝 {nf.file_name}")
+                    file_item.setForeground(0, QBrush(QColor("#e0e0e0")))
                     file_item.setData(0, Qt.UserRole, str(nf.id))
                     file_item.setData(0, Qt.UserRole + 3, "file")
                     file_item.setData(0, Qt.UserRole + 4, nf.r2_key)
                     file_item.setData(0, Qt.UserRole + 5, nf.file_type)
                     file_item.setData(0, Qt.UserRole + 6, nf.mime_type)
                     parent_item.addChild(file_item)
-
-                if crops:
-                    logger.info(
-                        f"Создание папки кропов с {len(crops)} файлами для узла {parent_id}"
-                    )
-                    crops_item = QTreeWidgetItem()
-                    crops_item.setText(0, f"✂️ Кропы ({len(crops)})")
-                    crops_item.setForeground(0, QBrush(QColor("#9370DB")))
-                    crops_item.setData(0, Qt.UserRole, None)
-                    crops_item.setData(0, Qt.UserRole + 3, "crops_folder")
-                    parent_item.addChild(crops_item)
-
-                    for nf in sorted(crops, key=lambda f: f.file_name):
-                        crop_item = QTreeWidgetItem()
-                        crop_item.setText(0, f"🖼️ {nf.file_name}")
-                        crop_item.setForeground(0, QBrush(QColor("#9370DB")))
-                        crop_item.setData(0, Qt.UserRole, str(nf.id))
-                        crop_item.setData(0, Qt.UserRole + 3, "file")
-                        crop_item.setData(0, Qt.UserRole + 4, nf.r2_key)
-                        crop_item.setData(0, Qt.UserRole + 5, FileType.CROP.value)
-                        crop_item.setData(0, Qt.UserRole + 6, nf.mime_type)
-                        crops_item.addChild(crop_item)
-
-                    # Auto-expand crops folder if not too many files
-                    if len(crops) <= 10:
-                        crops_item.setExpanded(True)
             else:
                 children = await self.supabase_repo.fetch_children(parent_id)
 
-                children_sorted = sorted(children, key=lambda n: n.name.lower())
-
-                for node in children_sorted:
+                # Keep sort order from Supabase (sort_order, then name)
+                for node in children:
                     self._add_node_item(parent_item, node)
 
         except Exception as e:
@@ -486,6 +468,29 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
 
         menu = QMenu(self.tree)
 
+        # Стилизация контекстного меню
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #252526;
+                color: #cccccc;
+                border: 1px solid #3e3e42;
+                padding: 4px 0px;
+            }
+            QMenu::item {
+                padding: 8px 24px 8px 12px;
+                margin: 0px;
+            }
+            QMenu::item:selected {
+                background-color: #094771;
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #3e3e42;
+                margin: 4px 8px;
+            }
+        """)
+
         # Determine what was clicked
         item_type = item.data(0, Qt.UserRole + 3)
         node_id = item.data(0, Qt.UserRole)
@@ -505,9 +510,9 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
 
         if can_add:
             if item_type == "crops_folder":
-                action_add = menu.addAction("📤 Добавить все кропы в Gemini Files")
+                action_add = menu.addAction("📤  Добавить все кропы в Gemini Files")
             else:
-                action_add = menu.addAction("📤 Добавить в Gemini Files")
+                action_add = menu.addAction("📤  Добавить в Gemini Files")
             action_add.triggered.connect(
                 lambda: asyncio.create_task(self.add_selected_to_context())
             )

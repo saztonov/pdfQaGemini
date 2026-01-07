@@ -14,6 +14,7 @@ __pycache__/
 /logs/
 *.log
 .DS_Store
+nul
 
 # Локальные настройки (если будут)
 .env

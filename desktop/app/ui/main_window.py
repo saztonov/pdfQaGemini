@@ -13,6 +13,7 @@ from app.ui.toast import ToastManager
 from app.ui.left_projects_panel import LeftProjectsPanel
 from app.ui.chat_panel import ChatPanel
 from app.ui.right_context_panel import RightContextPanel
+from app.ui.connection_status import ConnectionStatusWidget
 from app.ui.main_window_handlers import MainWindowHandlers
 from app.ui.main_window_actions import ModelActionsHandler
 from app.services.agent import Agent
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.left_panel: Optional[LeftProjectsPanel] = None
         self.chat_panel: Optional[ChatPanel] = None
         self.right_panel: Optional[RightContextPanel] = None
+        self.connection_status: Optional[ConnectionStatusWidget] = None
 
         self._setup_ui()
         self._connect_signals()
@@ -102,22 +104,63 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         layout.addWidget(self.splitter)
 
+        # Connection status bar at bottom right
+        self.connection_status = ConnectionStatusWidget(self)
+        layout.addWidget(self.connection_status)
+
     def _create_menu(self):
         """Create main menu"""
         menubar = self.menuBar()
 
+        # Стилизация меню в темной теме
+        menu_style = """
+            QMenuBar {
+                background-color: #1e1e1e;
+                color: #cccccc;
+                border-bottom: 1px solid #3e3e42;
+                padding: 2px 0px;
+            }
+            QMenuBar::item {
+                background-color: transparent;
+                padding: 6px 12px;
+                margin: 0px;
+            }
+            QMenuBar::item:selected {
+                background-color: #094771;
+                color: #ffffff;
+            }
+            QMenuBar::item:pressed {
+                background-color: #0e639c;
+            }
+            QMenu {
+                background-color: #252526;
+                color: #cccccc;
+                border: 1px solid #3e3e42;
+                padding: 4px 0px;
+            }
+            QMenu::item {
+                padding: 8px 32px 8px 12px;
+                margin: 0px;
+            }
+            QMenu::item:selected {
+                background-color: #094771;
+                color: #ffffff;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #3e3e42;
+                margin: 4px 8px;
+            }
+            QMenu::icon {
+                margin-left: 8px;
+            }
+        """
+        menubar.setStyleSheet(menu_style)
+
         # Меню "Файл"
-        file_menu = menubar.addMenu("Файл")
+        file_menu = menubar.addMenu("📁 Файл")
 
-        self.action_connect = QAction("Подключиться", self)
-        self.action_connect.setShortcut("F5")
-        self.action_connect.setToolTip("Загрузить настройки и подключиться")
-        self.action_connect.triggered.connect(self._on_connect)
-        file_menu.addAction(self.action_connect)
-
-        file_menu.addSeparator()
-
-        self.action_upload = QAction("Загрузить в Gemini", self)
+        self.action_upload = QAction("📤  Загрузить в Gemini", self)
         self.action_upload.setShortcut("Ctrl+U")
         self.action_upload.setToolTip("Загрузить выбранные файлы в Gemini Files")
         self.action_upload.triggered.connect(self._on_upload_selected)
@@ -126,22 +169,22 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         file_menu.addSeparator()
 
-        action_exit = QAction("Выход", self)
+        action_exit = QAction("🚪  Выход", self)
         action_exit.setShortcut("Alt+F4")
         action_exit.triggered.connect(self.close)
         file_menu.addAction(action_exit)
 
         # Меню "Вид"
-        view_menu = menubar.addMenu("Вид")
+        view_menu = menubar.addMenu("👁 Вид")
 
-        self.action_refresh_tree = QAction("Обновить дерево проектов", self)
+        self.action_refresh_tree = QAction("🔄  Обновить дерево проектов", self)
         self.action_refresh_tree.setShortcut("Ctrl+R")
         self.action_refresh_tree.setToolTip("Обновить дерево проектов")
         self.action_refresh_tree.triggered.connect(self._on_refresh_tree)
         self.action_refresh_tree.setEnabled(False)
         view_menu.addAction(self.action_refresh_tree)
 
-        self.action_refresh_gemini = QAction("Обновить Gemini Files", self)
+        self.action_refresh_gemini = QAction("🔄  Обновить Gemini Files", self)
         self.action_refresh_gemini.setShortcut("Ctrl+Shift+R")
         self.action_refresh_gemini.setToolTip("Обновить список Gemini Files")
         self.action_refresh_gemini.triggered.connect(self._on_refresh_gemini)
@@ -150,7 +193,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         view_menu.addSeparator()
 
-        self.action_model_inspector = QAction("🔍 Инспектор модели", self)
+        self.action_model_inspector = QAction("🔍  Инспектор модели", self)
         self.action_model_inspector.setShortcut("Ctrl+I")
         self.action_model_inspector.setToolTip("Открыть инспектор модели с полными логами, мыслями и токенами")
         self.action_model_inspector.triggered.connect(self._on_open_inspector)
@@ -159,16 +202,16 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         view_menu.addSeparator()
 
         # Подменю "Панели"
-        panels_menu = view_menu.addMenu("Панели")
+        panels_menu = view_menu.addMenu("📋  Панели")
 
-        self.action_toggle_left = QAction("Панель проектов", self)
+        self.action_toggle_left = QAction("📂  Панель проектов", self)
         self.action_toggle_left.setCheckable(True)
         self.action_toggle_left.setChecked(True)
         self.action_toggle_left.setShortcut("Ctrl+1")
         self.action_toggle_left.triggered.connect(self._toggle_left_panel)
         panels_menu.addAction(self.action_toggle_left)
 
-        self.action_toggle_right = QAction("Панель контекста", self)
+        self.action_toggle_right = QAction("📎  Панель контекста", self)
         self.action_toggle_right.setCheckable(True)
         self.action_toggle_right.setChecked(True)
         self.action_toggle_right.setShortcut("Ctrl+2")
@@ -176,9 +219,9 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         panels_menu.addAction(self.action_toggle_right)
 
         # Меню "Настройки"
-        settings_menu = menubar.addMenu("Настройки")
+        settings_menu = menubar.addMenu("⚙️ Настройки")
 
-        self.action_settings = QAction("Настройки подключения", self)
+        self.action_settings = QAction("🔌  Настройки подключения", self)
         self.action_settings.setShortcut("Ctrl+,")
         self.action_settings.setToolTip("Настройки подключения")
         self.action_settings.triggered.connect(self._on_open_settings)
@@ -186,7 +229,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
         settings_menu.addSeparator()
 
-        self.action_prompts = QAction("Промты", self)
+        self.action_prompts = QAction("📝  Промты", self)
         self.action_prompts.setShortcut("Ctrl+P")
         self.action_prompts.setToolTip("Управление промтами")
         self.action_prompts.triggered.connect(self._on_open_prompts)
@@ -243,9 +286,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         """Open settings dialog"""
         dialog = SettingsDialog(self)
         if dialog.exec():
-            self.toast_manager.success(
-                "Настройки сохранены. Нажмите 'Подключиться' для применения."
-            )
+            self.toast_manager.success("Настройки сохранены. Переподключение...")
+            asyncio.create_task(self._on_connect())
 
     def _on_open_prompts(self):
         """Open prompts management dialog"""
@@ -321,6 +363,8 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             return
 
         self.toast_manager.info("Подключение к серверу...")
+        if self.connection_status:
+            self.connection_status.set_server_connecting()
 
         try:
             local_settings = SettingsDialog.get_settings()
@@ -441,10 +485,14 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
             logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
             self.toast_manager.success(f"✓ Подключено как {self.client_id}")
+            if self.connection_status:
+                self.connection_status.set_server_connected(self.client_id)
 
         except Exception as e:
             logger.error(f"ОШИБКА ПОДКЛЮЧЕНИЯ: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
+            if self.connection_status:
+                self.connection_status.set_server_error(str(e))
             # Clear server config on error
             SettingsDialog.clear_server_config()
 
@@ -706,12 +754,20 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         """Handle realtime connection status change"""
         if is_connected:
             logger.info("Realtime connected")
+            if self.connection_status:
+                self.connection_status.set_server_connected(self.client_id)
         else:
             logger.warning("Realtime disconnected")
             self.toast_manager.warning("Соединение с сервером потеряно")
+            if self.connection_status:
+                self.connection_status.set_server_disconnected()
 
     async def closeEvent(self, event):
         """Clean up on window close"""
+        # Stop connection checker
+        if self.connection_status:
+            self.connection_status.cleanup()
+
         # Disconnect realtime client
         if self.realtime_client:
             await self.realtime_client.disconnect()

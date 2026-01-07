@@ -707,3 +707,34 @@ class SupabaseRepo:
             return None
 
         return await asyncio.to_thread(_sync_get)
+
+    async def fetch_tree_stats(self) -> dict:
+        """Fetch tree statistics: projects, documents, document_sets, pdf/md files"""
+
+        def _sync_fetch():
+            client = self._get_client()
+
+            # Count node types
+            nodes_response = client.table("tree_nodes").select("node_type").execute()
+            nodes = nodes_response.data
+
+            project_count = sum(1 for n in nodes if n["node_type"] == "project")
+            document_count = sum(1 for n in nodes if n["node_type"] == "document")
+            document_set_count = sum(1 for n in nodes if n["node_type"] == "document_set")
+
+            # Count file types
+            files_response = client.table("node_files").select("file_type").execute()
+            files = files_response.data
+
+            pdf_count = sum(1 for f in files if f["file_type"] == "pdf")
+            md_count = sum(1 for f in files if f["file_type"] == "result_md")
+
+            return {
+                "projects": project_count,
+                "documents": document_count,
+                "document_sets": document_set_count,
+                "pdf_files": pdf_count,
+                "md_files": md_count,
+            }
+
+        return await asyncio.to_thread(_sync_fetch)
