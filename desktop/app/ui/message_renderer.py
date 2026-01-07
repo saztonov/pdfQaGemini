@@ -38,6 +38,8 @@ class MessageRenderer:
             return self._render_system_message(content, timestamp, level)
         elif role == "thinking_progress":
             return self._render_thinking_progress(timestamp)
+        elif role == "loading":
+            return self._render_loading_message(content, timestamp)
         return ""
 
     def _render_user_message(self, content: str, timestamp: str, files_info: list = None) -> str:
@@ -140,6 +142,17 @@ class MessageRenderer:
             <div style="margin: 8px 0; padding: 10px 14px; background-color: #fffbf0; border: 1px solid #ffe082; border-radius: 12px; border-left: 3px solid #ffa726;">
                 <div style="font-size: 12px; color: #ef6c00; margin-bottom: 4px;">
                     💭 Размышляю... <span style="color: #666;">{timestamp}</span>
+                </div>
+            </div>
+        """
+
+    def _render_loading_message(self, content: str, timestamp: str) -> str:
+        return f"""
+            <div style="margin: 8px 0; padding: 12px 16px; background-color: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 12px; border-left: 3px solid #9e9e9e;">
+                <div style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-block; animation: pulse 1.5s infinite;">⏳</span>
+                    <span>{self._escape_html(content)}</span>
+                    <span style="color: #999; font-size: 11px;">{timestamp}</span>
                 </div>
             </div>
         """

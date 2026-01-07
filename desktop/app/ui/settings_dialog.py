@@ -36,6 +36,7 @@ class SettingsDialog(QDialog):
 
         # Tabs
         tabs.addTab(self._create_general_tab(), "Общие")
+        tabs.addTab(self._create_server_tab(), "Сервер")
         tabs.addTab(self._create_supabase_tab(), "Supabase")
         tabs.addTab(self._create_r2_tab(), "Cloudflare R2")
         tabs.addTab(self._create_gemini_tab(), "Gemini")
@@ -85,6 +86,32 @@ class SettingsDialog(QDialog):
         self.cache_size_edit = QLineEdit()
         self.cache_size_edit.setPlaceholderText("500")
         form.addRow("Размер кэша (МБ):", self.cache_size_edit)
+
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
+
+    def _create_server_tab(self) -> QWidget:
+        """Create server settings tab"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        group = QGroupBox("Конфигурация сервера")
+        form = QFormLayout(group)
+
+        self.server_url_edit = QLineEdit()
+        self.server_url_edit.setPlaceholderText("http://localhost:8000")
+        form.addRow("URL сервера:", self.server_url_edit)
+
+        # Info label
+        info = QLabel(
+            "URL сервера для API запросов.\n"
+            "Оставьте пустым для локальной работы без сервера."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
+        form.addRow(info)
 
         layout.addWidget(group)
         layout.addStretch()
@@ -187,6 +214,9 @@ class SettingsDialog(QDialog):
         self.cache_dir_edit.setText(self.settings.value("general/cache_dir", "./cache"))
         self.cache_size_edit.setText(self.settings.value("general/cache_size_mb", "500"))
 
+        # Server
+        self.server_url_edit.setText(self.settings.value("server/url", ""))
+
         # Supabase
         self.supabase_url_edit.setText(self.settings.value("supabase/url", ""))
         self.supabase_key_edit.setText(self.settings.value("supabase/key", ""))
@@ -207,6 +237,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("general/client_id", self.client_id_edit.text().strip() or "default")
         self.settings.setValue("general/cache_dir", self.cache_dir_edit.text().strip())
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
+
+        # Server
+        self.settings.setValue("server/url", self.server_url_edit.text().strip())
 
         # Supabase
         self.settings.setValue("supabase/url", self.supabase_url_edit.text().strip())
@@ -239,6 +272,7 @@ class SettingsDialog(QDialog):
             "client_id": settings.value("general/client_id", "default"),
             "cache_dir": settings.value("general/cache_dir", "./cache"),
             "cache_size_mb": int(settings.value("general/cache_size_mb", "500")),
+            "server_url": settings.value("server/url", ""),
             "supabase_url": settings.value("supabase/url", ""),
             "supabase_key": settings.value("supabase/key", ""),
             "r2_public_base_url": settings.value("r2/public_url", ""),
