@@ -6,6 +6,7 @@ app/main.py
 app/api/__init__.py
 app/api/dependencies.py
 app/api/routes/__init__.py
+app/api/routes/auth.py
 app/api/routes/conversations.py
 app/api/routes/files.py
 app/api/routes/health.py

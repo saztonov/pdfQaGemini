@@ -10,7 +10,12 @@
       "Bash(then echo \"File exists\")",
       "Bash(cat:*)",
       "Bash(else echo \"File does NOT exist\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(dir \"C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini\\\\logs\")",
+      "Bash(timeout 15 python:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nИсправлены имена R2 параметров в dependencies.py\n\n- r2_public_base_url → settings.r2_public_url\n- r2_bucket → settings.r2_bucket_name\n- r2_access_key → settings.r2_access_key_id\n- r2_secret_key → settings.r2_secret_access_key\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
