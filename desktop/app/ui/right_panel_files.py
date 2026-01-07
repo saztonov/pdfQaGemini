@@ -296,6 +296,13 @@ class RightPanelFilesMixin:
                     await self.gemini_client.delete_file(name)
                 self._selected_for_request.discard(name)
 
+                # Delete file metadata and links from database
+                if self.supabase_repo:
+                    try:
+                        await self.supabase_repo.qa_delete_gemini_file_by_name(name)
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить метаданные файла из БД: {e}")
+
             await self.refresh_files(conversation_id=self.conversation_id)
             await self.refresh_chats()
 

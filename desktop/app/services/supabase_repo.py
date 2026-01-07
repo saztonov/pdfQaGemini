@@ -314,6 +314,36 @@ class SupabaseRepo:
 
         await asyncio.to_thread(_sync_attach)
 
+    async def qa_delete_gemini_file_by_name(self, gemini_name: str) -> None:
+        """Delete Gemini file and its links from database by gemini_name"""
+
+        def _sync_delete():
+            client = self._get_client()
+
+            # First get the file ID
+            response = (
+                client.table("qa_gemini_files")
+                .select("id")
+                .eq("gemini_name", gemini_name)
+                .limit(1)
+                .execute()
+            )
+
+            if response.data:
+                file_id = response.data[0]["id"]
+
+                # Delete links from qa_conversation_gemini_files
+                client.table("qa_conversation_gemini_files").delete().eq(
+                    "gemini_file_id", file_id
+                ).execute()
+
+                # Delete the file record itself
+                client.table("qa_gemini_files").delete().eq("id", file_id).execute()
+
+                logger.info(f"Deleted Gemini file from DB: {gemini_name}")
+
+        await asyncio.to_thread(_sync_delete)
+
     # Context files (для восстановления состояния контекста)
 
     async def qa_save_context_file(

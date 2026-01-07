@@ -129,10 +129,19 @@ async def list_all_files():
 
 @router.delete("/{file_name:path}")
 async def delete_file(file_name: str):
-    """Delete file from Gemini Files API"""
+    """Delete file from Gemini Files API and database"""
     gemini = get_gemini_client()
+    repo = get_supabase_repo()
     try:
+        # Delete from Gemini
         await gemini.delete_file(file_name)
+
+        # Delete metadata and links from database
+        try:
+            await repo.qa_delete_gemini_file_by_name(file_name)
+        except Exception:
+            pass  # Ignore DB errors, file is already deleted from Gemini
+
         return {"status": "deleted"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
