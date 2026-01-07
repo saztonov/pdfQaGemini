@@ -1,4 +1,4 @@
-"""Settings dialog"""
+"""Settings dialog - simplified for centralized config"""
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -8,19 +8,17 @@ from PySide6.QtWidgets import (
     QPushButton,
     QGroupBox,
     QLabel,
-    QTabWidget,
-    QWidget,
 )
 from PySide6.QtCore import QSettings
 
 
 class SettingsDialog(QDialog):
-    """Settings configuration dialog"""
+    """Settings configuration dialog - server connection only"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Настройки")
-        self.resize(600, 500)
+        self.setWindowTitle("Настройки подключения")
+        self.resize(500, 300)
 
         self.settings = QSettings("pdfQaGemini", "Desktop")
 
@@ -31,17 +29,45 @@ class SettingsDialog(QDialog):
         """Initialize UI"""
         layout = QVBoxLayout(self)
 
-        # Tab widget
-        tabs = QTabWidget()
+        # Server connection group
+        server_group = QGroupBox("Подключение к серверу")
+        server_form = QFormLayout(server_group)
 
-        # Tabs
-        tabs.addTab(self._create_general_tab(), "Общие")
-        tabs.addTab(self._create_server_tab(), "Сервер")
-        tabs.addTab(self._create_supabase_tab(), "Supabase")
-        tabs.addTab(self._create_r2_tab(), "Cloudflare R2")
-        tabs.addTab(self._create_gemini_tab(), "Gemini")
+        self.server_url_edit = QLineEdit()
+        self.server_url_edit.setPlaceholderText("http://localhost:8000")
+        server_form.addRow("URL сервера:", self.server_url_edit)
 
-        layout.addWidget(tabs)
+        self.api_token_edit = QLineEdit()
+        self.api_token_edit.setPlaceholderText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+        self.api_token_edit.setEchoMode(QLineEdit.Password)
+        server_form.addRow("API токен:", self.api_token_edit)
+
+        # Info label
+        info = QLabel(
+            "API токен выдается администратором сервера.\n"
+            "Все остальные настройки (Supabase, Gemini, R2) хранятся на сервере."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #666; font-size: 11px; padding: 10px 5px;")
+        server_form.addRow(info)
+
+        layout.addWidget(server_group)
+
+        # Local settings group
+        local_group = QGroupBox("Локальные настройки")
+        local_form = QFormLayout(local_group)
+
+        self.cache_dir_edit = QLineEdit()
+        self.cache_dir_edit.setPlaceholderText("./cache")
+        local_form.addRow("Папка кэша:", self.cache_dir_edit)
+
+        self.cache_size_edit = QLineEdit()
+        self.cache_size_edit.setPlaceholderText("500")
+        local_form.addRow("Размер кэша (МБ):", self.cache_size_edit)
+
+        layout.addWidget(local_group)
+
+        layout.addStretch()
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -59,239 +85,67 @@ class SettingsDialog(QDialog):
 
         layout.addLayout(button_layout)
 
-    def _create_general_tab(self) -> QWidget:
-        """Create general settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        group = QGroupBox("Общие настройки")
-        form = QFormLayout(group)
-
-        self.client_id_edit = QLineEdit()
-        self.client_id_edit.setPlaceholderText("default")
-        form.addRow("Client ID:", self.client_id_edit)
-
-        # Info label for client_id
-        info = QLabel(
-            "⚠️ Client ID должен совпадать с client_id в таблице tree_nodes БД"
-        )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #ff9800; font-size: 11px; padding: 5px;")
-        form.addRow(info)
-
-        self.cache_dir_edit = QLineEdit()
-        self.cache_dir_edit.setPlaceholderText("./cache")
-        form.addRow("Папка кэша:", self.cache_dir_edit)
-
-        self.cache_size_edit = QLineEdit()
-        self.cache_size_edit.setPlaceholderText("500")
-        form.addRow("Размер кэша (МБ):", self.cache_size_edit)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        return widget
-
-    def _create_server_tab(self) -> QWidget:
-        """Create server settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        group = QGroupBox("Конфигурация сервера")
-        form = QFormLayout(group)
-
-        self.server_url_edit = QLineEdit()
-        self.server_url_edit.setPlaceholderText("http://localhost:8000")
-        form.addRow("URL сервера:", self.server_url_edit)
-
-        # Info label
-        info = QLabel(
-            "URL сервера для API запросов.\n"
-            "Оставьте пустым для локальной работы без сервера."
-        )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        form.addRow(info)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        return widget
-
-    def _create_supabase_tab(self) -> QWidget:
-        """Create Supabase settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        group = QGroupBox("Конфигурация Supabase")
-        form = QFormLayout(group)
-
-        self.supabase_url_edit = QLineEdit()
-        self.supabase_url_edit.setPlaceholderText("https://ваш-проект.supabase.co")
-        form.addRow("URL:", self.supabase_url_edit)
-
-        self.supabase_key_edit = QLineEdit()
-        self.supabase_key_edit.setPlaceholderText("ваш_supabase_ключ")
-        self.supabase_key_edit.setEchoMode(QLineEdit.Password)
-        form.addRow("Ключ:", self.supabase_key_edit)
-
-        # Info label
-        info = QLabel(
-            "⚠️ RLS не используется. Используйте сервисный ключ или обеспечьте контроль доступа."
-        )
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        form.addRow(info)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        return widget
-
-    def _create_r2_tab(self) -> QWidget:
-        """Create R2 settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        group = QGroupBox("Конфигурация Cloudflare R2")
-        form = QFormLayout(group)
-
-        self.r2_account_id_edit = QLineEdit()
-        self.r2_account_id_edit.setPlaceholderText("account_id")
-        form.addRow("Account ID:", self.r2_account_id_edit)
-
-        self.r2_access_key_id_edit = QLineEdit()
-        self.r2_access_key_id_edit.setPlaceholderText("access_key_id")
-        self.r2_access_key_id_edit.setEchoMode(QLineEdit.Password)
-        form.addRow("Access Key ID:", self.r2_access_key_id_edit)
-
-        self.r2_secret_access_key_edit = QLineEdit()
-        self.r2_secret_access_key_edit.setPlaceholderText("secret_access_key")
-        self.r2_secret_access_key_edit.setEchoMode(QLineEdit.Password)
-        form.addRow("Secret Access Key:", self.r2_secret_access_key_edit)
-
-        self.r2_bucket_name_edit = QLineEdit()
-        self.r2_bucket_name_edit.setPlaceholderText("bucket-name")
-        form.addRow("Bucket Name:", self.r2_bucket_name_edit)
-
-        self.r2_public_url_edit = QLineEdit()
-        self.r2_public_url_edit.setPlaceholderText("https://pub-xxx.r2.dev")
-        form.addRow("Public URL:", self.r2_public_url_edit)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        return widget
-
-    def _create_gemini_tab(self) -> QWidget:
-        """Create Gemini settings tab"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        group = QGroupBox("Конфигурация Gemini API")
-        form = QFormLayout(group)
-
-        self.gemini_api_key_edit = QLineEdit()
-        self.gemini_api_key_edit.setPlaceholderText("ваш_gemini_api_ключ")
-        self.gemini_api_key_edit.setEchoMode(QLineEdit.Password)
-        form.addRow("API ключ:", self.gemini_api_key_edit)
-
-        # Info label
-        info = QLabel("Получите API ключ на: https://aistudio.google.com/apikey")
-        info.setWordWrap(True)
-        info.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        form.addRow(info)
-
-        layout.addWidget(group)
-        layout.addStretch()
-
-        return widget
-
     def _load_settings(self):
         """Load settings from QSettings"""
-        # General
-        self.client_id_edit.setText(self.settings.value("general/client_id", "default"))
+        self.server_url_edit.setText(self.settings.value("server/url", ""))
+        self.api_token_edit.setText(self.settings.value("server/api_token", ""))
         self.cache_dir_edit.setText(self.settings.value("general/cache_dir", "./cache"))
         self.cache_size_edit.setText(self.settings.value("general/cache_size_mb", "500"))
 
-        # Server
-        self.server_url_edit.setText(self.settings.value("server/url", ""))
-
-        # Supabase
-        self.supabase_url_edit.setText(self.settings.value("supabase/url", ""))
-        self.supabase_key_edit.setText(self.settings.value("supabase/key", ""))
-
-        # R2
-        self.r2_account_id_edit.setText(self.settings.value("r2/account_id", ""))
-        self.r2_access_key_id_edit.setText(self.settings.value("r2/access_key_id", ""))
-        self.r2_secret_access_key_edit.setText(self.settings.value("r2/secret_access_key", ""))
-        self.r2_bucket_name_edit.setText(self.settings.value("r2/bucket_name", ""))
-        self.r2_public_url_edit.setText(self.settings.value("r2/public_url", ""))
-
-        # Gemini
-        self.gemini_api_key_edit.setText(self.settings.value("gemini/api_key", ""))
-
     def _save_settings(self):
         """Save settings to QSettings"""
-        # General
-        self.settings.setValue("general/client_id", self.client_id_edit.text().strip() or "default")
+        self.settings.setValue("server/url", self.server_url_edit.text().strip())
+        self.settings.setValue("server/api_token", self.api_token_edit.text().strip())
         self.settings.setValue("general/cache_dir", self.cache_dir_edit.text().strip())
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
-
-        # Server
-        self.settings.setValue("server/url", self.server_url_edit.text().strip())
-
-        # Supabase
-        self.settings.setValue("supabase/url", self.supabase_url_edit.text().strip())
-        self.settings.setValue("supabase/key", self.supabase_key_edit.text().strip())
-
-        # R2
-        self.settings.setValue("r2/account_id", self.r2_account_id_edit.text().strip())
-        self.settings.setValue("r2/access_key_id", self.r2_access_key_id_edit.text().strip())
-        self.settings.setValue(
-            "r2/secret_access_key", self.r2_secret_access_key_edit.text().strip()
-        )
-        self.settings.setValue("r2/bucket_name", self.r2_bucket_name_edit.text().strip())
-        self.settings.setValue("r2/public_url", self.r2_public_url_edit.text().strip())
-
-        # Gemini
-        self.settings.setValue("gemini/api_key", self.gemini_api_key_edit.text().strip())
 
         self.settings.sync()
         self.accept()
 
     @staticmethod
     def get_settings() -> dict:
-        """Get current settings as dict"""
+        """Get current settings as dict (local settings only)"""
         settings = QSettings("pdfQaGemini", "Desktop")
 
-        account_id = settings.value("r2/account_id", "")
-        r2_endpoint = f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
-
         return {
-            "client_id": settings.value("general/client_id", "default"),
-            "cache_dir": settings.value("general/cache_dir", "./cache"),
-            "cache_size_mb": int(settings.value("general/cache_size_mb", "500")),
             "server_url": settings.value("server/url", ""),
-            "supabase_url": settings.value("supabase/url", ""),
-            "supabase_key": settings.value("supabase/key", ""),
-            "r2_public_base_url": settings.value("r2/public_url", ""),
-            "r2_endpoint": r2_endpoint,
-            "r2_bucket": settings.value("r2/bucket_name", ""),
-            "r2_access_key": settings.value("r2/access_key_id", ""),
-            "r2_secret_key": settings.value("r2/secret_access_key", ""),
-            "gemini_api_key": settings.value("gemini/api_key", ""),
+            "api_token": settings.value("server/api_token", ""),
+            "cache_dir": settings.value("general/cache_dir", "./cache"),
+            "cache_size_mb": int(settings.value("general/cache_size_mb", "500") or "500"),
         }
 
     @staticmethod
     def is_configured() -> bool:
         """Check if essential settings are configured"""
         settings = SettingsDialog.get_settings()
+        return bool(settings["server_url"] and settings["api_token"])
 
-        required = [
-            settings["supabase_url"],
-            settings["supabase_key"],
-            settings["gemini_api_key"],
-        ]
+    @staticmethod
+    def save_server_config(config: dict) -> None:
+        """Save server config received from API"""
+        settings = QSettings("pdfQaGemini", "Desktop")
+        settings.setValue("server_config/client_id", config.get("client_id", "default"))
+        settings.setValue("server_config/supabase_url", config.get("supabase_url", ""))
+        settings.setValue("server_config/supabase_key", config.get("supabase_key", ""))
+        settings.setValue("server_config/r2_public_base_url", config.get("r2_public_base_url", ""))
+        settings.setValue("server_config/default_model", config.get("default_model", "gemini-2.0-flash"))
+        settings.sync()
 
-        return all(required)
+    @staticmethod
+    def get_server_config() -> dict:
+        """Get cached server config"""
+        settings = QSettings("pdfQaGemini", "Desktop")
+        return {
+            "client_id": settings.value("server_config/client_id", "default"),
+            "supabase_url": settings.value("server_config/supabase_url", ""),
+            "supabase_key": settings.value("server_config/supabase_key", ""),
+            "r2_public_base_url": settings.value("server_config/r2_public_base_url", ""),
+            "default_model": settings.value("server_config/default_model", "gemini-2.0-flash"),
+        }
+
+    @staticmethod
+    def clear_server_config() -> None:
+        """Clear cached server config (on disconnect)"""
+        settings = QSettings("pdfQaGemini", "Desktop")
+        settings.remove("server_config")
+        settings.sync()

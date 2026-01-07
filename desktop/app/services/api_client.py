@@ -12,19 +12,42 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """Async HTTP client for server API"""
 
-    def __init__(self, base_url: str, client_id: str = "default"):
+    def __init__(self, base_url: str, client_id: str = "default", api_token: str = ""):
         self.base_url = base_url.rstrip("/")
         self.client_id = client_id
+        self.api_token = api_token
         self._client: Optional[httpx.AsyncClient] = None
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
+            headers = {"X-Client-ID": self.client_id}
+            if self.api_token:
+                headers["X-API-Token"] = self.api_token
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
                 timeout=httpx.Timeout(60.0, connect=10.0),
-                headers={"X-Client-ID": self.client_id},
+                headers=headers,
             )
         return self._client
+
+    @staticmethod
+    async def fetch_config(server_url: str, api_token: str) -> dict:
+        """
+        Fetch client configuration from server using API token.
+        This is a static method used before APIClient is fully initialized.
+
+        Returns config dict with: client_id, supabase_url, supabase_key,
+        r2_public_base_url, default_model
+
+        Raises httpx.HTTPStatusError on 401 (invalid token) or other errors.
+        """
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            response = await client.get(
+                f"{server_url.rstrip('/')}/api/v1/auth/config",
+                headers={"X-API-Token": api_token},
+            )
+            response.raise_for_status()
+            return response.json()
 
     async def close(self):
         if self._client:
