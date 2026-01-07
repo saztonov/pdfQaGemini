@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git config:*)",
-      "Bash(pre-commit uninstall:*)"
+      "Bash(pre-commit uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nОбновлены параметры R2 в конфигурации сервера.\n\n- Переименованы переменные R2: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL\n- Добавлен extra=\"ignore\" в pydantic Settings для игнорирования лишних переменных\n- Обновлен env.example с новыми именами переменных\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

@@ -47,6 +47,6 @@ async def get_client_config(x_api_token: str = Header(..., description="Client A
         client_id=client_id,
         supabase_url=settings.supabase_url,
         supabase_key=settings.supabase_key,  # anon key for Realtime
-        r2_public_base_url=settings.r2_public_base_url,
+        r2_public_base_url=settings.r2_public_url,
         default_model=default_model,
     )

@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
 
     # R2 Storage
-    r2_public_base_url: str = ""
-    r2_endpoint: str = ""
-    r2_bucket: str = ""
-    r2_access_key: str = ""
-    r2_secret_key: str = ""
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+    r2_public_url: str = ""
 
     # Server
     host: str = "0.0.0.0"
@@ -31,9 +31,17 @@ class Settings(BaseSettings):
     # Default model
     default_model: str = "gemini-3-flash-preview"
 
+    @property
+    def r2_endpoint(self) -> str:
+        """Build R2 endpoint from account_id"""
+        if self.r2_account_id:
+            return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
+        return ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 settings = Settings()

@@ -59,11 +59,11 @@ async def lifespan(app: FastAPI):
         supabase_url=settings.supabase_url,
         supabase_key=settings.supabase_key,
         gemini_api_key=settings.gemini_api_key,
-        r2_public_base_url=settings.r2_public_base_url,
+        r2_public_base_url=settings.r2_public_url,
         r2_endpoint=settings.r2_endpoint,
-        r2_bucket=settings.r2_bucket,
-        r2_access_key=settings.r2_access_key,
-        r2_secret_key=settings.r2_secret_key,
+        r2_bucket=settings.r2_bucket_name,
+        r2_access_key=settings.r2_access_key_id,
+        r2_secret_key=settings.r2_secret_access_key,
         poll_interval=settings.job_poll_interval,
     )
     await job_processor.start()
