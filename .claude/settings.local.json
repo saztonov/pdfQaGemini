@@ -32,7 +32,25 @@
       "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini rm:*)",
       "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini status)",
       "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini add docker-compose.yml server/Dockerfile server/.dockerignore server/app/main.py server/run_worker.py)",
-      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini commit -m \"$\\(cat <<''EOF''\nAdd Docker Compose setup for server and worker\n\n- Add Dockerfile and .dockerignore for server\n- Add docker-compose.yml with web, worker, redis services\n- Update log paths to support Docker volume \\(/logs\\)\n- Remove run_backend.bat \\(replaced by docker compose\\)\n\nHot-reload enabled: uvicorn --reload for web, watchfiles for worker\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini commit -m \"$\\(cat <<''EOF''\nAdd Docker Compose setup for server and worker\n\n- Add Dockerfile and .dockerignore for server\n- Add docker-compose.yml with web, worker, redis services\n- Update log paths to support Docker volume \\(/logs\\)\n- Remove run_backend.bat \\(replaced by docker compose\\)\n\nHot-reload enabled: uvicorn --reload for web, watchfiles for worker\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(desktop/app/ui/chat_panel.py )",
+      "Bash(desktop/app/ui/main_window_handlers.py )",
+      "Bash(desktop/app/ui/right_context_panel.py )",
+      "Bash(desktop/app/ui/chat_widgets.py )",
+      "Bash(desktop/app/ui/handlers_agentic.py )",
+      "Bash(desktop/app/ui/handlers_upload.py )",
+      "Bash(desktop/app/ui/right_panel_chats.py )",
+      "Bash(desktop/app/ui/right_panel_files.py )",
+      "Bash(desktop/app/ui/right_panel_inspector.py )",
+      "Bash(desktop/app/ui/right_panel_styles.py )",
+      "Bash(desktop/app/utils/errors.py )",
+      "Bash(desktop/app/utils/retry.py )",
+      "Bash(server/app/utils/errors.py )",
+      "Bash(server/app/utils/retry.py )",
+      "Bash(shared/)"
     ]
   }
 }

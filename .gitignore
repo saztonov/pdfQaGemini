@@ -31,3 +31,4 @@ local_settings.py
 
 # Документация SDK (статичные файлы)
 /Google Gen AI SDK/
+/.claude/settings.local.json
