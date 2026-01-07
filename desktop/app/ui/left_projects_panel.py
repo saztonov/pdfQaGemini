@@ -24,12 +24,12 @@ from app.ui.tree_context import TreeContextMixin
 
 logger = logging.getLogger(__name__)
 
-# Node type icons (emoji as fallback)
+# Node type icons - folders for all except documents
 NODE_ICONS = {
     "project": "📁",
-    "section": "📂",
-    "subsection": "📑",
-    "document_set": "📦",
+    "section": "📁",
+    "subsection": "📁",
+    "document_set": "📁",
     "document": "📄",
 }
 
@@ -345,7 +345,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                 self.stats_label.setText(
                     f"📄 PDF: {stats['pdf_files']}  |  "
                     f"📝 MD: {stats['md_files']}  |  "
-                    f"📦 Папок с PDF: {stats['document_sets']}"
+                    f"📁 Папок с PDF: {stats['folders_with_pdf']}"
                 )
             except Exception as e:
                 logger.warning(f"Failed to load stats: {e}")
