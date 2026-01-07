@@ -1,5 +1,6 @@
 """Files API routes"""
 
+import sys
 import tempfile
 from pathlib import Path
 from uuid import UUID
@@ -8,6 +9,10 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Header
 
 from app.api.dependencies import get_supabase_repo, get_gemini_client
 from app.models.schemas import GeminiFileResponse
+
+# Add shared module to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent / "shared"))
+from token_counter import count_tokens_file
 
 router = APIRouter()
 
@@ -29,6 +34,9 @@ async def upload_file(
         tmp_path = Path(tmp.name)
 
     try:
+        # Count tokens using tiktoken
+        token_count = count_tokens_file(tmp_path)
+
         # Upload to Gemini
         result = await gemini.upload_file(
             path=tmp_path,
@@ -43,6 +51,7 @@ async def upload_file(
             display_name=file.filename,  # Use original filename from upload
             mime_type=result["mime_type"],
             size_bytes=result.get("size_bytes"),
+            token_count=token_count,
             client_id=x_client_id,
         )
 
@@ -61,6 +70,7 @@ async def upload_file(
             display_name=file.filename,  # Use original filename
             mime_type=result["mime_type"],
             size_bytes=result.get("size_bytes"),
+            token_count=token_count,
         )
 
     finally:

@@ -1,5 +1,6 @@
 """Upload handlers for MainWindow"""
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -8,6 +9,10 @@ from qasync import asyncSlot
 
 from app.services.bundle_builder import DocumentBundleBuilder
 from app.models.schemas import FileType
+
+# Add shared module to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+from token_counter import count_tokens_file, count_tokens_bytes
 
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
@@ -139,12 +144,16 @@ class UploadHandlersMixin:
                     # Use first node_file id as source reference
                     source_node_file_id = str(node_files[0].id) if node_files else None
 
+                    # Count tokens using tiktoken
+                    token_count = count_tokens_bytes(bundle_bytes)
+
                     gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
                         gemini_name=gemini_name,
                         gemini_uri=gemini_uri,
                         display_name=bundle_file_name,
                         mime_type="text/plain",
                         size_bytes=len(bundle_bytes),
+                        token_count=token_count,
                         source_node_file_id=source_node_file_id,
                         source_r2_key=None,
                         expires_at=None,
@@ -277,12 +286,17 @@ class UploadHandlersMixin:
                     if self.supabase_repo and gemini_name:
                         try:
                             node_file_id = file_info.get("id")
+
+                            # Count tokens using tiktoken
+                            token_count = count_tokens_file(cached_path)
+
                             gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
                                 gemini_name=gemini_name,
                                 gemini_uri=gemini_uri,
                                 display_name=file_name,
                                 mime_type=mime_type,
                                 size_bytes=result.get("size_bytes"),
+                                token_count=token_count,
                                 source_node_file_id=node_file_id,
                                 source_r2_key=r2_key,
                                 expires_at=None,

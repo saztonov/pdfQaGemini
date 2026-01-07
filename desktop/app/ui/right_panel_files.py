@@ -88,6 +88,7 @@ class RightPanelFilesMixin:
                         "display_name": f.get("display_name"),
                         "mime_type": f.get("mime_type"),
                         "size_bytes": f.get("size_bytes"),
+                        "token_count": f.get("token_count"),
                         "expiration_time": f.get("expiration_time"),
                     }
                     for f in all_files_raw
@@ -105,7 +106,7 @@ class RightPanelFilesMixin:
                         f.get("gemini_name"): f for f in conv_files if f.get("gemini_name")
                     }
 
-                    # Filter and merge data: expiration_time from Gemini, display_name from DB
+                    # Filter and merge data: expiration_time from Gemini, display_name/token_count from DB
                     merged_files = []
                     for f in all_files:
                         name = f.get("name")
@@ -117,6 +118,7 @@ class RightPanelFilesMixin:
                                 "display_name": db_file.get("display_name") or f.get("display_name"),
                                 "mime_type": db_file.get("mime_type") or f.get("mime_type"),
                                 "size_bytes": db_file.get("size_bytes") or f.get("size_bytes"),
+                                "token_count": db_file.get("token_count") or f.get("token_count"),
                                 "expiration_time": f.get("expiration_time"),
                             })
 
@@ -170,7 +172,7 @@ class RightPanelFilesMixin:
             self.table.setItem(row, 2, QTableWidgetItem(mime_type))
 
             # Size
-            size_bytes = gf.get("size_bytes", 0)
+            size_bytes = gf.get("size_bytes", 0) or 0
             if size_bytes:
                 if size_bytes > 1024 * 1024:
                     size_str = f"{size_bytes / (1024*1024):.1f} MB"
@@ -182,7 +184,30 @@ class RightPanelFilesMixin:
                 size_str = "-"
             self.table.setItem(row, 3, QTableWidgetItem(size_str))
 
-            # Expiration time in hours
+            # Token count from DB or estimate
+            token_count = gf.get("token_count")
+            if token_count:
+                # Exact count from tiktoken
+                if token_count >= 1_000_000:
+                    tokens_str = f"{token_count / 1_000_000:.1f}M"
+                elif token_count >= 1000:
+                    tokens_str = f"{token_count / 1000:.1f}k"
+                else:
+                    tokens_str = str(token_count)
+            elif size_bytes:
+                # Fallback: estimate from size (~4 bytes per token)
+                estimated_tokens = size_bytes // 4
+                if estimated_tokens >= 1_000_000:
+                    tokens_str = f"~{estimated_tokens / 1_000_000:.1f}M"
+                elif estimated_tokens >= 1000:
+                    tokens_str = f"~{estimated_tokens / 1000:.1f}k"
+                else:
+                    tokens_str = f"~{estimated_tokens}"
+            else:
+                tokens_str = "-"
+            self.table.setItem(row, 4, QTableWidgetItem(tokens_str))
+
+            # Expiration time in hours (column 5)
             expiration_time = gf.get("expiration_time")
             if expiration_time:
                 try:
@@ -218,7 +243,7 @@ class RightPanelFilesMixin:
             else:
                 hours_item = QTableWidgetItem("-")
 
-            self.table.setItem(row, 4, hours_item)
+            self.table.setItem(row, 5, hours_item)
 
         self.table.blockSignals(False)
         self._update_files_count()

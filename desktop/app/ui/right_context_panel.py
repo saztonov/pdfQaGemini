@@ -256,13 +256,16 @@ class RightContextPanel(
 
         # Files table
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["✓", "Имя файла", "MIME", "Размер", "Истекает (ч)"])
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(
+            ["✓", "Имя файла", "MIME", "Размер", "Токены", "Истекает (ч)"]
+        )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table.setColumnWidth(0, 40)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
