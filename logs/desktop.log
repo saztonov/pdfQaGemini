@@ -1,110 +1,10 @@
-2026-01-07 11:06:15,780 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
-2026-01-07 11:06:15,780 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
-2026-01-07 11:06:17,313 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
-2026-01-07 11:06:17,321 - app.ui.main_window - INFO - Конфигурация загружена
-2026-01-07 11:06:17,321 - app.ui.main_window - INFO - Используется client_id: 3cbb1afb-b877-4eb5-b2a7-16c358033733
-2026-01-07 11:06:17,520 - app.services.supabase_repo - INFO - Инициализация SupabaseRepo: url=https://zivbesacbxfmwzervmcy.s...
-2026-01-07 11:06:17,520 - app.ui.main_window - INFO - Локальный режим (без сервера)
-2026-01-07 11:06:17,521 - app.ui.left_projects_panel - INFO - LeftProjectsPanel.set_services вызван: supabase_repo=True
-2026-01-07 11:06:17,523 - app.services.supabase_repo - INFO - Создание Supabase клиента...
-2026-01-07 11:06:17,833 - app.services.supabase_repo - INFO - Supabase клиент создан успешно
-2026-01-07 11:06:18,399 - httpx - INFO - HTTP Request: POST https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/rpc/qa_list_conversations_with_stats "HTTP/2 200 OK"
-2026-01-07 11:06:18,448 - app.ui.left_projects_panel - INFO - === ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ для client_id=3cbb1afb-b877-4eb5-b2a7-16c358033733 ===
-2026-01-07 11:06:18,454 - app.services.supabase_repo - INFO - fetch_roots вызван
-2026-01-07 11:06:18,454 - app.services.supabase_repo - INFO - _sync_fetch: получение клиента...
-2026-01-07 11:06:18,454 - app.services.supabase_repo - INFO - _sync_fetch: выполнение запроса к tree_nodes...
-2026-01-07 11:06:18,566 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=is.null&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
-2026-01-07 11:06:18,568 - app.services.supabase_repo - INFO - _sync_fetch: получено 4 записей
-2026-01-07 11:06:18,570 - app.ui.left_projects_panel - ERROR - ОШИБКА ЗАГРУЗКИ: 1 validation error for TreeNode
-client_id
-  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 33, 'files_count': 0}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.12/v/missing
-Traceback (most recent call last):
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\left_projects_panel.py", line 319, in load_roots
-    roots = await self.supabase_repo.fetch_roots(client_id=client_id)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 52, in fetch_roots
-    result = await asyncio.to_thread(_sync_fetch)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\asyncio\threads.py", line 25, in to_thread
-    return await loop.run_in_executor(None, func_call)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\qasync\__init__.py", line 142, in run
-    r = callback(*args, **kwargs)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 50, in _sync_fetch
-    return [TreeNode(**row) for row in response.data]
-            ^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\pydantic\main.py", line 250, in __init__
-    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-pydantic_core._pydantic_core.ValidationError: 1 validation error for TreeNode
-client_id
-  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 33, 'files_count': 0}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.12/v/missing
-2026-01-07 11:06:18,581 - app.services.gemini_client - INFO - Возвращаем фиксированный список моделей Gemini 3
-2026-01-07 11:06:18,582 - app.ui.chat_panel - INFO - set_models вызван с 2 моделями
-2026-01-07 11:06:18,582 - app.ui.chat_panel - INFO - Добавлено 2 моделей в комбобокс
-2026-01-07 11:06:18,713 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/user_prompts?select=%2A&client_id=eq.3cbb1afb-b877-4eb5-b2a7-16c358033733&order=created_at.desc "HTTP/2 200 OK"
-2026-01-07 11:06:18,714 - app.ui.main_window - INFO - Загружено 0 промтов
-2026-01-07 11:06:18,715 - app.ui.main_window - INFO - === ПОДКЛЮЧЕНИЕ УСПЕШНО (локальный режим) ===
-2026-01-07 11:14:40,126 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
-2026-01-07 11:14:40,126 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
-2026-01-07 11:14:41,347 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
-2026-01-07 11:14:41,354 - app.ui.main_window - INFO - Конфигурация загружена
-2026-01-07 11:14:41,354 - app.ui.main_window - INFO - Используется client_id: 3cbb1afb-b877-4eb5-b2a7-16c358033733
-2026-01-07 11:14:41,457 - app.services.supabase_repo - INFO - Инициализация SupabaseRepo: url=https://zivbesacbxfmwzervmcy.s...
-2026-01-07 11:14:41,457 - app.ui.main_window - INFO - Локальный режим (без сервера)
-2026-01-07 11:14:41,458 - app.ui.left_projects_panel - INFO - LeftProjectsPanel.set_services вызван: supabase_repo=True
-2026-01-07 11:14:41,460 - app.services.supabase_repo - INFO - Создание Supabase клиента...
-2026-01-07 11:14:41,617 - app.services.supabase_repo - INFO - Supabase клиент создан успешно
-2026-01-07 11:14:42,128 - httpx - INFO - HTTP Request: POST https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/rpc/qa_list_conversations_with_stats "HTTP/2 200 OK"
-2026-01-07 11:14:42,130 - app.ui.left_projects_panel - INFO - === ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ для client_id=3cbb1afb-b877-4eb5-b2a7-16c358033733 ===
-2026-01-07 11:14:42,135 - app.services.supabase_repo - INFO - fetch_roots вызван
-2026-01-07 11:14:42,136 - app.services.supabase_repo - INFO - _sync_fetch: получение клиента...
-2026-01-07 11:14:42,136 - app.services.supabase_repo - INFO - _sync_fetch: выполнение запроса к tree_nodes...
-2026-01-07 11:14:42,253 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=is.null&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
-2026-01-07 11:14:42,253 - app.services.supabase_repo - INFO - _sync_fetch: получено 4 записей
-2026-01-07 11:14:42,254 - app.ui.left_projects_panel - ERROR - ОШИБКА ЗАГРУЗКИ: 1 validation error for TreeNode
-client_id
-  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 33, 'files_count': 0}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.12/v/missing
-Traceback (most recent call last):
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\left_projects_panel.py", line 319, in load_roots
-    roots = await self.supabase_repo.fetch_roots(client_id=client_id)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 52, in fetch_roots
-    result = await asyncio.to_thread(_sync_fetch)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\asyncio\threads.py", line 25, in to_thread
-    return await loop.run_in_executor(None, func_call)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\qasync\__init__.py", line 142, in run
-    r = callback(*args, **kwargs)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 50, in _sync_fetch
-    return [TreeNode(**row) for row in response.data]
-            ^^^^^^^^^^^^^^^
-  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\pydantic\main.py", line 250, in __init__
-    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-pydantic_core._pydantic_core.ValidationError: 1 validation error for TreeNode
-client_id
-  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 33, 'files_count': 0}, input_type=dict]
-    For further information visit https://errors.pydantic.dev/2.12/v/missing
-2026-01-07 11:14:42,263 - app.services.gemini_client - INFO - Возвращаем фиксированный список моделей Gemini 3
-2026-01-07 11:14:42,263 - app.ui.chat_panel - INFO - set_models вызван с 2 моделями
-2026-01-07 11:14:42,263 - app.ui.chat_panel - INFO - Добавлено 2 моделей в комбобокс
-2026-01-07 11:14:42,387 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/user_prompts?select=%2A&client_id=eq.3cbb1afb-b877-4eb5-b2a7-16c358033733&order=created_at.desc "HTTP/2 200 OK"
-2026-01-07 11:14:42,387 - app.ui.main_window - INFO - Загружено 0 промтов
-2026-01-07 11:14:42,387 - app.ui.main_window - INFO - === ПОДКЛЮЧЕНИЕ УСПЕШНО (локальный режим) ===
-2026-01-07 13:14:37,004 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
-2026-01-07 13:14:37,004 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
-2026-01-07 13:15:27,448 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
-2026-01-07 13:15:27,448 - app.ui.main_window - WARNING - Настройки не сконфигурированы
-2026-01-07 13:16:01,644 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
-2026-01-07 13:16:01,649 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
-2026-01-07 13:16:32,104 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
+2026-01-07 13:30:45,814 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:30:45,814 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:30:47,049 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:30:47,053 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:30:56,861 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:30:56,866 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:31:17,469 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
 Traceback (most recent call last):
   File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
     yield
@@ -174,3 +74,411 @@ Traceback (most recent call last):
   File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
     raise mapped_exc(message) from exc
 httpx.ReadTimeout
+2026-01-07 13:35:01,945 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:35:01,945 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:35:03,152 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:35:03,159 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:35:33,586 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_backends\anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\main_window.py", line 335, in _on_connect
+    server_config = await APIClient.fetch_config(server_url, api_token)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\api_client.py", line 45, in fetch_config
+    response = await client.get(
+               ^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-01-07 13:36:32,576 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:36:32,576 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:36:33,792 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:36:33,800 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:38:27,541 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:38:27,541 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:38:28,771 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:38:28,778 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:38:59,208 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_backends\anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\main_window.py", line 335, in _on_connect
+    server_config = await APIClient.fetch_config(server_url, api_token)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\api_client.py", line 45, in fetch_config
+    response = await client.get(
+               ^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-01-07 13:41:10,863 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:41:10,863 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:41:12,099 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:41:12,105 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:41:42,536 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_backends\anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\main_window.py", line 335, in _on_connect
+    server_config = await APIClient.fetch_config(server_url, api_token)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\api_client.py", line 45, in fetch_config
+    response = await client.get(
+               ^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-01-07 13:44:30,911 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:44:30,911 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:44:32,118 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:44:32,124 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8000
+2026-01-07 13:44:50,284 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:44:50,284 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8888
+2026-01-07 13:44:51,344 - httpx - INFO - HTTP Request: GET http://localhost:8888/api/v1/auth/config "HTTP/1.1 200 OK"
+2026-01-07 13:44:51,344 - app.ui.main_window - INFO - Конфигурация получена с сервера: client_id=default
+2026-01-07 13:44:51,346 - app.ui.main_window - INFO - Используется client_id: default
+2026-01-07 13:44:51,451 - app.services.supabase_repo - INFO - Инициализация SupabaseRepo: url=https://zivbesacbxfmwzervmcy.s...
+2026-01-07 13:44:51,584 - app.services.realtime_client - ERROR - Failed to connect to Realtime: This feature isn't available in the sync client. You can use the realtime feature in the async client only.
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\realtime_client.py", line 78, in connect
+    self._channel = client.channel("db-changes")
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\supabase\_sync\client.py", line 224, in channel
+    return self.realtime.channel(topic, params or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\realtime\_sync\client.py", line 39, in channel
+    raise NotImplementedError(NOT_IMPLEMENTED_MESSAGE)
+NotImplementedError: This feature isn't available in the sync client. You can use the realtime feature in the async client only.
+2026-01-07 13:44:51,588 - app.ui.main_window - WARNING - Realtime disconnected
+2026-01-07 13:44:51,594 - app.ui.left_projects_panel - INFO - LeftProjectsPanel.set_services вызван: supabase_repo=True
+2026-01-07 13:44:51,595 - app.services.supabase_repo - INFO - Создание Supabase клиента...
+2026-01-07 13:44:51,726 - app.services.supabase_repo - INFO - Supabase клиент создан успешно
+2026-01-07 13:44:52,118 - httpx - INFO - HTTP Request: POST https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/rpc/qa_list_conversations_with_stats "HTTP/2 200 OK"
+2026-01-07 13:44:52,120 - app.ui.left_projects_panel - INFO - === ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ для client_id=default ===
+2026-01-07 13:44:52,126 - app.services.supabase_repo - INFO - fetch_roots вызван
+2026-01-07 13:44:52,127 - app.services.supabase_repo - INFO - _sync_fetch: получение клиента...
+2026-01-07 13:44:52,127 - app.services.supabase_repo - INFO - _sync_fetch: выполнение запроса к tree_nodes...
+2026-01-07 13:44:52,253 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=is.null&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:44:52,253 - app.services.supabase_repo - INFO - _sync_fetch: получено 4 записей
+2026-01-07 13:44:52,255 - app.ui.left_projects_panel - ERROR - ОШИБКА ЗАГРУЗКИ: 1 validation error for TreeNode
+client_id
+  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 35, 'files_count': 0}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\left_projects_panel.py", line 319, in load_roots
+    roots = await self.supabase_repo.fetch_roots(client_id=client_id)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 52, in fetch_roots
+    result = await asyncio.to_thread(_sync_fetch)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\asyncio\threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\qasync\__init__.py", line 142, in run
+    r = callback(*args, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\supabase_repo.py", line 50, in _sync_fetch
+    return [TreeNode(**row) for row in response.data]
+            ^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\pydantic\main.py", line 250, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for TreeNode
+client_id
+  Field required [type=missing, input_value={'id': '0e8b64be-823a-458...': 35, 'files_count': 0}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+2026-01-07 13:44:52,262 - app.ui.chat_panel - INFO - set_default_model: gemini-3-flash-preview
+2026-01-07 13:44:52,396 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/user_prompts?select=%2A&client_id=eq.default&order=created_at.desc "HTTP/2 200 OK"
+2026-01-07 13:44:52,397 - app.ui.main_window - INFO - Загружено 1 промтов
+2026-01-07 13:44:52,397 - app.ui.main_window - INFO - === ПОДКЛЮЧЕНИЕ УСПЕШНО ===
+2026-01-07 13:45:02,538 - app.ui.main_window - ERROR - ОШИБКА ПОДКЛЮЧЕНИЯ: 
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_async\http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_backends\anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpcore\_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\ui\main_window.py", line 335, in _on_connect
+    server_config = await APIClient.fetch_config(server_url, api_token)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\desktop\app\services\api_client.py", line 45, in fetch_config
+    response = await client.get(
+               ^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\svarovsky\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\svarovsky\PycharmProjects\pdfQaGemini\.venv\Lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-01-07 13:47:05,647 - __main__ - INFO - === ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===
+2026-01-07 13:47:05,647 - __main__ - INFO - Логи сохраняются в: C:\Users\svarovsky\PycharmProjects\pdfQaGemini\logs\desktop.log
+2026-01-07 13:47:06,875 - app.ui.main_window - INFO - === НАЧАЛО ПОДКЛЮЧЕНИЯ ===
+2026-01-07 13:47:06,880 - app.ui.main_window - INFO - Подключение к серверу: http://localhost:8888
+2026-01-07 13:47:07,950 - httpx - INFO - HTTP Request: GET http://localhost:8888/api/v1/auth/config "HTTP/1.1 200 OK"
+2026-01-07 13:47:07,951 - app.ui.main_window - INFO - Конфигурация получена с сервера: client_id=default
+2026-01-07 13:47:07,953 - app.ui.main_window - INFO - Используется client_id: default
+2026-01-07 13:47:08,035 - app.services.supabase_repo - INFO - Инициализация SupabaseRepo: url=https://zivbesacbxfmwzervmcy.s...
+2026-01-07 13:47:08,035 - app.services.realtime_client - WARNING - Realtime disabled: supabase-py v2+ requires async client for Realtime
+2026-01-07 13:47:08,035 - app.ui.main_window - WARNING - Realtime disconnected
+2026-01-07 13:47:08,055 - app.ui.left_projects_panel - INFO - LeftProjectsPanel.set_services вызван: supabase_repo=True
+2026-01-07 13:47:08,055 - app.services.supabase_repo - INFO - Создание Supabase клиента...
+2026-01-07 13:47:08,189 - app.services.supabase_repo - INFO - Supabase клиент создан успешно
+2026-01-07 13:47:08,592 - httpx - INFO - HTTP Request: POST https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/rpc/qa_list_conversations_with_stats "HTTP/2 200 OK"
+2026-01-07 13:47:08,594 - app.ui.left_projects_panel - INFO - === ЗАГРУЗКА КОРНЕВЫХ УЗЛОВ для client_id=default ===
+2026-01-07 13:47:08,599 - app.services.supabase_repo - INFO - fetch_roots вызван
+2026-01-07 13:47:08,599 - app.services.supabase_repo - INFO - _sync_fetch: получение клиента...
+2026-01-07 13:47:08,599 - app.services.supabase_repo - INFO - _sync_fetch: выполнение запроса к tree_nodes...
+2026-01-07 13:47:08,724 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=is.null&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:08,724 - app.services.supabase_repo - INFO - _sync_fetch: получено 4 записей
+2026-01-07 13:47:08,725 - app.services.supabase_repo - INFO - fetch_roots завершён: 4 корневых узлов
+2026-01-07 13:47:08,725 - app.ui.left_projects_panel - INFO - Получено 4 корневых узлов
+2026-01-07 13:47:08,849 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.0e8b64be-823a-4581-bc85-7ef0eb8e6670&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:08,969 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.0ac8373f-689d-45b2-8b22-9a058098a1cc&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,102 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.6490f51a-b90c-4fd8-9d2a-c0457afd89c8&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,216 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.ae973c59-b3c3-4380-b04e-3dd3a4fb4c41&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,342 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.ac8ec6c6-589f-4b6e-8fcf-770b31c22daf&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,466 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.ad93f761-397d-469f-929b-8deae2458ded&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,618 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.16c5a00f-b581-4a80-b227-ed77a99f9c3d&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,625 - app.ui.left_projects_panel - INFO - Создание папки кропов с 137 файлами для узла 16c5a00f-b581-4a80-b227-ed77a99f9c3d
+2026-01-07 13:47:09,752 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.909c6060-a2c1-442f-9f0e-0d62fdd5fcc5&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,867 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.d7268b80-00b2-4220-a4a1-36e3d267b1a0&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:09,873 - app.ui.left_projects_panel - INFO - Создание папки кропов с 152 файлами для узла d7268b80-00b2-4220-a4a1-36e3d267b1a0
+2026-01-07 13:47:10,006 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.78cb02b5-e262-42aa-9376-a28e4d9ededc&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,007 - app.ui.left_projects_panel - INFO - Создание папки кропов с 1 файлами для узла 78cb02b5-e262-42aa-9376-a28e4d9ededc
+2026-01-07 13:47:10,131 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.6aa863e1-677d-411f-a563-90725b24373b&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,253 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.51afc857-236a-4ad3-8a16-c47ddc66b64b&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,255 - app.ui.left_projects_panel - INFO - Создание папки кропов с 35 файлами для узла 51afc857-236a-4ad3-8a16-c47ddc66b64b
+2026-01-07 13:47:10,375 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.11df03bb-39ee-4ce6-a690-9998e7908c8d&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,497 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.1060b4a2-370d-4c71-bef3-fb5170b07a38&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,619 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.eda51959-8ce0-47f3-9faf-0570a8f06ee4&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,621 - app.ui.left_projects_panel - INFO - Создание папки кропов с 2 файлами для узла eda51959-8ce0-47f3-9faf-0570a8f06ee4
+2026-01-07 13:47:10,753 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/tree_nodes?select=%2A&parent_id=eq.55933488-d09b-4fc4-9f74-d029677487a3&order=sort_order.asc%2Cname.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,881 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/node_files?select=%2A&node_id=eq.0d3052c7-c4d8-4289-88e0-353d9ff7aef1&order=file_type.asc "HTTP/2 200 OK"
+2026-01-07 13:47:10,890 - app.ui.left_projects_panel - INFO - Создание папки кропов с 3 файлами для узла 0d3052c7-c4d8-4289-88e0-353d9ff7aef1
+2026-01-07 13:47:10,891 - app.ui.chat_panel - INFO - set_default_model: gemini-3-flash-preview
+2026-01-07 13:47:11,005 - httpx - INFO - HTTP Request: GET https://zivbesacbxfmwzervmcy.supabase.co/rest/v1/user_prompts?select=%2A&client_id=eq.default&order=created_at.desc "HTTP/2 200 OK"
+2026-01-07 13:47:11,006 - app.ui.main_window - INFO - Загружено 1 промтов
+2026-01-07 13:47:11,006 - app.ui.main_window - INFO - === ПОДКЛЮЧЕНИЕ УСПЕШНО ===
