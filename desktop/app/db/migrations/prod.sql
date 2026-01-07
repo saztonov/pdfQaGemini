@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2026-01-07T12:09:48.296383
+-- Generated: 2026-01-07T14:50:04.140768
 -- Database: postgres
 -- Host: aws-1-eu-north-1.pooler.supabase.com
 
@@ -505,7 +505,7 @@ CREATE TABLE IF NOT EXISTS public.qa_clients (
     client_id text NOT NULL,
     api_token uuid NOT NULL DEFAULT gen_random_uuid(),
     name text,
-    default_model text DEFAULT 'gemini-2.0-flash'::text,
+    default_model text DEFAULT 'gemini-3-flash-preview'::text,
     is_active boolean DEFAULT true,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
