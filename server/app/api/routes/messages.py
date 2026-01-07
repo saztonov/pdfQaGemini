@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header
 
 from app.api.dependencies import get_supabase_repo
+from app.services.redis_queue import get_redis_queue
 from app.models.schemas import (
     MessageResponse,
     SendMessageRequest,
@@ -77,7 +78,20 @@ async def send_message(
         file_refs=request.file_refs,
     )
 
-    # 3. Update conversation timestamp
+    # 3. Enqueue job to Redis for processing
+    redis_queue = get_redis_queue()
+    await redis_queue.enqueue_llm_job(
+        job_id=job["id"],
+        conversation_id=str(conversation_id),
+        user_text=request.user_text,
+        model_name=request.model_name,
+        system_prompt=request.system_prompt,
+        thinking_level=request.thinking_level,
+        thinking_budget=request.thinking_budget,
+        file_refs=request.file_refs,
+    )
+
+    # 4. Update conversation timestamp
     await repo.qa_update_conversation(str(conversation_id))
 
     return SendMessageResponse(

@@ -24,12 +24,25 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    # Job processing
-    job_poll_interval: float = 1.0
-    job_max_retries: int = 3
+    # Redis
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str = ""
+    redis_db: int = 0
+
+    # Worker
+    worker_max_jobs: int = 10
+    worker_job_timeout: int = 300
+    worker_max_retries: int = 3
 
     # Default model
     default_model: str = "gemini-3-flash-preview"
+
+    @property
+    def redis_dsn(self) -> str:
+        """Build Redis DSN"""
+        auth = f":{self.redis_password}@" if self.redis_password else ""
+        return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     @property
     def r2_endpoint(self) -> str:

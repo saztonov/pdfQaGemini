@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.routes import health, conversations, messages, jobs, files, prompts, auth
-from app.services.job_processor import JobProcessor
+from app.services.redis_queue import init_redis_queue, get_redis_queue
 
 
 def setup_logging():
@@ -36,37 +36,26 @@ def setup_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=handlers,
     )
+
+    # Reduce httpx logging to avoid flooding console with polling requests
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     return logging.getLogger(__name__), log_file
 
 
 logger, log_file_path = setup_logging()
 logger.info(f"Логи сохраняются в: {log_file_path}")
 
-# Global job processor instance
-job_processor: JobProcessor = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown"""
-    global job_processor
-
-    # Startup
     logger.info("Starting pdfQaGemini server...")
 
-    # Initialize job processor
-    job_processor = JobProcessor(
-        supabase_url=settings.supabase_url,
-        supabase_key=settings.supabase_key,
-        gemini_api_key=settings.gemini_api_key,
-        r2_public_base_url=settings.r2_public_url,
-        r2_endpoint=settings.r2_endpoint,
-        r2_bucket=settings.r2_bucket_name,
-        r2_access_key=settings.r2_access_key_id,
-        r2_secret_key=settings.r2_secret_access_key,
-        poll_interval=settings.job_poll_interval,
-    )
-    await job_processor.start()
+    # Initialize Redis queue
+    redis_queue = init_redis_queue()
+    await redis_queue.connect()
 
     logger.info("Server started successfully")
 
@@ -74,7 +63,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down server...")
-    await job_processor.stop()
+    await redis_queue.close()
     logger.info("Server stopped")
 
 
@@ -112,11 +101,6 @@ app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-
-
-def get_job_processor() -> JobProcessor:
-    """Get job processor instance for dependency injection"""
-    return job_processor
 
 
 if __name__ == "__main__":
