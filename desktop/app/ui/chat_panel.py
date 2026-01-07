@@ -665,6 +665,21 @@ class ChatPanel(QWidget):
 
         self._on_model_changed(self.model_combo.currentIndex())
 
+    def set_default_model(self, model_name: str):
+        """Set default model from server config"""
+        logger.info(f"set_default_model: {model_name}")
+
+        # Check if model already exists in combo
+        idx = self.model_combo.findData(model_name)
+        if idx >= 0:
+            self.model_combo.setCurrentIndex(idx)
+        else:
+            # Add model if not present
+            self.model_combo.addItem(model_name, model_name)
+            self.model_combo.setCurrentIndex(self.model_combo.count() - 1)
+
+        self._on_model_changed(self.model_combo.currentIndex())
+
     def add_user_message(self, text: str, file_refs: list = None):
         """Add user message to chat with file attachments"""
         from app.utils.time_utils import format_time

@@ -135,3 +135,13 @@ class ErrorResponse(BaseModel):
     """Error response"""
 
     detail: str
+
+
+class ClientConfigResponse(BaseModel):
+    """Client configuration response - returned after token authentication"""
+
+    client_id: str
+    supabase_url: str
+    supabase_key: str
+    r2_public_base_url: str
+    default_model: str = "gemini-2.0-flash"

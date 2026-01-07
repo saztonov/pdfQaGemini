@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.routes import health, conversations, messages, jobs, files, prompts
+from app.api.routes import health, conversations, messages, jobs, files, prompts, auth
 from app.services.job_processor import JobProcessor
 
 
@@ -102,6 +102,7 @@ app.include_router(messages.router, prefix="/api/v1", tags=["messages"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 
 
 def get_job_processor() -> JobProcessor:

@@ -628,6 +628,7 @@ CREATE TABLE IF NOT EXISTS public.qa_messages (
 CREATE TABLE IF NOT EXISTS public.qa_settings (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     client_id text NOT NULL,
+    api_token uuid DEFAULT gen_random_uuid(),
     gemini_api_key text,
     supabase_url text,
     supabase_anon_key text,
@@ -635,11 +636,13 @@ CREATE TABLE IF NOT EXISTS public.qa_settings (
     r2_access_key_id text,
     r2_secret_access_key text,
     r2_bucket_name text,
-    default_model text DEFAULT 'gemini-3-flash-preview'::text,
+    r2_public_base_url text,
+    default_model text DEFAULT 'gemini-2.0-flash'::text,
     settings jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT qa_settings_client_id_key UNIQUE (client_id),
+    CONSTRAINT qa_settings_api_token_key UNIQUE (api_token),
     CONSTRAINT qa_settings_pkey PRIMARY KEY (id)
 );
 
@@ -4335,6 +4338,9 @@ CREATE INDEX idx_qa_settings_client ON public.qa_settings USING btree (client_id
 
 -- Index on public.qa_settings
 CREATE UNIQUE INDEX qa_settings_client_id_key ON public.qa_settings USING btree (client_id);
+
+-- Index on public.qa_settings (api_token for fast lookup)
+CREATE INDEX IF NOT EXISTS idx_qa_settings_api_token ON public.qa_settings USING btree (api_token);
 
 -- Index on public.section_types
 CREATE UNIQUE INDEX section_types_code_key ON public.section_types USING btree (code);

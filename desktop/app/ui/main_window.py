@@ -320,88 +320,91 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             self._on_open_settings()
             return
 
-        self.toast_manager.info("Подключение...")
+        self.toast_manager.info("Подключение к серверу...")
 
         try:
-            config = SettingsDialog.get_settings()
-            logger.info("Конфигурация загружена")
+            local_settings = SettingsDialog.get_settings()
+            server_url = local_settings["server_url"]
+            api_token = local_settings["api_token"]
+            cache_dir = Path(local_settings["cache_dir"])
 
-            # Save client_id from settings
-            self.client_id = config.get("client_id", "default")
+            logger.info(f"Подключение к серверу: {server_url}")
+
+            # Step 1: Fetch configuration from server
+            try:
+                server_config = await APIClient.fetch_config(server_url, api_token)
+                logger.info(f"Конфигурация получена с сервера: client_id={server_config.get('client_id')}")
+            except Exception as e:
+                if "401" in str(e):
+                    self.toast_manager.error("Неверный API токен")
+                    self._on_open_settings()
+                    return
+                raise
+
+            # Save server config locally for quick access
+            SettingsDialog.save_server_config(server_config)
+
+            # Extract config values
+            self.client_id = server_config.get("client_id", "default")
+            supabase_url = server_config.get("supabase_url", "")
+            supabase_key = server_config.get("supabase_key", "")
+            r2_public_url = server_config.get("r2_public_base_url", "")
+            default_model = server_config.get("default_model", "gemini-2.0-flash")
+
             logger.info(f"Используется client_id: {self.client_id}")
 
-            supabase_url = config["supabase_url"]
-            supabase_key = config["supabase_key"]
-            gemini_api_key = config["gemini_api_key"]
-            server_url = config.get("server_url", "")
-
             from app.services.supabase_repo import SupabaseRepo
-            from app.services.gemini_client import GeminiClient
             from app.services.r2_async import R2AsyncClient
 
+            # Step 2: Initialize Supabase repo (for local queries and realtime)
             self.supabase_repo = SupabaseRepo(supabase_url, supabase_key)
 
-            # Initialize server API clients if server_url is configured
-            if server_url:
-                logger.info(f"Включен режим сервера: {server_url}")
-                self.server_mode = True
-                self.api_client = APIClient(base_url=server_url, client_id=self.client_id)
+            # Step 3: Server mode - all LLM operations go through server
+            self.server_mode = True
+            self.api_client = APIClient(
+                base_url=server_url,
+                client_id=self.client_id,
+                api_token=api_token,
+            )
 
-                # Initialize Realtime client for live updates
-                self.realtime_client = RealtimeClient(
-                    supabase_url=supabase_url,
-                    supabase_key=supabase_key,
-                    client_id=self.client_id,
-                )
+            # Step 4: Initialize Realtime client for live updates
+            self.realtime_client = RealtimeClient(
+                supabase_url=supabase_url,
+                supabase_key=supabase_key,
+                client_id=self.client_id,
+            )
 
-                # Connect realtime signals
-                self.realtime_client.jobUpdated.connect(self._on_job_updated)
-                self.realtime_client.messageReceived.connect(self._on_realtime_message)
-                self.realtime_client.connectionStatusChanged.connect(self._on_realtime_status)
+            # Connect realtime signals
+            self.realtime_client.jobUpdated.connect(self._on_job_updated)
+            self.realtime_client.messageReceived.connect(self._on_realtime_message)
+            self.realtime_client.connectionStatusChanged.connect(self._on_realtime_status)
 
-                # Connect to realtime
-                await self.realtime_client.connect()
+            # Connect to realtime
+            await self.realtime_client.connect()
 
-                self.gemini_client = None  # Not needed in server mode
-            else:
-                logger.info("Локальный режим (без сервера)")
-                self.server_mode = False
-                self.api_client = None
-                self.realtime_client = None
-                self.gemini_client = GeminiClient(gemini_api_key)
+            # Gemini client not needed - server handles LLM
+            self.gemini_client = None
 
-            r2_public = config["r2_public_base_url"]
-            r2_endpoint = config["r2_endpoint"]
-            r2_bucket = config["r2_bucket"]
-            r2_access = config["r2_access_key"]
-            r2_secret = config["r2_secret_key"]
-            cache_dir = Path(config["cache_dir"])
-
-            if all([r2_public, r2_endpoint, r2_bucket, r2_access, r2_secret]):
+            # Step 5: R2 client for loading files (read-only, using public URL)
+            if r2_public_url:
                 self.r2_client = R2AsyncClient(
-                    r2_public_base_url=r2_public,
-                    r2_endpoint=r2_endpoint,
-                    r2_bucket=r2_bucket,
-                    r2_access_key=r2_access,
-                    r2_secret_key=r2_secret,
+                    r2_public_base_url=r2_public_url,
+                    r2_endpoint="",  # Not needed for read-only
+                    r2_bucket="",    # Not needed for read-only
+                    r2_access_key="",
+                    r2_secret_key="",
                     local_cache_dir=cache_dir,
                 )
             else:
-                self.toast_manager.warning("R2 не настроен")
+                self.r2_client = None
+                self.toast_manager.warning("R2 не настроен на сервере")
 
             # Update trace store with R2 client
             self.trace_store.r2_client = self.r2_client
             self.trace_store.client_id = self.client_id
 
-            # Agent is only needed in local mode
-            if not self.server_mode:
-                self.agent = Agent(
-                    self.gemini_client,
-                    self.supabase_repo,
-                    trace_store=self.trace_store,
-                )
-            else:
-                self.agent = None
+            # Agent not needed - server handles LLM
+            self.agent = None
 
             # Update panels with services
             if self.left_panel:
@@ -418,10 +421,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             if self.right_panel:
                 await self.right_panel.refresh_chats()
 
-            # Don't create conversation automatically - it will be created on first message
-            # Just load files
-
-            # Load Gemini files and sync to chat
+            # Load Gemini files if conversation exists
             if self.right_panel and self.current_conversation_id:
                 conv_id = str(self.current_conversation_id)
                 await self.right_panel.refresh_files(conversation_id=conv_id)
@@ -433,16 +433,20 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             if self.left_panel:
                 await self.left_panel.load_roots(client_id=self.client_id)
 
-            await self._load_gemini_models()
+            # Set default model in chat panel
+            if self.chat_panel:
+                self.chat_panel.set_default_model(default_model)
+
             await self._load_prompts()
 
-            mode_str = "серверный режим" if self.server_mode else "локальный режим"
-            logger.info(f"=== ПОДКЛЮЧЕНИЕ УСПЕШНО ({mode_str}) ===")
-            self.toast_manager.success(f"✓ Подключено ({mode_str})")
+            logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
+            self.toast_manager.success(f"✓ Подключено как {self.client_id}")
 
         except Exception as e:
             logger.error(f"ОШИБКА ПОДКЛЮЧЕНИЯ: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка: {e}")
+            # Clear server config on error
+            SettingsDialog.clear_server_config()
 
     async def _ensure_conversation(self):
         """Ensure conversation exists"""
