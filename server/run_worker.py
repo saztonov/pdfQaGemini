@@ -34,7 +34,15 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
 
+    import asyncio
     from arq import run_worker
     from app.worker.settings import WorkerSettings
+
+    # Fix for Python 3.10+ where get_event_loop() raises RuntimeError
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
     run_worker(WorkerSettings)

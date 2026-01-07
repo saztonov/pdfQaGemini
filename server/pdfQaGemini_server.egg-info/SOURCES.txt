@@ -18,12 +18,15 @@ app/models/schemas.py
 app/services/__init__.py
 app/services/agent.py
 app/services/gemini_client.py
-app/services/job_processor.py
 app/services/r2_async.py
+app/services/redis_queue.py
 app/services/supabase_repo.py
 app/utils/__init__.py
 app/utils/errors.py
 app/utils/retry.py
+app/worker/__init__.py
+app/worker/settings.py
+app/worker/tasks.py
 pdfQaGemini_server.egg-info/PKG-INFO
 pdfQaGemini_server.egg-info/SOURCES.txt
 pdfQaGemini_server.egg-info/dependency_links.txt
