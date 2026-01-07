@@ -88,6 +88,7 @@ class RightPanelFilesMixin:
                         "display_name": f.get("display_name"),
                         "mime_type": f.get("mime_type"),
                         "size_bytes": f.get("size_bytes"),
+                        "expiration_time": f.get("expiration_time"),
                     }
                     for f in all_files_raw
                 ]
@@ -99,12 +100,27 @@ class RightPanelFilesMixin:
                 self.conversation_id = conversation_id
                 try:
                     conv_files = await self.supabase_repo.qa_get_conversation_files(conversation_id)
-                    conv_file_names = {
-                        f.get("gemini_name") for f in conv_files if f.get("gemini_name")
+                    # Build lookup by gemini_name to get display_name from DB
+                    db_files_map = {
+                        f.get("gemini_name"): f for f in conv_files if f.get("gemini_name")
                     }
 
-                    # Filter to only files attached to this conversation
-                    self.gemini_files = [f for f in all_files if f.get("name") in conv_file_names]
+                    # Filter and merge data: expiration_time from Gemini, display_name from DB
+                    merged_files = []
+                    for f in all_files:
+                        name = f.get("name")
+                        if name in db_files_map:
+                            db_file = db_files_map[name]
+                            merged_files.append({
+                                "name": name,
+                                "uri": f.get("uri"),
+                                "display_name": db_file.get("display_name") or f.get("display_name"),
+                                "mime_type": db_file.get("mime_type") or f.get("mime_type"),
+                                "size_bytes": db_file.get("size_bytes") or f.get("size_bytes"),
+                                "expiration_time": f.get("expiration_time"),
+                            })
+
+                    self.gemini_files = merged_files
 
                     logger.info(
                         f"Отфильтровано {len(self.gemini_files)} из {len(all_files)} файлов для чата {conversation_id}"
@@ -377,6 +393,8 @@ class RightPanelFilesMixin:
                     result = await self.api_client.upload_file(
                         file_path=str(cached_path),
                         conversation_id=self.conversation_id or "",
+                        file_name=display_name,
+                        mime_type=mime_type,
                     )
                     new_name = result.get("gemini_name")
                     logger.info(f"✓ Файл успешно перезагружен через сервер: {new_name}")

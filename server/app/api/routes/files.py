@@ -36,11 +36,11 @@ async def upload_file(
             display_name=file.filename,
         )
 
-        # Save to database
+        # Save to database - use original filename, not what Gemini returns
         gemini_file_record = await repo.qa_upsert_gemini_file(
             gemini_name=result["name"],
             gemini_uri=result["uri"],
-            display_name=result.get("display_name"),
+            display_name=file.filename,  # Use original filename from upload
             mime_type=result["mime_type"],
             size_bytes=result.get("size_bytes"),
             client_id=x_client_id,
@@ -58,7 +58,7 @@ async def upload_file(
         return GeminiFileResponse(
             gemini_name=result["name"],
             gemini_uri=result["uri"],
-            display_name=result.get("display_name"),
+            display_name=file.filename,  # Use original filename
             mime_type=result["mime_type"],
             size_bytes=result.get("size_bytes"),
         )
@@ -93,16 +93,28 @@ async def list_all_files():
     gemini = get_gemini_client()
     files = await gemini.list_files()
 
-    return [
-        GeminiFileResponse(
-            gemini_name=f["name"],
-            gemini_uri=f["uri"],
-            display_name=f.get("display_name"),
-            mime_type=f["mime_type"],
-            size_bytes=f.get("size_bytes"),
+    result = []
+    for f in files:
+        # Convert expiration_time to ISO string if present
+        exp_time = f.get("expiration_time")
+        exp_time_str = None
+        if exp_time:
+            if hasattr(exp_time, "isoformat"):
+                exp_time_str = exp_time.isoformat()
+            else:
+                exp_time_str = str(exp_time)
+
+        result.append(
+            GeminiFileResponse(
+                gemini_name=f["name"],
+                gemini_uri=f["uri"],
+                display_name=f.get("display_name"),
+                mime_type=f["mime_type"],
+                size_bytes=f.get("size_bytes"),
+                expiration_time=exp_time_str,
+            )
         )
-        for f in files
-    ]
+    return result
 
 
 @router.delete("/{file_name:path}")

@@ -116,6 +116,8 @@ class UploadHandlersMixin:
                 result = await self.api_client.upload_file(
                     file_path=str(tmp_path),
                     conversation_id=str(self.current_conversation_id),
+                    file_name=bundle_file_name,
+                    mime_type="text/plain",
                 )
                 # Server returns GeminiFileResponse with gemini_name, gemini_uri
                 gemini_name = result.get("gemini_name")
@@ -253,6 +255,8 @@ class UploadHandlersMixin:
                     result = await self.api_client.upload_file(
                         file_path=str(cached_path),
                         conversation_id=str(self.current_conversation_id),
+                        file_name=file_name,
+                        mime_type=mime_type,
                     )
                     # Server returns GeminiFileResponse with gemini_name, gemini_uri
                     gemini_name = result.get("gemini_name")

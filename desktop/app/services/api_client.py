@@ -185,11 +185,27 @@ class APIClient:
         self,
         file_path: str,
         conversation_id: str,
+        file_name: str = None,
+        mime_type: str = None,
     ) -> dict:
         """Upload file to Gemini via server"""
+        import mimetypes
+        from pathlib import Path
+
         client = self._get_client()
+        path = Path(file_path)
+
+        # Use provided file_name or fall back to path name
+        actual_name = file_name or path.name
+
+        # Auto-detect mime_type if not provided
+        if mime_type is None:
+            detected, _ = mimetypes.guess_type(actual_name)
+            mime_type = detected or "application/octet-stream"
+
         with open(file_path, "rb") as f:
-            files = {"file": f}
+            # Pass explicit filename and mime_type in tuple format
+            files = {"file": (actual_name, f, mime_type)}
             data = {"conversation_id": conversation_id}
             response = await client.post("/api/v1/files/upload", files=files, data=data)
         response.raise_for_status()

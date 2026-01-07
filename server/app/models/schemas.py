@@ -109,6 +109,7 @@ class GeminiFileResponse(BaseModel):
     display_name: Optional[str] = None
     mime_type: str
     size_bytes: Optional[int] = None
+    expiration_time: Optional[str] = None  # ISO format datetime
 
 
 class PromptResponse(BaseModel):
