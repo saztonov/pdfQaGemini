@@ -50,7 +50,8 @@
       "Bash(desktop/app/utils/retry.py )",
       "Bash(server/app/utils/errors.py )",
       "Bash(server/app/utils/retry.py )",
-      "Bash(shared/)"
+      "Bash(shared/)",
+      "Bash(dir \"C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini\\\\test\" /s)"
     ]
   }
 }
