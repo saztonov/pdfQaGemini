@@ -43,6 +43,21 @@ NODE_COLORS = {
 }
 
 
+def get_node_icon(node: TreeNode) -> str:
+    """Get icon for node (with fallback for unknown types)"""
+    # First check if node_type is in icons
+    if node.node_type in NODE_ICONS:
+        return NODE_ICONS[node.node_type]
+    
+    # Fallback: folder icon for all types except document
+    return "📁" if node.node_type != "document" else "📄"
+
+
+def get_node_color(node: TreeNode) -> str:
+    """Get color for node (with fallback)"""
+    return NODE_COLORS.get(node.node_type, "#e0e0e0")
+
+
 class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMixin):
     """Projects tree panel with lazy loading"""
 
@@ -416,7 +431,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
         """Add tree node to widget"""
         item = QTreeWidgetItem()
 
-        icon = NODE_ICONS.get(node.node_type, "📄")
+        icon = get_node_icon(node)
         version_display = None
 
         if node.node_type == "document":
@@ -442,7 +457,7 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
         item.setData(0, Qt.UserRole + 1, node.node_type)
         item.setData(0, Qt.UserRole + 2, version_display)
 
-        color = NODE_COLORS.get(node.node_type, "#e0e0e0")
+        color = get_node_color(node)
         item.setForeground(0, QBrush(QColor(color)))
 
         self._node_cache[str(node.id)] = node
