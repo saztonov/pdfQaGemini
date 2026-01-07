@@ -23,7 +23,16 @@
       "Bash(git commit:*)",
       "Bash(git rm:*)",
       "Bash(git pull:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 5 python:*)",
+      "Bash(docker compose:*)",
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini && docker compose up --build -d\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini && docker compose build 2>&1\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\Usr\\\\PycharmProjects\\\\pdfQaGemini''; docker compose build\")",
+      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini rm:*)",
+      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini status)",
+      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini add docker-compose.yml server/Dockerfile server/.dockerignore server/app/main.py server/run_worker.py)",
+      "Bash(git -C /c/Users/Usr/PycharmProjects/pdfQaGemini commit -m \"$\\(cat <<''EOF''\nAdd Docker Compose setup for server and worker\n\n- Add Dockerfile and .dockerignore for server\n- Add docker-compose.yml with web, worker, redis services\n- Update log paths to support Docker volume \\(/logs\\)\n- Remove run_backend.bat \\(replaced by docker compose\\)\n\nHot-reload enabled: uvicorn --reload for web, watchfiles for worker\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

@@ -28,27 +28,37 @@ class ConnectionChecker(QObject):
         self._timer = QTimer()
         self._timer.timeout.connect(self._check_internet)
         self._last_status = None
+        self._first_check_done = False
 
     def start(self):
-        self._check_internet()
+        # Delay first check to allow event loop to start
+        QTimer.singleShot(1000, self._check_internet)
         self._timer.start(self._check_interval)
 
     def stop(self):
         self._timer.stop()
 
     def _check_internet(self):
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(self._async_check())
-        except RuntimeError:
-            pass
+        # Run sync check in separate thread via QTimer
+        import concurrent.futures
 
-    async def _async_check(self):
+        def do_check():
+            result = self._sync_check()
+            return result
+
         try:
-            is_connected = await asyncio.to_thread(self._sync_check)
-            if is_connected != self._last_status:
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(do_check)
+                future.add_done_callback(self._on_check_complete)
+        except Exception as e:
+            logger.debug(f"Internet check submit error: {e}")
+
+    def _on_check_complete(self, future):
+        try:
+            is_connected = future.result()
+            if is_connected != self._last_status or not self._first_check_done:
                 self._last_status = is_connected
+                self._first_check_done = True
                 self.internetStatusChanged.emit(is_connected)
         except Exception as e:
             logger.debug(f"Internet check error: {e}")
@@ -57,11 +67,23 @@ class ConnectionChecker(QObject):
                 self.internetStatusChanged.emit(False)
 
     def _sync_check(self) -> bool:
+        # Try multiple methods to check internet
         try:
+            # Method 1: DNS lookup
             socket.create_connection(("8.8.8.8", 53), timeout=3)
             return True
         except OSError:
-            return False
+            pass
+
+        try:
+            # Method 2: HTTP check
+            import urllib.request
+            urllib.request.urlopen("https://www.google.com", timeout=3)
+            return True
+        except Exception:
+            pass
+
+        return False
 
 
 class StatusIcon(QLabel):
