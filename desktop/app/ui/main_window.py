@@ -3,7 +3,6 @@ from typing import Optional
 from uuid import UUID
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction
 from qasync import asyncSlot
 from pathlib import Path
 import asyncio
@@ -16,6 +15,7 @@ from app.ui.right_context_panel import RightContextPanel
 from app.ui.connection_status import ConnectionStatusWidget
 from app.ui.main_window_handlers import MainWindowHandlers
 from app.ui.main_window_actions import ModelActionsHandler
+from app.ui.menu_setup import MenuSetupMixin
 from app.services.agent import Agent
 from app.services.pdf_render import PDFRenderer
 from app.services.trace import TraceStore
@@ -27,7 +27,7 @@ from app.ui.settings_dialog import SettingsDialog
 logger = logging.getLogger(__name__)
 
 
-class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
+class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainWindow):
     """Main application window"""
 
     def __init__(self):
@@ -74,7 +74,7 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
     def _setup_ui(self):
         """Initialize UI components"""
-        self._create_menu()
+        self._setup_menu()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -107,134 +107,6 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         # Connection status bar at bottom right
         self.connection_status = ConnectionStatusWidget(self)
         layout.addWidget(self.connection_status)
-
-    def _create_menu(self):
-        """Create main menu"""
-        menubar = self.menuBar()
-
-        # Стилизация меню в темной теме
-        menu_style = """
-            QMenuBar {
-                background-color: #1e1e1e;
-                color: #cccccc;
-                border-bottom: 1px solid #3e3e42;
-                padding: 2px 0px;
-            }
-            QMenuBar::item {
-                background-color: transparent;
-                padding: 6px 12px;
-                margin: 0px;
-            }
-            QMenuBar::item:selected {
-                background-color: #094771;
-                color: #ffffff;
-            }
-            QMenuBar::item:pressed {
-                background-color: #0e639c;
-            }
-            QMenu {
-                background-color: #252526;
-                color: #cccccc;
-                border: 1px solid #3e3e42;
-                padding: 4px 0px;
-            }
-            QMenu::item {
-                padding: 8px 32px 8px 12px;
-                margin: 0px;
-            }
-            QMenu::item:selected {
-                background-color: #094771;
-                color: #ffffff;
-            }
-            QMenu::separator {
-                height: 1px;
-                background-color: #3e3e42;
-                margin: 4px 8px;
-            }
-            QMenu::icon {
-                margin-left: 8px;
-            }
-        """
-        menubar.setStyleSheet(menu_style)
-
-        # Меню "Файл"
-        file_menu = menubar.addMenu("📁 Файл")
-
-        self.action_upload = QAction("📤  Загрузить в Gemini", self)
-        self.action_upload.setShortcut("Ctrl+U")
-        self.action_upload.setToolTip("Загрузить выбранные файлы в Gemini Files")
-        self.action_upload.triggered.connect(self._on_upload_selected)
-        self.action_upload.setEnabled(False)
-        file_menu.addAction(self.action_upload)
-
-        file_menu.addSeparator()
-
-        action_exit = QAction("🚪  Выход", self)
-        action_exit.setShortcut("Alt+F4")
-        action_exit.triggered.connect(self.close)
-        file_menu.addAction(action_exit)
-
-        # Меню "Вид"
-        view_menu = menubar.addMenu("👁 Вид")
-
-        self.action_refresh_tree = QAction("🔄  Обновить дерево проектов", self)
-        self.action_refresh_tree.setShortcut("Ctrl+R")
-        self.action_refresh_tree.setToolTip("Обновить дерево проектов")
-        self.action_refresh_tree.triggered.connect(self._on_refresh_tree)
-        self.action_refresh_tree.setEnabled(False)
-        view_menu.addAction(self.action_refresh_tree)
-
-        self.action_refresh_gemini = QAction("🔄  Обновить Gemini Files", self)
-        self.action_refresh_gemini.setShortcut("Ctrl+Shift+R")
-        self.action_refresh_gemini.setToolTip("Обновить список Gemini Files")
-        self.action_refresh_gemini.triggered.connect(self._on_refresh_gemini)
-        self.action_refresh_gemini.setEnabled(False)
-        view_menu.addAction(self.action_refresh_gemini)
-
-        view_menu.addSeparator()
-
-        self.action_model_inspector = QAction("🔍  Инспектор модели", self)
-        self.action_model_inspector.setShortcut("Ctrl+I")
-        self.action_model_inspector.setToolTip("Открыть инспектор модели с полными логами, мыслями и токенами")
-        self.action_model_inspector.triggered.connect(self._on_open_inspector)
-        view_menu.addAction(self.action_model_inspector)
-
-        view_menu.addSeparator()
-
-        # Подменю "Панели"
-        panels_menu = view_menu.addMenu("📋  Панели")
-
-        self.action_toggle_left = QAction("📂  Панель проектов", self)
-        self.action_toggle_left.setCheckable(True)
-        self.action_toggle_left.setChecked(True)
-        self.action_toggle_left.setShortcut("Ctrl+1")
-        self.action_toggle_left.triggered.connect(self._toggle_left_panel)
-        panels_menu.addAction(self.action_toggle_left)
-
-        self.action_toggle_right = QAction("📎  Панель контекста", self)
-        self.action_toggle_right.setCheckable(True)
-        self.action_toggle_right.setChecked(True)
-        self.action_toggle_right.setShortcut("Ctrl+2")
-        self.action_toggle_right.triggered.connect(self._toggle_right_panel)
-        panels_menu.addAction(self.action_toggle_right)
-
-        # Меню "Настройки"
-        settings_menu = menubar.addMenu("⚙️ Настройки")
-
-        self.action_settings = QAction("🔌  Настройки подключения", self)
-        self.action_settings.setShortcut("Ctrl+,")
-        self.action_settings.setToolTip("Настройки подключения")
-        self.action_settings.triggered.connect(self._on_open_settings)
-        settings_menu.addAction(self.action_settings)
-
-        settings_menu.addSeparator()
-
-        self.action_prompts = QAction("📝  Промты", self)
-        self.action_prompts.setShortcut("Ctrl+P")
-        self.action_prompts.setToolTip("Управление промтами")
-        self.action_prompts.triggered.connect(self._on_open_prompts)
-        self.action_prompts.setEnabled(False)
-        settings_menu.addAction(self.action_prompts)
 
     def _connect_signals(self):
         """Connect panel signals"""
