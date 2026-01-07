@@ -1,6 +1,8 @@
 """FastAPI server entry point"""
 
 import logging
+from pathlib import Path
+from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,12 +12,35 @@ from app.config import settings
 from app.api.routes import health, conversations, messages, jobs, files, prompts
 from app.services.job_processor import JobProcessor
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+
+def setup_logging():
+    """Configure logging with file output"""
+    # Create logs directory
+    logs_dir = Path(__file__).parent.parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    log_file = logs_dir / "server.log"
+
+    # Configure handlers
+    handlers = [
+        logging.StreamHandler(),
+        RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=5,
+            encoding="utf-8",
+        ),
+    ]
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=handlers,
+    )
+    return logging.getLogger(__name__), log_file
+
+
+logger, log_file_path = setup_logging()
+logger.info(f"Логи сохраняются в: {log_file_path}")
 
 # Global job processor instance
 job_processor: JobProcessor = None
@@ -91,5 +116,7 @@ if __name__ == "__main__":
         "app.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
+        reload=True,  # Auto-reload on code changes
+        reload_dirs=["app"],  # Watch only app directory
+        log_level="info",
     )

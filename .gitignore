@@ -11,6 +11,7 @@ __pycache__/
 
 # Кэш и временные файлы
 /cache
+/logs/
 *.log
 .DS_Store
 
