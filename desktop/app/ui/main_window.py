@@ -18,6 +18,8 @@ from app.ui.main_window_actions import ModelActionsHandler
 from app.services.agent import Agent
 from app.services.pdf_render import PDFRenderer
 from app.services.trace import TraceStore
+from app.services.api_client import APIClient
+from app.services.realtime_client import RealtimeClient, JobUpdate, MessageUpdate
 from app.ui.model_inspector import ModelInspectorWindow
 from app.ui.settings_dialog import SettingsDialog
 
@@ -48,6 +50,11 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
         self.agent = None
         self.pdf_renderer = PDFRenderer()
         self.trace_store = TraceStore(maxsize=200)  # R2 client will be set in connect
+
+        # Server API clients (when server_url is configured)
+        self.api_client: Optional[APIClient] = None
+        self.realtime_client: Optional[RealtimeClient] = None
+        self.server_mode: bool = False  # True when using server API
 
         # Inspector window (singleton)
         self.inspector_window: Optional[ModelInspectorWindow] = None
@@ -326,13 +333,42 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             supabase_url = config["supabase_url"]
             supabase_key = config["supabase_key"]
             gemini_api_key = config["gemini_api_key"]
+            server_url = config.get("server_url", "")
 
             from app.services.supabase_repo import SupabaseRepo
             from app.services.gemini_client import GeminiClient
             from app.services.r2_async import R2AsyncClient
 
             self.supabase_repo = SupabaseRepo(supabase_url, supabase_key)
-            self.gemini_client = GeminiClient(gemini_api_key)
+
+            # Initialize server API clients if server_url is configured
+            if server_url:
+                logger.info(f"Включен режим сервера: {server_url}")
+                self.server_mode = True
+                self.api_client = APIClient(base_url=server_url, client_id=self.client_id)
+
+                # Initialize Realtime client for live updates
+                self.realtime_client = RealtimeClient(
+                    supabase_url=supabase_url,
+                    supabase_key=supabase_key,
+                    client_id=self.client_id,
+                )
+
+                # Connect realtime signals
+                self.realtime_client.jobUpdated.connect(self._on_job_updated)
+                self.realtime_client.messageReceived.connect(self._on_realtime_message)
+                self.realtime_client.connectionStatusChanged.connect(self._on_realtime_status)
+
+                # Connect to realtime
+                await self.realtime_client.connect()
+
+                self.gemini_client = None  # Not needed in server mode
+            else:
+                logger.info("Локальный режим (без сервера)")
+                self.server_mode = False
+                self.api_client = None
+                self.realtime_client = None
+                self.gemini_client = GeminiClient(gemini_api_key)
 
             r2_public = config["r2_public_base_url"]
             r2_endpoint = config["r2_endpoint"]
@@ -357,11 +393,15 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             self.trace_store.r2_client = self.r2_client
             self.trace_store.client_id = self.client_id
 
-            self.agent = Agent(
-                self.gemini_client,
-                self.supabase_repo,
-                trace_store=self.trace_store,
-            )
+            # Agent is only needed in local mode
+            if not self.server_mode:
+                self.agent = Agent(
+                    self.gemini_client,
+                    self.supabase_repo,
+                    trace_store=self.trace_store,
+                )
+            else:
+                self.agent = None
 
             # Update panels with services
             if self.left_panel:
@@ -396,8 +436,9 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
             await self._load_gemini_models()
             await self._load_prompts()
 
-            logger.info("=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===")
-            self.toast_manager.success("✓ Подключено")
+            mode_str = "серверный режим" if self.server_mode else "локальный режим"
+            logger.info(f"=== ПОДКЛЮЧЕНИЕ УСПЕШНО ({mode_str}) ===")
+            self.toast_manager.success(f"✓ Подключено ({mode_str})")
 
         except Exception as e:
             logger.error(f"ОШИБКА ПОДКЛЮЧЕНИЯ: {e}", exc_info=True)
@@ -600,3 +641,83 @@ class MainWindow(QMainWindow, MainWindowHandlers, ModelActionsHandler):
 
             # Don't create new conversation automatically
             # It will be created on first message
+
+    # === Realtime handlers (server mode) ===
+
+    def _on_job_updated(self, job_update: JobUpdate):
+        """Handle job status update from realtime"""
+        logger.info(f"Job update received: {job_update.job_id} -> {job_update.status}")
+
+        # Only process if this is for the current conversation
+        if self.current_conversation_id and job_update.conversation_id != str(self.current_conversation_id):
+            return
+
+        if job_update.status == "completed":
+            # Job completed - hide loading indicator
+            if self.chat_panel:
+                self.chat_panel.set_loading(False)
+
+            # The message will arrive via messageReceived signal
+            logger.info(f"Job {job_update.job_id} completed")
+
+        elif job_update.status == "failed":
+            # Job failed - show error
+            if self.chat_panel:
+                self.chat_panel.set_loading(False)
+
+            error_msg = job_update.error_message or "Неизвестная ошибка"
+            self.toast_manager.error(f"Ошибка: {error_msg}")
+            logger.error(f"Job {job_update.job_id} failed: {error_msg}")
+
+        elif job_update.status == "processing":
+            # Job started processing
+            logger.info(f"Job {job_update.job_id} is processing")
+
+    def _on_realtime_message(self, message_update: MessageUpdate):
+        """Handle new message from realtime"""
+        logger.info(f"New message received: {message_update.message_id}")
+
+        # Only process if this is for the current conversation
+        if self.current_conversation_id and message_update.conversation_id != str(self.current_conversation_id):
+            return
+
+        # Add message to chat panel
+        if self.chat_panel and message_update.role == "assistant":
+            from app.utils.time_utils import format_time
+            from datetime import datetime
+
+            self.chat_panel.add_message(
+                role="assistant",
+                content=message_update.content,
+                meta=message_update.meta,
+                timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
+            )
+
+            # Process actions if present
+            if message_update.meta and message_update.meta.get("actions"):
+                actions = message_update.meta["actions"]
+                asyncio.create_task(self._process_model_actions(actions))
+
+    def _on_realtime_status(self, is_connected: bool):
+        """Handle realtime connection status change"""
+        if is_connected:
+            logger.info("Realtime connected")
+        else:
+            logger.warning("Realtime disconnected")
+            self.toast_manager.warning("Соединение с сервером потеряно")
+
+    async def closeEvent(self, event):
+        """Clean up on window close"""
+        # Disconnect realtime client
+        if self.realtime_client:
+            await self.realtime_client.disconnect()
+
+        # Close API client
+        if self.api_client:
+            await self.api_client.close()
+
+        # Close R2 client
+        if self.r2_client:
+            await self.r2_client.close()
+
+        event.accept()

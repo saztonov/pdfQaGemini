@@ -590,6 +590,57 @@ CREATE TABLE IF NOT EXISTS public.qa_messages (
     CONSTRAINT qa_messages_pkey PRIMARY KEY (id)
 );
 
+-- Table: public.qa_jobs
+-- Description: Tracks async LLM job processing for client-server architecture
+CREATE TABLE IF NOT EXISTS public.qa_jobs (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    conversation_id uuid NOT NULL,
+    client_id text NOT NULL,
+
+    -- Job specification
+    user_text text NOT NULL,
+    system_prompt text DEFAULT ''::text,
+    user_text_template text DEFAULT ''::text,
+    model_name text NOT NULL,
+    thinking_level text NOT NULL DEFAULT 'low'::text,
+    thinking_budget integer,
+    file_refs jsonb DEFAULT '[]'::jsonb,
+
+    -- Job status: queued, processing, completed, failed
+    status text NOT NULL DEFAULT 'queued'::text,
+    progress real DEFAULT 0,
+
+    -- Result (populated when completed)
+    result_message_id uuid,
+    result_text text,
+    result_actions jsonb DEFAULT '[]'::jsonb,
+    result_is_final boolean DEFAULT false,
+
+    -- Error handling
+    error_message text,
+    retry_count integer DEFAULT 0,
+    max_retries integer DEFAULT 3,
+
+    -- Timing
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    started_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+
+    CONSTRAINT qa_jobs_pkey PRIMARY KEY (id),
+    CONSTRAINT qa_jobs_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.qa_conversations(id) ON DELETE CASCADE,
+    CONSTRAINT qa_jobs_result_message_id_fkey FOREIGN KEY (result_message_id) REFERENCES public.qa_messages(id) ON DELETE SET NULL
+);
+COMMENT ON TABLE public.qa_jobs IS 'Tracks async LLM job processing for client-server architecture';
+COMMENT ON COLUMN public.qa_jobs.status IS 'Job status: queued, processing, completed, failed';
+COMMENT ON COLUMN public.qa_jobs.result_message_id IS 'FK to the assistant message created when job completes';
+
+-- Indexes for qa_jobs
+CREATE INDEX IF NOT EXISTS qa_jobs_status_idx ON public.qa_jobs(status);
+CREATE INDEX IF NOT EXISTS qa_jobs_conversation_id_idx ON public.qa_jobs(conversation_id);
+CREATE INDEX IF NOT EXISTS qa_jobs_client_id_idx ON public.qa_jobs(client_id);
+CREATE INDEX IF NOT EXISTS qa_jobs_created_at_idx ON public.qa_jobs(created_at DESC);
+
 -- Table: public.qa_settings
 CREATE TABLE IF NOT EXISTS public.qa_settings (
     id uuid NOT NULL DEFAULT gen_random_uuid(),

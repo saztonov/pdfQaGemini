@@ -691,6 +691,18 @@ class ChatPanel(QWidget):
         )
         self._rerender_messages()
 
+    def add_message(self, role: str, content: str, meta: dict = None, timestamp: str = None):
+        """Add message with any role to chat"""
+        from app.utils.time_utils import format_time
+
+        if timestamp is None:
+            timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
+
+        self._messages.append(
+            {"role": role, "content": content, "timestamp": timestamp, "meta": meta or {}}
+        )
+        self._rerender_messages()
+
     # ========== Streaming Thoughts Display ==========
 
     def start_thinking_block(self):
@@ -768,6 +780,25 @@ class ChatPanel(QWidget):
         """Enable/disable input"""
         self.input_field.setEnabled(enabled)
         self.btn_send.setEnabled(enabled)
+
+    def set_loading(self, loading: bool):
+        """Show/hide loading indicator"""
+        if loading:
+            # Add loading message
+            from app.utils.time_utils import format_time
+            timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
+            # Remove existing loading message if any
+            self._messages = [m for m in self._messages if m.get("role") != "loading"]
+            self._messages.append(
+                {"role": "loading", "content": "Обработка запроса...", "timestamp": timestamp}
+            )
+        else:
+            # Remove loading message
+            self._messages = [m for m in self._messages if m.get("role") != "loading"]
+            # Re-enable input
+            self.set_input_enabled(True)
+
+        self._rerender_messages()
 
     def load_history(self, messages: list[dict]):
         """Load message history"""
