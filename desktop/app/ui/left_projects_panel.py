@@ -387,13 +387,21 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
 
             # Get parent node type from tree item
             parent_node_type = parent_item.data(0, Qt.UserRole + 1)
+            parent_name = parent_item.text(0)
+            logger.info(f"[TREE] Loading children for: {parent_name} (type={parent_node_type}, id={parent_id})")
 
             if parent_node_type == "document":
                 node_files = await self.supabase_repo.fetch_node_files_single(parent_id)
+                logger.info(f"[TREE] Document '{parent_name}' has {len(node_files)} total files:")
+                for nf in node_files:
+                    logger.info(f"[TREE]   - {nf.file_name} (type={nf.file_type}, r2_key={nf.r2_key})")
 
                 # Filter: only show OCR_HTML and RESULT_MD files
                 allowed_types = {FileType.OCR_HTML.value, FileType.RESULT_MD.value}
                 visible_files = [nf for nf in node_files if nf.file_type in allowed_types]
+                logger.info(
+                    f"[TREE] After filter (allowed: {allowed_types}): {len(visible_files)} visible files"
+                )
 
                 if not visible_files:
                     no_files_item = QTreeWidgetItem()
@@ -416,8 +424,10 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
                     file_item.setData(0, Qt.UserRole + 5, nf.file_type)
                     file_item.setData(0, Qt.UserRole + 6, nf.mime_type)
                     parent_item.addChild(file_item)
+                    logger.info(f"[TREE]   Added to tree: {nf.file_name} (type={nf.file_type})")
             else:
                 children = await self.supabase_repo.fetch_children(parent_id)
+                logger.info(f"[TREE] Node '{parent_name}' has {len(children)} child nodes")
 
                 # Keep sort order from Supabase (sort_order, then name)
                 for node in children:
@@ -430,6 +440,9 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
 
     def _add_node_item(self, parent: Optional[QTreeWidgetItem], node: TreeNode):
         """Add tree node to widget"""
+        parent_name = parent.text(0) if parent else "ROOT"
+        logger.info(f"[TREE] Adding node: {node.name} (type={node.node_type}) under '{parent_name}'")
+
         item = QTreeWidgetItem()
 
         icon = get_node_icon(node)
