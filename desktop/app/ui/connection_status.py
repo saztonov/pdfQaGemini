@@ -120,22 +120,42 @@ class ConnectionStatusWidget(QWidget):
 
     def _setup_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 8, 4)
-        layout.setSpacing(8)
+        layout.setContentsMargins(4, 4, 12, 4)
+        layout.setSpacing(12)
 
         layout.addStretch()
 
-        self.internet_icon = StatusIcon("", "Интернет")
-        self.server_icon = StatusIcon("", "Сервер")
+        # Internet status with label
+        internet_container = QWidget()
+        internet_layout = QHBoxLayout(internet_container)
+        internet_layout.setContentsMargins(0, 0, 0, 0)
+        internet_layout.setSpacing(4)
+        internet_label = QLabel("Интернет")
+        internet_label.setStyleSheet("color: #888888; font-size: 9pt;")
+        self.internet_icon = StatusIcon("●", "Интернет")
+        internet_layout.addWidget(internet_label)
+        internet_layout.addWidget(self.internet_icon)
+        layout.addWidget(internet_container)
 
-        layout.addWidget(self.internet_icon)
-        layout.addWidget(self.server_icon)
+        # Server status with label
+        server_container = QWidget()
+        server_layout = QHBoxLayout(server_container)
+        server_layout.setContentsMargins(0, 0, 0, 0)
+        server_layout.setSpacing(4)
+        server_label = QLabel("Сервер")
+        server_label.setStyleSheet("color: #888888; font-size: 9pt;")
+        self.server_icon = StatusIcon("●", "Сервер")
+        server_layout.addWidget(server_label)
+        server_layout.addWidget(self.server_icon)
+        layout.addWidget(server_container)
 
         self.setStyleSheet("""
             QWidget {
-                background: transparent;
+                background-color: #252526;
+                border-top: 1px solid #3e3e42;
             }
         """)
+        self.setFixedHeight(28)
 
     def _on_internet_status(self, is_connected: bool):
         if is_connected:
