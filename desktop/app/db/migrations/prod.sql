@@ -646,6 +646,21 @@ CREATE TABLE IF NOT EXISTS public.qa_settings (
     CONSTRAINT qa_settings_pkey PRIMARY KEY (id)
 );
 
+-- Table: public.qa_clients (client authentication)
+CREATE TABLE IF NOT EXISTS public.qa_clients (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    client_id text NOT NULL,
+    api_token uuid NOT NULL DEFAULT gen_random_uuid(),
+    name text,
+    default_model text DEFAULT 'gemini-2.0-flash',
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT qa_clients_pkey PRIMARY KEY (id),
+    CONSTRAINT qa_clients_client_id_key UNIQUE (client_id),
+    CONSTRAINT qa_clients_api_token_key UNIQUE (api_token)
+);
+
 -- Table: public.section_types
 CREATE TABLE IF NOT EXISTS public.section_types (
     id integer NOT NULL DEFAULT nextval('section_types_id_seq'::regclass),
@@ -4008,7 +4023,10 @@ CREATE TRIGGER qa_gemini_files_updated_at BEFORE UPDATE ON public.qa_gemini_file
 CREATE TRIGGER qa_jobs_updated_at BEFORE UPDATE ON public.qa_jobs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
 
 -- Trigger: qa_settings_updated_at on public.qa_settings
-CREATE TRIGGER qa_settings_updated_at BEFORE UPDATE ON public.qa_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+CREATE TRIGGER qa_settings_updated_at BEFORE UPDATE ON public.qa_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger: qa_clients_updated_at on public.qa_clients
+CREATE TRIGGER qa_clients_updated_at BEFORE UPDATE ON public.qa_clients FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger: tr_tree_nodes_children_count on public.tree_nodes
 CREATE TRIGGER tr_tree_nodes_children_count AFTER INSERT OR DELETE OR UPDATE OF parent_id ON public.tree_nodes FOR EACH ROW EXECUTE FUNCTION update_parent_children_count()
@@ -4341,6 +4359,10 @@ CREATE UNIQUE INDEX qa_settings_client_id_key ON public.qa_settings USING btree 
 
 -- Index on public.qa_settings (api_token for fast lookup)
 CREATE INDEX IF NOT EXISTS idx_qa_settings_api_token ON public.qa_settings USING btree (api_token);
+
+-- Index on public.qa_clients
+CREATE INDEX IF NOT EXISTS idx_qa_clients_api_token ON public.qa_clients USING btree (api_token);
+CREATE INDEX IF NOT EXISTS idx_qa_clients_client_id ON public.qa_clients USING btree (client_id);
 
 -- Index on public.section_types
 CREATE UNIQUE INDEX section_types_code_key ON public.section_types USING btree (code);

@@ -717,17 +717,18 @@ class SupabaseRepo:
 
         return await asyncio.to_thread(_sync_get)
 
-    # ==================== Settings / Auth ====================
+    # ==================== Clients / Auth ====================
 
-    async def get_settings_by_token(self, api_token: str) -> Optional[dict]:
-        """Get settings by API token for client authentication"""
+    async def get_client_by_token(self, api_token: str) -> Optional[dict]:
+        """Get client by API token for authentication"""
 
         def _sync_get():
             client = self._get_client()
             response = (
-                client.table("qa_settings")
+                client.table("qa_clients")
                 .select("*")
                 .eq("api_token", api_token)
+                .eq("is_active", True)
                 .limit(1)
                 .execute()
             )
