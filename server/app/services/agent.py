@@ -1,227 +1,43 @@
 """Agent logic - orchestrates Gemini interactions (server version)"""
-
+import sys
+from pathlib import Path
 import logging
 import time
 from typing import Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from pydantic import ValidationError, BaseModel
 
 from app.services.gemini_client import GeminiClient
 
+# Add project root to path for shared imports
+_project_root = Path(__file__).resolve().parents[3]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+# Import from shared
+from shared.agent_core import (
+    DEFAULT_SYSTEM_PROMPT,
+    USER_TEXT_TEMPLATE,
+    build_user_prompt,
+    MODEL_REPLY_SCHEMA_STRICT,
+    MODEL_REPLY_SCHEMA_SIMPLE,
+)
+
 logger = logging.getLogger(__name__)
 
-
-# ========== PROMPT TEMPLATES ==========
-
-
-DEFAULT_SYSTEM_PROMPT = ""
-
-USER_TEXT_TEMPLATE = """Вопрос пользователя:
-{question}
-
-context_catalog (используй только эти id; если нужен кроп — запроси через request_files):
-{context_catalog_json}
-
-Требование:
-- Если можно ответить по тексту — ответь сразу.
-- Если нужны чертежи/размеры — запроси конкретные context_item_id кропов.
-"""
-
-
-def build_user_prompt(
-    question: str, context_catalog_json: str, user_text_template: str = ""
-) -> str:
-    """Build user prompt with question and context catalog."""
-    if user_text_template and "{question}" in user_text_template:
-        return user_text_template.format(
-            question=question,
-            context_catalog_json=context_catalog_json,
-        )
-    return USER_TEXT_TEMPLATE.format(
-        question=question,
-        context_catalog_json=context_catalog_json,
-    )
-
-
-# ========== JSON SCHEMAS ==========
-
-MODEL_REPLY_SCHEMA_STRICT = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "assistant_text": {"type": "string"},
-        "is_final": {"type": "boolean"},
-        "actions": {
-            "type": "array",
-            "items": {
-                "oneOf": [
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "request_files"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "items": {
-                                        "type": "array",
-                                        "minItems": 1,
-                                        "maxItems": 5,
-                                        "items": {
-                                            "type": "object",
-                                            "additionalProperties": False,
-                                            "properties": {
-                                                "context_item_id": {"type": "string"},
-                                                "kind": {
-                                                    "type": "string",
-                                                    "enum": ["crop", "text"],
-                                                },
-                                                "reason": {"type": "string"},
-                                                "priority": {
-                                                    "type": "string",
-                                                    "enum": ["high", "medium", "low"],
-                                                },
-                                                "crop_id": {"type": "string"},
-                                            },
-                                            "required": ["context_item_id", "kind", "reason"],
-                                        },
-                                    },
-                                },
-                                "required": ["items"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
-                    },
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "open_image"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "context_item_id": {"type": "string"},
-                                    "purpose": {"type": "string"},
-                                },
-                                "required": ["context_item_id"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
-                    },
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "request_roi"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "image_ref": {
-                                        "type": "object",
-                                        "additionalProperties": False,
-                                        "properties": {
-                                            "context_item_id": {"type": "string"},
-                                        },
-                                        "required": ["context_item_id"],
-                                    },
-                                    "goal": {"type": "string"},
-                                    "dpi": {"type": "integer", "minimum": 120, "maximum": 800},
-                                    "suggested_bbox_norm": {
-                                        "type": "object",
-                                        "additionalProperties": False,
-                                        "properties": {
-                                            "x1": {
-                                                "type": "number",
-                                                "minimum": 0.0,
-                                                "maximum": 1.0,
-                                            },
-                                            "y1": {
-                                                "type": "number",
-                                                "minimum": 0.0,
-                                                "maximum": 1.0,
-                                            },
-                                            "x2": {
-                                                "type": "number",
-                                                "minimum": 0.0,
-                                                "maximum": 1.0,
-                                            },
-                                            "y2": {
-                                                "type": "number",
-                                                "minimum": 0.0,
-                                                "maximum": 1.0,
-                                            },
-                                        },
-                                        "required": ["x1", "y1", "x2", "y2"],
-                                    },
-                                },
-                                "required": ["image_ref", "goal"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
-                    },
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "final"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "confidence": {
-                                        "type": "string",
-                                        "enum": ["low", "medium", "high"],
-                                    },
-                                    "used_context_item_ids": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                    },
-                                },
-                                "required": ["confidence", "used_context_item_ids"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
-                    },
-                ],
-            },
-        },
-    },
-    "required": ["assistant_text", "actions", "is_final"],
-}
-
-MODEL_REPLY_SCHEMA_SIMPLE = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "assistant_text": {"type": "string"},
-        "is_final": {"type": "boolean"},
-        "actions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "type": {
-                        "type": "string",
-                        "enum": ["request_files", "open_image", "request_roi", "final"],
-                    },
-                    "payload": {"type": "object"},
-                    "note": {"type": "string"},
-                },
-                "required": ["type", "payload"],
-            },
-        },
-    },
-    "required": ["assistant_text", "actions", "is_final"],
-}
+# Re-export for backward compatibility
+__all__ = [
+    "DEFAULT_SYSTEM_PROMPT",
+    "USER_TEXT_TEMPLATE",
+    "build_user_prompt",
+    "MODEL_REPLY_SCHEMA_STRICT",
+    "MODEL_REPLY_SCHEMA_SIMPLE",
+    "Agent",
+    "AgentResult",
+    "ModelAction",
+    "ModelReply",
+]
 
 
 # ========== PYDANTIC MODELS ==========
@@ -239,7 +55,7 @@ class ModelReply(BaseModel):
     """Model structured reply"""
 
     assistant_text: str
-    actions: list[ModelAction] = field(default_factory=list)
+    actions: list[ModelAction] = []
     is_final: bool = False
 
 
