@@ -15,8 +15,9 @@ from app.services.redis_queue import init_redis_queue, get_redis_queue
 
 def setup_logging():
     """Configure logging with file output"""
-    # Create logs directory
-    logs_dir = Path(__file__).parent.parent.parent / "logs"
+    # Create logs directory (use /logs in Docker, otherwise relative path)
+    docker_logs = Path("/logs")
+    logs_dir = docker_logs if docker_logs.exists() else Path(__file__).parent.parent.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
     log_file = logs_dir / "server.log"
 

@@ -7,7 +7,9 @@ from logging.handlers import RotatingFileHandler
 
 def setup_logging():
     """Configure worker logging"""
-    logs_dir = Path(__file__).parent.parent / "logs"
+    # Use /logs in Docker, otherwise relative path
+    docker_logs = Path("/logs")
+    logs_dir = docker_logs if docker_logs.exists() else Path(__file__).parent.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
     log_file = logs_dir / "worker.log"
 

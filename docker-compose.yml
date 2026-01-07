@@ -1,0 +1,42 @@
+name: pdfqa
+
+services:
+  web:
+    build: ./server
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./server:/app
+      - ./logs:/logs
+    env_file:
+      - ./server/.env
+    environment:
+      - REDIS_HOST=redis
+      - HOST=0.0.0.0
+      - PORT=8888
+    depends_on:
+      - redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8888 --reload
+
+  worker:
+    build: ./server
+    volumes:
+      - ./server:/app
+      - ./logs:/logs
+    env_file:
+      - ./server/.env
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    command: watchfiles "python run_worker.py" /app
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
