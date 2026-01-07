@@ -95,6 +95,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """Log all incoming requests"""
+    logger.info(f">>> Incoming request: {request.method} {request.url}")
+    response = await call_next(request)
+    logger.info(f"<<< Response: {response.status_code}")
+    return response
+
 # Register routes
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["conversations"])
@@ -113,11 +122,13 @@ def get_job_processor() -> JobProcessor:
 if __name__ == "__main__":
     import uvicorn
 
+    print(f"*** Starting uvicorn on {settings.host}:{settings.port} ***")
+    
     uvicorn.run(
         "app.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,  # Auto-reload on code changes
-        reload_dirs=["app"],  # Watch only app directory
+        reload=False,  # Disabled - causes issues on Windows
         log_level="info",
+        access_log=True,
     )

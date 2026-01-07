@@ -82,7 +82,7 @@ FILE_TYPE_COLORS = {
 class TreeNode(BaseModel):
     id: UUID
     parent_id: Optional[UUID] = None
-    client_id: str
+    client_id: str = "default"  # Made optional with default
     node_type: str
     name: str
     code: Optional[str] = None

@@ -70,42 +70,15 @@ class RealtimeClient(QObject):
         Connect to Supabase Realtime.
 
         Returns True if connection successful.
+        Note: supabase-py v2+ requires async client for Realtime.
+        Currently disabled - app works via polling instead.
         """
-        try:
-            client = self._get_client()
-
-            # Subscribe to jobs table for this client
-            self._channel = client.channel("db-changes")
-
-            # Listen for job updates (INSERT, UPDATE)
-            self._channel.on_postgres_changes(
-                event="*",
-                schema="public",
-                table="qa_jobs",
-                callback=self._on_job_change,
-            )
-
-            # Listen for new messages
-            self._channel.on_postgres_changes(
-                event="INSERT",
-                schema="public",
-                table="qa_messages",
-                callback=self._on_message_insert,
-            )
-
-            # Subscribe
-            await asyncio.to_thread(self._channel.subscribe)
-
-            self._connected = True
-            self.connectionStatusChanged.emit(True)
-            logger.info("Realtime client connected")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to connect to Realtime: {e}", exc_info=True)
-            self._connected = False
-            self.connectionStatusChanged.emit(False)
-            return False
+        # Realtime is not supported with sync client in supabase-py v2+
+        # The app will work without live updates - uses polling instead
+        logger.warning("Realtime disabled: supabase-py v2+ requires async client for Realtime")
+        self._connected = False
+        self.connectionStatusChanged.emit(False)
+        return False
 
     async def disconnect(self):
         """Disconnect from Supabase Realtime"""

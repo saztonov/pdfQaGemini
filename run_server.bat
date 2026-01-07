@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0server"
-echo Starting pdfQaGemini Server with auto-reload...
+echo Starting pdfQaGemini Server...
 echo Logs: ..\logs\server.log
-echo API Docs: http://localhost:8000/docs
+echo Check .env for HOST and PORT settings
 echo.
 python -B -m app.main
 pause
