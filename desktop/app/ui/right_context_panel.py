@@ -64,6 +64,8 @@ class RightContextPanel(
         self.gemini_files: list[dict] = []
         self._selected_for_request: set[str] = set()
         self.current_trace: Optional[ModelTrace] = None
+        self.api_client = None
+        self.server_mode: bool = False
 
         self._setup_ui()
         self._connect_signals()
@@ -314,6 +316,8 @@ class RightContextPanel(
         r2_client,
         toast_manager,
         client_id: str = "default",
+        api_client=None,
+        server_mode: bool = False,
     ):
         """Set service dependencies"""
         self.supabase_repo = supabase_repo
@@ -321,3 +325,5 @@ class RightContextPanel(
         self.r2_client = r2_client
         self.toast_manager = toast_manager
         self.client_id = client_id
+        self.api_client = api_client
+        self.server_mode = server_mode

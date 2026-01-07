@@ -329,7 +329,9 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             if self.right_panel:
                 self.right_panel.set_services(
                     self.supabase_repo, self.gemini_client, self.r2_client, self.toast_manager,
-                    client_id=self.client_id
+                    client_id=self.client_id,
+                    api_client=self.api_client,
+                    server_mode=self.server_mode,
                 )
                 self.right_panel.trace_store = self.trace_store
 

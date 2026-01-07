@@ -37,7 +37,7 @@ async def upload_file(
         )
 
         # Save to database
-        await repo.qa_upsert_gemini_file(
+        gemini_file_record = await repo.qa_upsert_gemini_file(
             gemini_name=result["name"],
             gemini_uri=result["uri"],
             display_name=result.get("display_name"),
@@ -45,6 +45,15 @@ async def upload_file(
             size_bytes=result.get("size_bytes"),
             client_id=x_client_id,
         )
+
+        # Attach file to conversation
+        if gemini_file_record and conversation_id:
+            gemini_file_id = gemini_file_record.get("id")
+            if gemini_file_id:
+                await repo.qa_attach_gemini_file(
+                    conversation_id=conversation_id,
+                    gemini_file_id=str(gemini_file_id),
+                )
 
         return GeminiFileResponse(
             gemini_name=result["name"],

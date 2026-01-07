@@ -68,11 +68,31 @@ class RightPanelFilesMixin:
 
     async def refresh_files(self, conversation_id: Optional[str] = None):
         """Refresh Gemini Files list (filtered by conversation if provided)"""
-        if not self.gemini_client:
-            return
+        # Check required services based on mode
+        if self.server_mode:
+            if not self.api_client:
+                return
+        else:
+            if not self.gemini_client:
+                return
 
         try:
-            all_files = await self.gemini_client.list_files()
+            # Get all files from Gemini
+            if self.server_mode:
+                all_files_raw = await self.api_client.list_gemini_files()
+                # Normalize server response (gemini_name -> name, gemini_uri -> uri)
+                all_files = [
+                    {
+                        "name": f.get("gemini_name"),
+                        "uri": f.get("gemini_uri"),
+                        "display_name": f.get("display_name"),
+                        "mime_type": f.get("mime_type"),
+                        "size_bytes": f.get("size_bytes"),
+                    }
+                    for f in all_files_raw
+                ]
+            else:
+                all_files = await self.gemini_client.list_files()
 
             # Filter files by conversation if specified
             if conversation_id and self.supabase_repo:
@@ -198,10 +218,17 @@ class RightPanelFilesMixin:
 
     async def delete_selected_files(self):
         """Delete selected files from Gemini"""
-        if not self.gemini_client:
-            if self.toast_manager:
-                self.toast_manager.error("Клиент Gemini не инициализирован")
-            return
+        # Check required services based on mode
+        if self.server_mode:
+            if not self.api_client:
+                if self.toast_manager:
+                    self.toast_manager.error("API клиент не инициализирован")
+                return
+        else:
+            if not self.gemini_client:
+                if self.toast_manager:
+                    self.toast_manager.error("Клиент Gemini не инициализирован")
+                return
 
         selected_rows = set(item.row() for item in self.table.selectedItems())
         if not selected_rows:
@@ -222,7 +249,10 @@ class RightPanelFilesMixin:
 
         try:
             for name in file_names:
-                await self.gemini_client.delete_file(name)
+                if self.server_mode:
+                    await self.api_client.delete_file(name)
+                else:
+                    await self.gemini_client.delete_file(name)
                 self._selected_for_request.discard(name)
 
             await self.refresh_files(conversation_id=self.conversation_id)
@@ -238,10 +268,17 @@ class RightPanelFilesMixin:
 
     async def reload_selected_files(self):
         """Delete and re-upload selected files from R2"""
-        if not self.gemini_client or not self.r2_client or not self.supabase_repo:
-            if self.toast_manager:
-                self.toast_manager.error("Сервисы не инициализированы")
-            return
+        # Check required services based on mode
+        if self.server_mode:
+            if not self.api_client or not self.r2_client:
+                if self.toast_manager:
+                    self.toast_manager.error("Сервисы не инициализированы")
+                return
+        else:
+            if not self.gemini_client or not self.r2_client or not self.supabase_repo:
+                if self.toast_manager:
+                    self.toast_manager.error("Сервисы не инициализированы")
+                return
 
         selected_rows = set(item.row() for item in self.table.selectedItems())
         if not selected_rows:
@@ -321,7 +358,10 @@ class RightPanelFilesMixin:
 
                 # Delete from Gemini
                 logger.info(f"Удаление файла из Gemini: {name}")
-                await self.gemini_client.delete_file(name)
+                if self.server_mode:
+                    await self.api_client.delete_file(name)
+                else:
+                    await self.gemini_client.delete_file(name)
                 self._selected_for_request.discard(name)
 
                 # Download from R2
@@ -332,31 +372,40 @@ class RightPanelFilesMixin:
 
                 # Re-upload to Gemini
                 logger.info(f"Повторная загрузка в Gemini: {display_name}")
-                result = await self.gemini_client.upload_file(
-                    cached_path,
-                    mime_type=mime_type,
-                    display_name=display_name,
-                )
+                if self.server_mode:
+                    # Server mode: upload via API
+                    result = await self.api_client.upload_file(
+                        file_path=str(cached_path),
+                        conversation_id=self.conversation_id or "",
+                    )
+                    new_name = result.get("gemini_name")
+                    logger.info(f"✓ Файл успешно перезагружен через сервер: {new_name}")
+                else:
+                    # Local mode: upload directly
+                    result = await self.gemini_client.upload_file(
+                        cached_path,
+                        mime_type=mime_type,
+                        display_name=display_name,
+                    )
+                    new_name = result.get("name")
+                    logger.info(f"✓ Файл успешно перезагружен: {new_name}")
 
-                new_name = result.get("name")
-                logger.info(f"✓ Файл успешно перезагружен: {new_name}")
-
-                # Update metadata in database
-                if self.supabase_repo and new_name:
-                    try:
-                        await self.supabase_repo.qa_upsert_gemini_file(
-                            gemini_name=new_name,
-                            gemini_uri=result.get("uri", ""),
-                            display_name=display_name,
-                            mime_type=mime_type,
-                            size_bytes=result.get("size_bytes"),
-                            source_node_file_id=file_metadata.get("source_node_file_id"),
-                            source_r2_key=r2_key,
-                            expires_at=None,
-                            client_id=self.client_id,
-                        )
-                    except Exception as e:
-                        logger.error(f"Не удалось обновить метаданные в БД: {e}")
+                    # Update metadata in database (only in local mode)
+                    if self.supabase_repo and new_name:
+                        try:
+                            await self.supabase_repo.qa_upsert_gemini_file(
+                                gemini_name=new_name,
+                                gemini_uri=result.get("uri", ""),
+                                display_name=display_name,
+                                mime_type=mime_type,
+                                size_bytes=result.get("size_bytes"),
+                                source_node_file_id=file_metadata.get("source_node_file_id"),
+                                source_r2_key=r2_key,
+                                expires_at=None,
+                                client_id=self.client_id,
+                            )
+                        except Exception as e:
+                            logger.error(f"Не удалось обновить метаданные в БД: {e}")
 
                 success_count += 1
                 if status_item:

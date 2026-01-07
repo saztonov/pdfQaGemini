@@ -28,9 +28,15 @@ class UploadHandlersMixin:
             self.toast_manager.error("Supabase не инициализирован")
             return
 
-        if not self.gemini_client or not self.r2_client:
-            self.toast_manager.error("Сервисы не инициализированы")
-            return
+        # Check required services based on mode
+        if self.server_mode:
+            if not self.api_client or not self.r2_client:
+                self.toast_manager.error("Сервисы не инициализированы")
+                return
+        else:
+            if not self.gemini_client or not self.r2_client:
+                self.toast_manager.error("Сервисы не инициализированы")
+                return
 
         self.toast_manager.info(f"Подготовка bundle для {len(node_ids)} узлов...")
 
@@ -101,50 +107,64 @@ class UploadHandlersMixin:
             # Upload bundle to Gemini
             self.toast_manager.info("Загрузка bundle.txt в Gemini...")
 
-            result = await self.gemini_client.upload_file(
-                tmp_path,
-                mime_type="text/plain",
-                display_name=bundle_file_name,
-            )
+            if self.server_mode:
+                # Server mode: upload via API
+                if not self.current_conversation_id:
+                    self.toast_manager.error("Нет активного чата для загрузки bundle")
+                    return
 
-            gemini_name = result.get("name")
-            gemini_uri = result.get("uri", "")
-            logger.info(f"Bundle uploaded: {gemini_name}")
-
-            # Save metadata to database
-            if self.supabase_repo and gemini_name:
-                # Use first node_file id as source reference
-                source_node_file_id = str(node_files[0].id) if node_files else None
-
-                gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
-                    gemini_name=gemini_name,
-                    gemini_uri=gemini_uri,
-                    display_name=bundle_file_name,
-                    mime_type="text/plain",
-                    size_bytes=len(bundle_bytes),
-                    source_node_file_id=source_node_file_id,
-                    source_r2_key=None,
-                    expires_at=None,
-                    client_id=self.client_id,
+                result = await self.api_client.upload_file(
+                    file_path=str(tmp_path),
+                    conversation_id=str(self.current_conversation_id),
                 )
+                # Server returns GeminiFileResponse with gemini_name, gemini_uri
+                gemini_name = result.get("gemini_name")
+                gemini_uri = result.get("gemini_uri", "")
+                logger.info(f"Bundle uploaded via server: {gemini_name}")
+            else:
+                # Local mode: upload directly
+                result = await self.gemini_client.upload_file(
+                    tmp_path,
+                    mime_type="text/plain",
+                    display_name=bundle_file_name,
+                )
+                gemini_name = result.get("name")
+                gemini_uri = result.get("uri", "")
+                logger.info(f"Bundle uploaded: {gemini_name}")
 
-                # Store crop_index in metadata for later use
-                if gemini_file_result and crop_index:
-                    # Could store crop_index in gemini_file metadata if needed
-                    logger.info(f"Crop index: {len(crop_index)} items stored")
+                # Save metadata to database (only in local mode, server does this automatically)
+                if self.supabase_repo and gemini_name:
+                    # Use first node_file id as source reference
+                    source_node_file_id = str(node_files[0].id) if node_files else None
 
-                # Attach to conversation
-                if self.current_conversation_id and gemini_file_result:
-                    gemini_file_id = gemini_file_result.get("id")
-                    if gemini_file_id:
-                        try:
-                            await self.supabase_repo.qa_attach_gemini_file(
-                                conversation_id=str(self.current_conversation_id),
-                                gemini_file_id=gemini_file_id,
-                            )
-                            logger.info(f"Bundle attached to chat {self.current_conversation_id}")
-                        except Exception as e:
-                            logger.error(f"Failed to attach bundle: {e}")
+                    gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
+                        gemini_name=gemini_name,
+                        gemini_uri=gemini_uri,
+                        display_name=bundle_file_name,
+                        mime_type="text/plain",
+                        size_bytes=len(bundle_bytes),
+                        source_node_file_id=source_node_file_id,
+                        source_r2_key=None,
+                        expires_at=None,
+                        client_id=self.client_id,
+                    )
+
+                    # Store crop_index in metadata for later use
+                    if gemini_file_result and crop_index:
+                        logger.info(f"Crop index: {len(crop_index)} items stored")
+
+                    # Attach to conversation
+                    if self.current_conversation_id and gemini_file_result:
+                        gemini_file_id = gemini_file_result.get("id")
+                        if gemini_file_id:
+                            try:
+                                await self.supabase_repo.qa_attach_gemini_file(
+                                    conversation_id=str(self.current_conversation_id),
+                                    gemini_file_id=gemini_file_id,
+                                )
+                                logger.info(f"Bundle attached to chat {self.current_conversation_id}")
+                            except Exception as e:
+                                logger.error(f"Failed to attach bundle: {e}")
 
             # Refresh panels
             if self.right_panel:
@@ -180,10 +200,21 @@ class UploadHandlersMixin:
         """Upload files to Gemini and refresh panel"""
         logger.info(f"=== ЗАГРУЗКА {len(files_info)} ФАЙЛОВ В GEMINI ===")
 
-        if not self.gemini_client or not self.r2_client:
-            logger.error("Сервисы не инициализированы")
-            self.toast_manager.error("Сервисы не инициализированы")
-            return
+        # Check required services based on mode
+        if self.server_mode:
+            if not self.api_client:
+                logger.error("API клиент не инициализирован")
+                self.toast_manager.error("API клиент не инициализирован")
+                return
+            if not self.r2_client:
+                logger.error("R2 клиент не инициализирован")
+                self.toast_manager.error("R2 клиент не инициализирован")
+                return
+        else:
+            if not self.gemini_client or not self.r2_client:
+                logger.error("Сервисы не инициализированы")
+                self.toast_manager.error("Сервисы не инициализированы")
+                return
 
         self.toast_manager.info(f"Загрузка {len(files_info)} файлов в Gemini...")
 
@@ -209,66 +240,82 @@ class UploadHandlersMixin:
 
                 cached_path = await self.r2_client.download_to_cache(url, file_id)
 
-                # Upload to Gemini
+                # Upload to Gemini (via server API or directly)
                 logger.info(f"[{idx}/{len(files_info)}] Загрузка в Gemini: {file_name}")
 
-                result = await self.gemini_client.upload_file(
-                    cached_path,
-                    mime_type=mime_type,
-                    display_name=file_name,
-                )
+                if self.server_mode:
+                    # Server mode: upload via API (server handles Gemini + DB save)
+                    if not self.current_conversation_id:
+                        logger.warning("Нет активного чата для загрузки файла")
+                        failed_count += 1
+                        continue
 
-                gemini_name = result.get("name")
-                gemini_uri = result.get("uri", "")
-                logger.info(f"[{idx}/{len(files_info)}] ✓ Загружен: {gemini_name}")
+                    result = await self.api_client.upload_file(
+                        file_path=str(cached_path),
+                        conversation_id=str(self.current_conversation_id),
+                    )
+                    # Server returns GeminiFileResponse with gemini_name, gemini_uri
+                    gemini_name = result.get("gemini_name")
+                    gemini_uri = result.get("gemini_uri", "")
+                    logger.info(f"[{idx}/{len(files_info)}] ✓ Загружен через сервер: {gemini_name}")
+                else:
+                    # Local mode: upload directly to Gemini
+                    result = await self.gemini_client.upload_file(
+                        cached_path,
+                        mime_type=mime_type,
+                        display_name=file_name,
+                    )
+                    gemini_name = result.get("name")
+                    gemini_uri = result.get("uri", "")
+                    logger.info(f"[{idx}/{len(files_info)}] ✓ Загружен: {gemini_name}")
 
-                # Save metadata to database
-                if self.supabase_repo and gemini_name:
-                    try:
-                        node_file_id = file_info.get("id")
-                        gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
-                            gemini_name=gemini_name,
-                            gemini_uri=gemini_uri,
-                            display_name=file_name,
-                            mime_type=mime_type,
-                            size_bytes=result.get("size_bytes"),
-                            source_node_file_id=node_file_id,
-                            source_r2_key=r2_key,
-                            expires_at=None,  # Will be updated on next list
-                            client_id=self.client_id,
-                        )
-                        logger.info(f"  Метаданные сохранены в БД для {gemini_name}")
+                    # Save metadata to database (only in local mode, server does this automatically)
+                    if self.supabase_repo and gemini_name:
+                        try:
+                            node_file_id = file_info.get("id")
+                            gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
+                                gemini_name=gemini_name,
+                                gemini_uri=gemini_uri,
+                                display_name=file_name,
+                                mime_type=mime_type,
+                                size_bytes=result.get("size_bytes"),
+                                source_node_file_id=node_file_id,
+                                source_r2_key=r2_key,
+                                expires_at=None,
+                                client_id=self.client_id,
+                            )
+                            logger.info(f"  Метаданные сохранены в БД для {gemini_name}")
 
-                        # Attach file to current conversation
-                        if self.current_conversation_id and gemini_file_result:
-                            gemini_file_id = gemini_file_result.get("id")
-                            if gemini_file_id:
+                            # Attach file to current conversation
+                            if self.current_conversation_id and gemini_file_result:
+                                gemini_file_id = gemini_file_result.get("id")
+                                if gemini_file_id:
+                                    try:
+                                        await self.supabase_repo.qa_attach_gemini_file(
+                                            conversation_id=str(self.current_conversation_id),
+                                            gemini_file_id=gemini_file_id,
+                                        )
+                                        logger.info(
+                                            f"  Файл привязан к чату {self.current_conversation_id}"
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"  Не удалось привязать файл к чату: {e}")
+
+                            # Save file copy to R2 chat folder
+                            if self.current_conversation_id and self.r2_client:
                                 try:
-                                    await self.supabase_repo.qa_attach_gemini_file(
+                                    await self.r2_client.save_chat_file(
                                         conversation_id=str(self.current_conversation_id),
-                                        gemini_file_id=gemini_file_id,
+                                        file_name=file_name,
+                                        file_path=cached_path,
+                                        mime_type=mime_type,
                                     )
-                                    logger.info(
-                                        f"  Файл привязан к чату {self.current_conversation_id}"
-                                    )
+                                    logger.info("  Файл сохранен в папку чата на R2")
                                 except Exception as e:
-                                    logger.error(f"  Не удалось привязать файл к чату: {e}")
+                                    logger.error(f"  Не удалось сохранить файл в папку чата: {e}")
 
-                        # Save file copy to R2 chat folder
-                        if self.current_conversation_id and self.r2_client:
-                            try:
-                                await self.r2_client.save_chat_file(
-                                    conversation_id=str(self.current_conversation_id),
-                                    file_name=file_name,
-                                    file_path=cached_path,
-                                    mime_type=mime_type,
-                                )
-                                logger.info("  Файл сохранен в папку чата на R2")
-                            except Exception as e:
-                                logger.error(f"  Не удалось сохранить файл в папку чата: {e}")
-
-                    except Exception as e:
-                        logger.error(f"  Не удалось сохранить метаданные в БД: {e}")
+                        except Exception as e:
+                            logger.error(f"  Не удалось сохранить метаданные в БД: {e}")
 
                 uploaded_count += 1
                 if gemini_name:
