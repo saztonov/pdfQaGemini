@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     job_max_retries: int = 3
 
     # Default model
-    default_model: str = "gemini-2.0-flash"
+    default_model: str = "gemini-3-flash-preview"
 
     class Config:
         env_file = ".env"
