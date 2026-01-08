@@ -33,3 +33,4 @@ local_settings.py
 /Google Gen AI SDK/
 /.claude/settings.local.json
 .claude/settings.local.json
+desktop/cache/
