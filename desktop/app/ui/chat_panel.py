@@ -1,4 +1,4 @@
-"""Center panel - Chat with file selection"""
+"""Center panel - Chat with file selection (ChatGPT-style dark theme)"""
 import logging
 from PySide6.QtWidgets import (
     QWidget,
@@ -7,12 +7,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QFrame,
-    QTextBrowser,
     QScrollArea,
     QLabel,
 )
 from PySide6.QtCore import Signal, Qt, Slot, QUrl
-from PySide6.QtGui import QTextCursor
 from datetime import datetime
 from app.models.schemas import (
     MODEL_THINKING_LEVELS,
@@ -20,7 +18,7 @@ from app.models.schemas import (
     DEFAULT_MODEL,
     THINKING_BUDGET_PRESETS,
 )
-from app.ui.message_renderer import MessageRenderer
+from app.ui.chat_widget import ChatWidget
 from app.ui.chat_widgets import FileChip, PromptInput
 
 logger = logging.getLogger(__name__)
@@ -39,8 +37,6 @@ class ChatPanel(QWidget):
         super().__init__()
         self._current_thought_block_id: str | None = None
         self._current_answer_block_id: str | None = None
-        self._messages: list[dict] = []
-        self._renderer = MessageRenderer()
         self._available_files: list[dict] = []  # files from Gemini
         self._selected_files: dict[str, dict] = {}  # name -> file_info
         self._available_prompts: list[dict] = []  # user prompts
@@ -49,39 +45,28 @@ class ChatPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        """Initialize UI"""
+        """Initialize UI with dark theme"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Chat history
-        self.chat_history = QTextBrowser()
-        self.chat_history.setReadOnly(True)
-        self.chat_history.setOpenLinks(False)
-        self.chat_history.anchorClicked.connect(self._on_link_clicked)
-        self.chat_history.setStyleSheet(
-            """
-            QTextBrowser {
-                background-color: #ffffff;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 12px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 14px;
-                color: #1a1a1a;
-            }
-        """
-        )
+        # Apply dark theme to entire panel
+        self.setStyleSheet("background-color: #1a1a1a;")
+
+        # Chat history - modern ChatWidget
+        self.chat_history = ChatWidget()
+        self.chat_history.linkClicked.connect(self._on_link_clicked)
         layout.addWidget(self.chat_history, 1)
 
-        # Input Block
+        # Input Block - dark theme style
         self.input_container = QFrame()
         self.input_container.setStyleSheet(
             """
             QFrame#input_container {
-                background-color: #2d2d2d;
-                border: 1px solid #404040;
+                background-color: #212121;
+                border: 1px solid #333;
                 border-radius: 16px;
+                margin: 8px 16px 16px 16px;
             }
         """
         )
@@ -100,7 +85,7 @@ class ChatPanel(QWidget):
         self.files_header.addWidget(files_label)
 
         self.files_count_label = QLabel("0 выбрано")
-        self.files_count_label.setStyleSheet("color: #0e639c; font-size: 11px;")
+        self.files_count_label.setStyleSheet("color: #60a5fa; font-size: 11px;")
         self.files_header.addWidget(self.files_count_label)
 
         self.btn_toggle_files = QPushButton("▼")
@@ -168,11 +153,11 @@ class ChatPanel(QWidget):
 
         # No files message
         self.no_files_label = QLabel("Нет загруженных файлов. Выберите файлы в дереве проектов.")
-        self.no_files_label.setStyleSheet("color: #666; font-size: 11px; padding: 8px 0;")
+        self.no_files_label.setStyleSheet("color: #6b7280; font-size: 11px; padding: 8px 0;")
         self.no_files_label.setAlignment(Qt.AlignCenter)
         input_main_layout.addWidget(self.no_files_label)
 
-        # Text input area
+        # Text input area - dark theme
         self.input_field = PromptInput()
         self.input_field.setPlaceholderText(
             "Задайте вопрос... (Enter - отправить, Shift+Enter - новая строка)"
@@ -181,14 +166,14 @@ class ChatPanel(QWidget):
         self.input_field.setStyleSheet(
             """
             QTextEdit {
-                background-color: #1e1e1e;
-                border: 1px solid #404040;
-                border-radius: 8px;
+                background-color: #111827;
+                border: 1px solid #374151;
+                border-radius: 10px;
                 font-size: 14px;
-                color: #e0e0e0;
-                padding: 8px;
+                color: #e5e7eb;
+                padding: 10px 12px;
             }
-            QTextEdit:focus { border: 1px solid #0e639c; }
+            QTextEdit:focus { border: 1px solid #3b82f6; }
         """
         )
         input_main_layout.addWidget(self.input_field)
@@ -221,13 +206,13 @@ class ChatPanel(QWidget):
         self.btn_edit_prompt.setStyleSheet(
             """
             QPushButton {
-                background-color: #3e3e42;
+                background-color: #374151;
                 border: none;
                 border-radius: 6px;
                 font-size: 14px;
             }
-            QPushButton:hover { background-color: #505054; }
-            QPushButton:disabled { background-color: transparent; color: #555; }
+            QPushButton:hover { background-color: #4b5563; }
+            QPushButton:disabled { background-color: transparent; color: #4b5563; }
         """
         )
         toolbar_layout.addWidget(self.btn_edit_prompt)
@@ -262,7 +247,7 @@ class ChatPanel(QWidget):
         toolbar_layout.addWidget(self.budget_combo)
         toolbar_layout.addStretch()
 
-        # Send button
+        # Send button - modern style
         self.btn_send = QPushButton("➤ Отправить")
         self.btn_send.setToolTip("Отправить запрос (Enter)")
         self.btn_send.clicked.connect(self._on_send)
@@ -271,17 +256,17 @@ class ChatPanel(QWidget):
         self.btn_send.setStyleSheet(
             """
             QPushButton {
-                background-color: #0e639c;
+                background-color: #2563eb;
                 color: white;
                 border: none;
-                border-radius: 8px;
-                padding: 0 20px;
+                border-radius: 10px;
+                padding: 0 24px;
                 font-size: 13px;
-                font-weight: 500;
+                font-weight: 600;
             }
-            QPushButton:hover { background-color: #1177bb; }
-            QPushButton:pressed { background-color: #0a4d78; }
-            QPushButton:disabled { background-color: #404040; color: #666; }
+            QPushButton:hover { background-color: #3b82f6; }
+            QPushButton:pressed { background-color: #1d4ed8; }
+            QPushButton:disabled { background-color: #374151; color: #6b7280; }
         """
         )
 
@@ -302,40 +287,40 @@ class ChatPanel(QWidget):
     def _small_button_style(self) -> str:
         return """
             QPushButton {
-                background-color: #3e3e42;
-                color: #aaa;
+                background-color: #374151;
+                color: #9ca3af;
                 border: none;
                 border-radius: 4px;
-                padding: 2px 8px;
+                padding: 2px 10px;
                 font-size: 10px;
             }
-            QPushButton:hover { background-color: #505054; color: #fff; }
+            QPushButton:hover { background-color: #4b5563; color: #e5e7eb; }
         """
 
     def _combo_style(self) -> str:
         return """
             QComboBox {
-                background-color: #3e3e42;
-                color: #e0e0e0;
-                border: 1px solid #555;
+                background-color: #374151;
+                color: #e5e7eb;
+                border: 1px solid #4b5563;
                 border-radius: 8px;
                 padding: 6px 10px;
                 font-size: 12px;
             }
-            QComboBox:hover { background-color: #505050; }
+            QComboBox:hover { background-color: #4b5563; }
             QComboBox::drop-down { border: none; width: 20px; }
             QComboBox::down-arrow {
                 image: none;
                 border-left: 4px solid transparent;
                 border-right: 4px solid transparent;
-                border-top: 5px solid #aaa;
+                border-top: 5px solid #9ca3af;
                 margin-right: 6px;
             }
             QComboBox QAbstractItemView {
-                background-color: #333;
-                color: #e0e0e0;
-                selection-background-color: #0e639c;
-                border: 1px solid #555;
+                background-color: #1f2937;
+                color: #e5e7eb;
+                selection-background-color: #2563eb;
+                border: 1px solid #4b5563;
                 border-radius: 8px;
             }
         """
@@ -356,19 +341,7 @@ class ChatPanel(QWidget):
 
     def _show_welcome(self):
         """Show welcome message"""
-        self.chat_history.setHtml(
-            """
-            <div style="color: #666; padding: 40px; text-align: center;">
-                <h2 style="color: #1a1a1a; margin-bottom: 16px;">pdfQaGemini</h2>
-                <p style="font-size: 14px; line-height: 1.6;">
-                    1. Выберите файлы в дереве проектов слева<br>
-                    2. Они автоматически загрузятся в Gemini Files<br>
-                    3. Выберите нужные файлы для запроса<br>
-                    4. Задайте вопрос
-                </p>
-            </div>
-        """
-        )
+        self.chat_history.show_welcome()
 
     def set_available_files(self, files: list[dict]):
         """Set available Gemini files for selection"""
@@ -443,10 +416,10 @@ class ChatPanel(QWidget):
         total = len(self._available_files)
         if count == 0:
             self.files_count_label.setText(f"{total} доступно")
-            self.files_count_label.setStyleSheet("color: #888; font-size: 11px;")
+            self.files_count_label.setStyleSheet("color: #6b7280; font-size: 11px;")
         else:
             self.files_count_label.setText(f"{count} из {total} выбрано")
-            self.files_count_label.setStyleSheet("color: #0e639c; font-size: 11px;")
+            self.files_count_label.setStyleSheet("color: #60a5fa; font-size: 11px;")
 
     def get_selected_file_refs(self) -> list[dict]:
         """Get selected file references for request"""
@@ -461,25 +434,12 @@ class ChatPanel(QWidget):
         return refs
 
     def _on_link_clicked(self, url: QUrl):
-        """Handle link clicks for collapsible thoughts"""
+        """Handle link clicks"""
         url_str = url.toString()
-        if url_str.startswith("toggle_thought:"):
-            try:
-                idx = int(url_str.split(":")[1])
-                self._renderer.toggle_thought(idx)
-                self._rerender_messages()
-            except ValueError:
-                pass
-
-    def _rerender_messages(self):
-        """Re-render all messages"""
-        html_parts = []
-        for i, msg in enumerate(self._messages):
-            html_parts.append(self._renderer.render_message(msg, i))
-        self.chat_history.setHtml("".join(html_parts))
-        cursor = self.chat_history.textCursor()
-        cursor.movePosition(QTextCursor.End)
-        self.chat_history.setTextCursor(cursor)
+        # External links
+        if url_str.startswith("http://") or url_str.startswith("https://"):
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(url)
 
     def _on_send(self):
         """Handle send button click"""
@@ -582,26 +542,15 @@ class ChatPanel(QWidget):
         from app.utils.time_utils import format_time
 
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-        self._messages.append(
-            {
-                "role": "user",
-                "content": text,
-                "timestamp": timestamp,
-                "files_count": len(file_refs) if file_refs else 0,
-                "meta": {"file_refs": file_refs or []},
-            }
-        )
-        self._rerender_messages()
+        meta = {"file_refs": file_refs or []}
+        self.chat_history.add_message("user", text, timestamp, meta)
 
     def add_assistant_message(self, text: str, meta: dict = None):
         """Add assistant message to chat"""
         from app.utils.time_utils import format_time
 
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-        self._messages.append(
-            {"role": "assistant", "content": text, "timestamp": timestamp, "meta": meta or {}}
-        )
-        self._rerender_messages()
+        self.chat_history.add_message("assistant", text, timestamp, meta or {})
 
     def add_message(self, role: str, content: str, meta: dict = None, timestamp: str = None):
         """Add message with any role to chat"""
@@ -609,11 +558,7 @@ class ChatPanel(QWidget):
 
         if timestamp is None:
             timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-
-        self._messages.append(
-            {"role": role, "content": content, "timestamp": timestamp, "meta": meta or {}}
-        )
-        self._rerender_messages()
+        self.chat_history.add_message(role, content, timestamp, meta or {})
 
     # ========== Streaming Thoughts Display ==========
 
@@ -624,8 +569,6 @@ class ChatPanel(QWidget):
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
         self._current_thought_block_id = f"thought_{timestamp.replace(':', '')}"
         self._thought_text = ""
-        self._messages.append({"role": "thinking_progress", "content": "", "timestamp": timestamp})
-        self._rerender_messages()
 
     @Slot(str)
     def append_thought_chunk(self, chunk: str):
@@ -641,14 +584,8 @@ class ChatPanel(QWidget):
         text = getattr(self, "_thought_text", "")
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
 
-        if self._messages and self._messages[-1].get("role") == "thinking_progress":
-            self._messages.pop()
-
         if text:
-            idx = len(self._messages)
-            self._renderer._collapsed_thoughts.add(idx)
-            self._messages.append({"role": "thinking", "content": text, "timestamp": timestamp})
-            self._rerender_messages()
+            self.chat_history.add_message("thinking", text, timestamp)
 
         self._thought_text = ""
         self._current_thought_block_id = None
@@ -676,15 +613,10 @@ class ChatPanel(QWidget):
         from app.utils.time_utils import format_time
 
         timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-        self._messages.append(
-            {"role": "system", "content": text, "timestamp": timestamp, "level": level}
-        )
-        self._rerender_messages()
+        self.chat_history.add_message("system", text, timestamp, {"level": level})
 
     def clear_chat(self):
         """Clear chat history"""
-        self._messages.clear()
-        self._renderer._collapsed_thoughts.clear()
         self.chat_history.clear()
         self._show_welcome()
 
@@ -696,58 +628,33 @@ class ChatPanel(QWidget):
     def set_loading(self, loading: bool):
         """Show/hide loading indicator"""
         if loading:
-            # Add loading message
             from app.utils.time_utils import format_time
             timestamp = format_time(datetime.utcnow(), "%H:%M:%S")
-            # Remove existing loading message if any
-            self._messages = [m for m in self._messages if m.get("role") != "loading"]
-            self._messages.append(
-                {"role": "loading", "content": "Обработка запроса...", "timestamp": timestamp}
-            )
+            self.chat_history.remove_loading()
+            self.chat_history.add_message("loading", "Обработка запроса...", timestamp)
         else:
-            # Remove loading message
-            self._messages = [m for m in self._messages if m.get("role") != "loading"]
-            # Re-enable input
+            self.chat_history.remove_loading()
             self.set_input_enabled(True)
-
-        self._rerender_messages()
 
     def load_history(self, messages: list[dict]):
         """Load message history"""
         from app.utils.time_utils import format_time
 
-        self._messages.clear()
-        self._renderer._collapsed_thoughts.clear()
-
+        chat_messages = []
         for msg in messages:
             role = msg.get("role")
             content = msg.get("content", "")
             meta = msg.get("meta", {})
             timestamp = msg.get("timestamp", format_time(datetime.utcnow(), "%H:%M:%S"))
 
-            if role == "user":
-                self._messages.append({"role": "user", "content": content, "timestamp": timestamp})
-            elif role == "assistant":
-                self._messages.append(
-                    {"role": "assistant", "content": content, "timestamp": timestamp, "meta": meta}
-                )
-            elif role == "thinking":
-                idx = len(self._messages)
-                self._renderer._collapsed_thoughts.add(idx)
-                self._messages.append(
-                    {"role": "thinking", "content": content, "timestamp": timestamp}
-                )
-            elif role == "system":
-                self._messages.append(
-                    {
-                        "role": "system",
-                        "content": content,
-                        "timestamp": timestamp,
-                        "level": msg.get("level", "info"),
-                    }
-                )
+            chat_messages.append({
+                "role": role,
+                "content": content,
+                "timestamp": timestamp,
+                "meta": meta,
+            })
 
-        self._rerender_messages()
+        self.chat_history.load_messages(chat_messages)
 
     def set_prompts(self, prompts: list[dict]):
         """Set available prompts"""

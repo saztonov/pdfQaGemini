@@ -6,13 +6,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
     QLabel,
-    QAbstractItemView,
     QTabWidget,
-    QListWidget,
+    QScrollArea,
+    QFrame,
 )
 from PySide6.QtCore import Signal, Qt
 from app.services.gemini_client import GeminiClient
@@ -23,6 +20,7 @@ from app.ui.right_panel_styles import RightPanelStylesMixin
 from app.ui.right_panel_inspector import RightPanelInspectorMixin
 from app.ui.right_panel_chats import RightPanelChatsMixin
 from app.ui.right_panel_files import RightPanelFilesMixin
+from app.ui.chat_list_item import ChatListItem
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +41,8 @@ class RightContextPanel(
     chatSelected = Signal(str)  # conversation_id
     chatCreated = Signal(str, str)  # conversation_id, title
     chatDeleted = Signal(str)  # conversation_id
+    fileAddRequested = Signal(str, dict)  # conversation_id, file_data
+    fileDeleteRequested = Signal(str, str)  # conversation_id, gemini_name
 
     def __init__(
         self,
@@ -67,6 +67,8 @@ class RightContextPanel(
         self.current_trace: Optional[ModelTrace] = None
         self.api_client = None
         self.server_mode: bool = False
+        self._chat_items: dict[str, ChatListItem] = {}  # conversation_id -> widget
+        self._conversations: list = []  # list of conversation data
 
         self._setup_ui()
         self._connect_signals()
@@ -122,7 +124,7 @@ class RightContextPanel(
         layout.addWidget(self.tab_widget)
 
     def _create_chats_tab(self) -> QWidget:
-        """Create Chats tab with expandable files table"""
+        """Create Chats tab with expandable chat items"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -154,11 +156,6 @@ class RightContextPanel(
         self.btn_delete_chat.setStyleSheet(self._button_style())
         toolbar_layout.addWidget(self.btn_delete_chat)
 
-        self.btn_refresh_chats = QPushButton("↻ Обновить")
-        self.btn_refresh_chats.setCursor(Qt.PointingHandCursor)
-        self.btn_refresh_chats.setStyleSheet(self._button_style())
-        toolbar_layout.addWidget(self.btn_refresh_chats)
-
         toolbar_layout.addStretch()
 
         self.btn_delete_all_chats = QPushButton("🗑 Все")
@@ -170,129 +167,43 @@ class RightContextPanel(
         header_layout.addLayout(toolbar_layout)
         layout.addWidget(header)
 
-        # Chats list
-        self.chats_list = QListWidget()
-        self.chats_list.setStyleSheet(
+        # Scrollable chats list
+        self.chats_scroll = QScrollArea()
+        self.chats_scroll.setWidgetResizable(True)
+        self.chats_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chats_scroll.setStyleSheet(
             """
-            QListWidget {
+            QScrollArea {
                 background-color: #1e1e1e;
-                color: #e0e0e0;
                 border: none;
-                font-size: 12px;
             }
-            QListWidget::item {
-                padding: 12px;
-                border-bottom: 1px solid #2d2d2d;
-            }
-            QListWidget::item:selected {
-                background-color: #094771;
-            }
-            QListWidget::item:hover {
-                background-color: #2a2a2a;
-            }
-        """
-        )
-        self.chats_list.itemClicked.connect(self._on_chat_selected)
-        self.chats_list.itemDoubleClicked.connect(self._on_chat_double_clicked)
-        layout.addWidget(self.chats_list, 1)
-
-        # Expandable files section
-        self.files_section = QWidget()
-        self.files_section.setStyleSheet(
-            "background-color: #1e1e1e; border-top: 1px solid #3e3e42;"
-        )
-        files_section_layout = QVBoxLayout(self.files_section)
-        files_section_layout.setContentsMargins(0, 0, 0, 0)
-        files_section_layout.setSpacing(0)
-
-        # Files header with expand button
-        files_header = QWidget()
-        files_header.setStyleSheet("background-color: #252526;")
-        files_header_layout = QHBoxLayout(files_header)
-        files_header_layout.setContentsMargins(10, 8, 10, 8)
-
-        self.btn_toggle_files = QPushButton("▼ Файлы чата")
-        self.btn_toggle_files.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle_files.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                color: #bbbbbb;
-                border: none;
-                text-align: left;
-                font-size: 10pt;
-                font-weight: bold;
-            }
-            QPushButton:hover { color: #ffffff; }
-        """
-        )
-        self.btn_toggle_files.clicked.connect(self._toggle_files_section)
-        files_header_layout.addWidget(self.btn_toggle_files)
-
-        self.files_count_label = QLabel("0 файлов")
-        self.files_count_label.setStyleSheet("color: #888; font-size: 9pt;")
-        files_header_layout.addWidget(self.files_count_label)
-
-        files_header_layout.addStretch()
-
-        # Files toolbar buttons
-        self.btn_refresh_files = QPushButton("↻")
-        self.btn_refresh_files.setFixedSize(24, 24)
-        self.btn_refresh_files.setCursor(Qt.PointingHandCursor)
-        self.btn_refresh_files.setToolTip("Обновить список файлов")
-        self.btn_refresh_files.setStyleSheet(self._icon_button_style())
-        self.btn_refresh_files.clicked.connect(self._on_refresh_files_clicked)
-        files_header_layout.addWidget(self.btn_refresh_files)
-
-        self.btn_delete_files = QPushButton("🗑")
-        self.btn_delete_files.setFixedSize(24, 24)
-        self.btn_delete_files.setCursor(Qt.PointingHandCursor)
-        self.btn_delete_files.setToolTip("Удалить выбранные файлы")
-        self.btn_delete_files.setEnabled(False)
-        self.btn_delete_files.setStyleSheet(self._icon_button_style())
-        self.btn_delete_files.clicked.connect(self._on_delete_files_clicked)
-        files_header_layout.addWidget(self.btn_delete_files)
-
-        files_section_layout.addWidget(files_header)
-
-        # Files table
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(
-            ["✓", "Имя файла", "MIME", "Размер", "Токены", "Истекает (ч)"]
-        )
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.table.setColumnWidth(0, 40)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.table.setMaximumHeight(250)
-        self.table.setStyleSheet(
-            """
-            QTableWidget {
+            QScrollBar:vertical {
                 background-color: #1e1e1e;
-                color: #e0e0e0;
-                border: none;
-                gridline-color: #3e3e42;
+                width: 8px;
             }
-            QTableWidget::item { padding: 4px; }
-            QTableWidget::item:selected { background-color: #094771; }
-            QHeaderView::section {
-                background-color: #252526;
-                color: #bbbbbb;
-                border: 1px solid #3e3e42;
-                padding: 4px;
+            QScrollBar::handle:vertical {
+                background-color: #3e3e42;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #505050;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
             }
         """
         )
-        files_section_layout.addWidget(self.table)
 
-        self.table.setVisible(False)  # Initially hidden
-        layout.addWidget(self.files_section)
+        self.chats_container = QFrame()
+        self.chats_container.setStyleSheet("background-color: #1e1e1e;")
+        self.chats_layout = QVBoxLayout(self.chats_container)
+        self.chats_layout.setContentsMargins(0, 0, 0, 0)
+        self.chats_layout.setSpacing(0)
+        self.chats_layout.addStretch()
+
+        self.chats_scroll.setWidget(self.chats_container)
+        layout.addWidget(self.chats_scroll, 1)
 
         # Footer
         self.chats_footer_label = QLabel("Чатов: 0")
@@ -302,12 +213,85 @@ class RightContextPanel(
         # Connect signals
         self.btn_new_chat.clicked.connect(self._on_new_chat_clicked)
         self.btn_delete_chat.clicked.connect(self._on_delete_chat_clicked)
-        self.btn_refresh_chats.clicked.connect(self._on_refresh_chats_clicked)
         self.btn_delete_all_chats.clicked.connect(self._on_delete_all_chats_clicked)
-        self.table.itemSelectionChanged.connect(self._on_files_table_selection_changed)
-        self.table.cellChanged.connect(self._on_cell_changed)
 
         return widget
+
+    def _on_chat_item_clicked(self, conversation_id: str):
+        """Handle chat item click"""
+        # Deselect all items
+        for item in self._chat_items.values():
+            item.set_selected(False)
+
+        # Select clicked item
+        if conversation_id in self._chat_items:
+            chat_item = self._chat_items[conversation_id]
+            chat_item.set_selected(True)
+            chat_item.expand()
+            # Update gemini_files for the selected conversation
+            self.gemini_files = chat_item._files
+
+        self.conversation_id = conversation_id
+        self.btn_delete_chat.setEnabled(True)
+        self.chatSelected.emit(conversation_id)
+
+    def _on_chat_item_double_clicked(self, conversation_id: str):
+        """Handle chat item double click for renaming"""
+        self._on_chat_double_clicked_by_id(conversation_id)
+
+    def _on_file_add_clicked(self, conversation_id: str, gemini_name: str):
+        """Handle file add button click"""
+        # Find file data
+        for conv_id, item in self._chat_items.items():
+            if conv_id == conversation_id:
+                for f in item._files:
+                    if f.get("name") == gemini_name:
+                        self.fileAddRequested.emit(conversation_id, f)
+                        self._selected_for_request.add(gemini_name)
+                        self.filesSelectionChanged.emit(self.get_selected_files_for_request())
+                        if self.toast_manager:
+                            display = f.get("display_name") or gemini_name
+                            self.toast_manager.success(f"Файл добавлен: {display[:30]}")
+                        return
+
+    def _on_file_delete_clicked(self, conversation_id: str, gemini_name: str):
+        """Handle file delete button click"""
+        import asyncio
+        asyncio.create_task(self._delete_file_by_name(gemini_name))
+
+    async def _delete_file_by_name(self, gemini_name: str):
+        """Delete single file by name"""
+        if self.server_mode:
+            if not self.api_client:
+                return
+        else:
+            if not self.gemini_client:
+                return
+
+        try:
+            if self.server_mode:
+                await self.api_client.delete_file(gemini_name)
+            else:
+                await self.gemini_client.delete_file(gemini_name)
+
+            self._selected_for_request.discard(gemini_name)
+
+            if self.supabase_repo:
+                try:
+                    await self.supabase_repo.qa_delete_gemini_file_by_name(gemini_name)
+                except Exception as e:
+                    logger.warning(f"Не удалось удалить метаданные файла: {e}")
+
+            await self.refresh_chats()
+            self.filesListChanged.emit()
+
+            if self.toast_manager:
+                self.toast_manager.success("Файл удален")
+
+        except Exception as e:
+            logger.error(f"Ошибка удаления файла: {e}", exc_info=True)
+            if self.toast_manager:
+                self.toast_manager.error(f"Ошибка: {e}")
 
     def _connect_signals(self):
         """Connect signals"""
