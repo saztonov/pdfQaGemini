@@ -58,6 +58,9 @@ class TreeContextMenuMixin:
         if can_add:
             self._add_gemini_action(menu, item_type)
 
+        # Добавляем действие скачивания
+        self._add_download_action(menu)
+
         if not menu.isEmpty():
             menu.exec_(self.tree.viewport().mapToGlobal(position))
 
@@ -86,4 +89,11 @@ class TreeContextMenuMixin:
 
         action_add.triggered.connect(
             lambda: asyncio.create_task(self.add_selected_to_context())
+        )
+
+    def _add_download_action(self: "LeftProjectsPanel", menu: QMenu):
+        """Добавить действие 'Скачать документы'"""
+        action_download = menu.addAction("📥  Скачать документы")
+        action_download.triggered.connect(
+            lambda: asyncio.create_task(self.download_selected_documents())
         )

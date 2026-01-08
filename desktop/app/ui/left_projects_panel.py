@@ -22,6 +22,7 @@ from app.ui.tree_delegates import VersionHighlightDelegate
 from app.ui.tree_state import TreeStateMixin, TreeFilterMixin
 from app.ui.tree_context import TreeContextMixin
 from app.ui.tree_menu import TreeContextMenuMixin
+from app.ui.tree_download import TreeDownloadMixin
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def get_node_color(node: TreeNode) -> str:
     return NODE_COLORS.get(node.node_type, "#e0e0e0")
 
 
-class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMixin, TreeContextMenuMixin):
+class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMixin, TreeContextMenuMixin, TreeDownloadMixin):
     """Projects tree panel with lazy loading"""
 
     # Signals
