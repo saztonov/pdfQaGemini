@@ -76,17 +76,25 @@ class FileChip(QFrame):
 
 
 class PromptInput(QTextEdit):
-    """Custom text input that sends on Enter (Shift+Enter for newline)"""
+    """Custom text input that sends on Enter (Shift+Enter for newline)
+
+    - Default height: 3 lines (72px)
+    - Expands up to 10 lines (220px) when typing
+    - Collapses back to 3 lines when focus is lost
+    """
 
     sendRequested = Signal()
-    MIN_HEIGHT = 36
-    MAX_HEIGHT = 200
+    MIN_HEIGHT = 72  # 3 lines
+    MAX_HEIGHT = 220  # 10 lines
+    DEFAULT_HEIGHT = 72  # 3 lines (collapsed state)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.textChanged.connect(self._adjust_height)
-        self.setMinimumHeight(self.MIN_HEIGHT)
+        self.setMinimumHeight(self.DEFAULT_HEIGHT)
         self.setMaximumHeight(self.MAX_HEIGHT)
+        self.setFixedHeight(self.DEFAULT_HEIGHT)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Return and not event.modifiers() & Qt.ShiftModifier:
@@ -94,11 +102,29 @@ class PromptInput(QTextEdit):
         else:
             super().keyPressEvent(event)
 
+    def focusInEvent(self, event):
+        """Expand to content height when focused"""
+        super().focusInEvent(event)
+        self._adjust_height()
+
+    def focusOutEvent(self, event):
+        """Collapse to default height when focus lost"""
+        super().focusOutEvent(event)
+        self.setFixedHeight(self.DEFAULT_HEIGHT)
+        # Show scrollbar if content exceeds collapsed height
+        doc_height = int(self.document().size().height()) + 10
+        if doc_height > self.DEFAULT_HEIGHT:
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        else:
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
     def _adjust_height(self):
-        """Adjust height based on content"""
+        """Adjust height based on content (only when focused)"""
+        if not self.hasFocus():
+            return
         doc = self.document()
         doc_height = int(doc.size().height()) + 10
-        new_height = max(self.MIN_HEIGHT, min(doc_height, self.MAX_HEIGHT))
+        new_height = max(self.DEFAULT_HEIGHT, min(doc_height, self.MAX_HEIGHT))
         self.setFixedHeight(new_height)
 
         if doc_height > self.MAX_HEIGHT:

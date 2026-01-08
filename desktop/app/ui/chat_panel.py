@@ -108,20 +108,6 @@ class ChatPanel(QWidget):
 
         self.files_header.addStretch()
 
-        self.btn_select_all_files = QPushButton("Все")
-        self.btn_select_all_files.setFixedHeight(22)
-        self.btn_select_all_files.setCursor(Qt.PointingHandCursor)
-        self.btn_select_all_files.setStyleSheet(self._small_button_style())
-        self.btn_select_all_files.clicked.connect(self._select_all_files)
-        self.files_header.addWidget(self.btn_select_all_files)
-
-        self.btn_clear_files = QPushButton("Снять")
-        self.btn_clear_files.setFixedHeight(22)
-        self.btn_clear_files.setCursor(Qt.PointingHandCursor)
-        self.btn_clear_files.setStyleSheet(self._small_button_style())
-        self.btn_clear_files.clicked.connect(self._clear_file_selection)
-        self.files_header.addWidget(self.btn_clear_files)
-
         input_main_layout.addLayout(self.files_header)
 
         # Files chips container (collapsible)
@@ -183,12 +169,7 @@ class ChatPanel(QWidget):
         toolbar_layout.setSpacing(8)
         toolbar_layout.setContentsMargins(0, 4, 0, 0)
 
-        # Prompt selector
-        prompt_label = QLabel("📝")
-        prompt_label.setToolTip("Промты")
-        prompt_label.setStyleSheet("color: #888; font-size: 14px;")
-        toolbar_layout.addWidget(prompt_label)
-
+        # Prompt selector (no icon)
         self.prompt_combo = QComboBox()
         self.prompt_combo.setToolTip("Выбор промта")
         self.prompt_combo.setFixedWidth(150)
@@ -196,34 +177,13 @@ class ChatPanel(QWidget):
         self.prompt_combo.addItem("Без промта", None)
         toolbar_layout.addWidget(self.prompt_combo)
 
-        # Edit prompt button
-        self.btn_edit_prompt = QPushButton("✏️")
-        self.btn_edit_prompt.setToolTip("Редактировать промт")
-        self.btn_edit_prompt.setFixedSize(28, 28)
-        self.btn_edit_prompt.setCursor(Qt.PointingHandCursor)
-        self.btn_edit_prompt.clicked.connect(self._on_edit_prompt)
-        self.btn_edit_prompt.setEnabled(False)
-        self.btn_edit_prompt.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #374151;
-                border: none;
-                border-radius: 6px;
-                font-size: 14px;
-            }
-            QPushButton:hover { background-color: #4b5563; }
-            QPushButton:disabled { background-color: transparent; color: #4b5563; }
-        """
-        )
-        toolbar_layout.addWidget(self.btn_edit_prompt)
-
         toolbar_layout.addSpacing(8)
 
-        # Model selector
+        # Model selector (wider)
         self.model_combo = QComboBox()
         self.model_combo.setToolTip("Выбор модели")
         self.model_combo.currentIndexChanged.connect(self._on_model_changed)
-        self.model_combo.setFixedWidth(140)
+        self.model_combo.setFixedWidth(180)
         self.model_combo.setStyleSheet(self._combo_style())
 
         # Thinking level selector
@@ -336,8 +296,6 @@ class ChatPanel(QWidget):
         has_files = len(self._available_files) > 0
         self.files_scroll.setVisible(self._files_panel_visible and has_files)
         self.no_files_label.setVisible(self._files_panel_visible and not has_files)
-        self.btn_select_all_files.setVisible(has_files)
-        self.btn_clear_files.setVisible(has_files)
 
     def _show_welcome(self):
         """Show welcome message"""
@@ -726,7 +684,6 @@ class ChatPanel(QWidget):
             # No prompt selected
             self._current_system_prompt = ""
             self._current_user_text_template = ""
-            self.btn_edit_prompt.setEnabled(False)
             # Clear input field and restore default placeholder
             self.input_field.clear()
             self.input_field.setPlaceholderText(
@@ -747,7 +704,6 @@ class ChatPanel(QWidget):
             self.input_field.clear()
             self.input_field.setPlaceholderText("Введите ваш вопрос...")
 
-            self.btn_edit_prompt.setEnabled(True)
             logger.info(
                 f"Prompt applied: {prompt.get('title')}, system_prompt_len={len(self._current_system_prompt)}, user_text_template_len={len(user_text)}"
             )
