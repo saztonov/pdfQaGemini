@@ -56,6 +56,7 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
         self.api_client: Optional[APIClient] = None
         self.realtime_client: Optional[RealtimeClient] = None
         self.server_mode: bool = False  # True when using server API
+        self._pending_request: Optional[dict] = None  # For tracing in server mode
 
         # Inspector window (singleton)
         self.inspector_window: Optional[ModelInspectorWindow] = None
@@ -632,10 +633,68 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
 
             self.toast_manager.success("✓ Ответ получен")
 
+            # Create trace for inspector
+            self._create_trace_from_response(message_update)
+
             # Process actions if present
             if message_update.meta and message_update.meta.get("actions"):
                 actions = message_update.meta["actions"]
                 asyncio.create_task(self._process_model_actions(actions))
+
+    def _create_trace_from_response(self, message_update: MessageUpdate):
+        """Create a trace from server response for inspector"""
+        from datetime import datetime
+        from app.services.trace import ModelTrace
+
+        if not self._pending_request:
+            logger.warning("No pending request for trace")
+            return
+
+        try:
+            meta = message_update.meta or {}
+            request_ts = self._pending_request.get("ts", datetime.utcnow())
+            response_ts = datetime.utcnow()
+            latency_ms = (response_ts - request_ts).total_seconds() * 1000
+
+            # Build file refs for trace
+            file_refs = self._pending_request.get("file_refs", [])
+            input_files = [
+                {
+                    "name": f.get("name", ""),
+                    "uri": f.get("uri", ""),
+                    "mime_type": f.get("mime_type", ""),
+                    "display_name": f.get("display_name", ""),
+                }
+                for f in file_refs
+            ]
+
+            trace = ModelTrace(
+                ts=request_ts,
+                conversation_id=self.current_conversation_id,
+                model=self._pending_request.get("model_name", "unknown"),
+                thinking_level=self._pending_request.get("thinking_level", "low"),
+                system_prompt=self._pending_request.get("system_prompt", ""),
+                user_text=self._pending_request.get("user_text", ""),
+                input_files=input_files,
+                response_json={"assistant_text": message_update.content, "actions": meta.get("actions", [])},
+                parsed_actions=meta.get("actions", []),
+                latency_ms=latency_ms,
+                is_final=meta.get("is_final", True),
+                assistant_text=message_update.content,
+                full_thoughts=meta.get("thoughts", ""),
+                input_tokens=meta.get("input_tokens"),
+                output_tokens=meta.get("output_tokens"),
+                total_tokens=meta.get("total_tokens"),
+            )
+
+            self.trace_store.add(trace)
+            logger.info(f"Trace created: {trace.id}")
+
+            # Clear pending request
+            self._pending_request = None
+
+        except Exception as e:
+            logger.error(f"Failed to create trace: {e}", exc_info=True)
 
     def _on_realtime_status(self, is_connected: bool):
         """Handle realtime connection status change"""

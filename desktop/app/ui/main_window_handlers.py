@@ -109,9 +109,21 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
         file_refs: list,
     ):
         """Handle ask model in server mode - send via API and wait for Realtime update"""
+        from datetime import datetime
+
         if not self.api_client:
             self.toast_manager.error("API клиент не инициализирован")
             return
+
+        # Save request data for tracing
+        self._pending_request = {
+            "ts": datetime.utcnow(),
+            "user_text": user_text,
+            "system_prompt": system_prompt,
+            "model_name": model_name,
+            "thinking_level": thinking_level,
+            "file_refs": file_refs,
+        }
 
         # Ensure conversation exists via API
         if not self.current_conversation_id:
