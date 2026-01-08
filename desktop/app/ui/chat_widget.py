@@ -43,30 +43,30 @@ class MessageBubble(QFrame):
         bubble = QFrame()
         bubble.setObjectName("bubble")
 
-        # Role-specific styling - adaptive width (no fixed maxWidth)
+        # Role-specific styling - full width for all message types
         if self.role == "user":
-            # User message - right aligned, blue background
-            outer_layout.addStretch(1)
+            # User message - full width, blue background
             bubble.setStyleSheet(self._user_style())
+            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         elif self.role == "assistant":
-            # AI message - left aligned, dark gray background, full width
+            # AI message - full width, dark gray background
             bubble.setStyleSheet(self._assistant_style())
-            outer_layout.addStretch(0)
+            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         elif self.role == "thinking":
-            # Thinking - left aligned, subtle background
+            # Thinking - full width, subtle background
             bubble.setStyleSheet(self._thinking_style())
-            outer_layout.addStretch(0)
+            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         elif self.role == "system":
             # System message - centered, info style
             outer_layout.addStretch(1)
             bubble.setStyleSheet(self._system_style())
         elif self.role == "loading":
-            # Loading indicator
+            # Loading indicator - limited width
             bubble.setStyleSheet(self._loading_style())
             bubble.setMaximumWidth(400)
-            outer_layout.addStretch(0)
         else:
             bubble.setStyleSheet(self._default_style())
+            bubble.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         # Bubble inner layout
         bubble_layout = QVBoxLayout(bubble)
@@ -123,12 +123,8 @@ class MessageBubble(QFrame):
 
         outer_layout.addWidget(bubble)
 
-        # Add stretch after bubble for user messages (already added before for others)
-        if self.role == "user":
-            pass  # Already aligned right
-        elif self.role == "system":
-            outer_layout.addStretch(1)
-        else:
+        # Add stretch after bubble only for centered messages (system)
+        if self.role == "system":
             outer_layout.addStretch(1)
 
         self.setStyleSheet("background: transparent;")
@@ -148,8 +144,7 @@ class MessageBubble(QFrame):
         return """
             QFrame#bubble {
                 background-color: #2563eb;
-                border-radius: 18px;
-                border-bottom-right-radius: 4px;
+                border-radius: 12px;
             }
         """
 
@@ -157,8 +152,7 @@ class MessageBubble(QFrame):
         return """
             QFrame#bubble {
                 background-color: #2d2d2d;
-                border-radius: 18px;
-                border-bottom-left-radius: 4px;
+                border-radius: 12px;
             }
         """
 
