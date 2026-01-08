@@ -41,7 +41,6 @@ class RightContextPanel(
     chatSelected = Signal(str)  # conversation_id
     chatCreated = Signal(str, str)  # conversation_id, title
     chatDeleted = Signal(str)  # conversation_id
-    fileAddRequested = Signal(str, dict)  # conversation_id, file_data
     fileDeleteRequested = Signal(str, str)  # conversation_id, gemini_name
 
     def __init__(
@@ -240,21 +239,6 @@ class RightContextPanel(
     def _on_chat_item_double_clicked(self, conversation_id: str):
         """Handle chat item double click for renaming"""
         self._on_chat_double_clicked_by_id(conversation_id)
-
-    def _on_file_add_clicked(self, conversation_id: str, gemini_name: str):
-        """Handle file add button click"""
-        # Find file data
-        for conv_id, item in self._chat_items.items():
-            if conv_id == conversation_id:
-                for f in item._files:
-                    if f.get("name") == gemini_name:
-                        self.fileAddRequested.emit(conversation_id, f)
-                        self._selected_for_request.add(gemini_name)
-                        self.filesSelectionChanged.emit(self.get_selected_files_for_request())
-                        if self.toast_manager:
-                            display = f.get("display_name") or gemini_name
-                            self.toast_manager.success(f"Файл добавлен: {display[:30]}")
-                        return
 
     def _on_file_delete_clicked(self, conversation_id: str, gemini_name: str):
         """Handle file delete button click"""

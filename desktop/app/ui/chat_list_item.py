@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 class FileItemWidget(QFrame):
     """Single file item within chat"""
 
-    addClicked = Signal(str)  # gemini_name
     deleteClicked = Signal(str)  # gemini_name
 
     def __init__(self, file_data: dict, parent=None):
@@ -82,27 +81,6 @@ class FileItemWidget(QFrame):
         info_layout.addWidget(details_label)
 
         layout.addLayout(info_layout, 1)
-
-        # Add button
-        btn_add = QPushButton("+")
-        btn_add.setFixedSize(28, 28)
-        btn_add.setCursor(Qt.PointingHandCursor)
-        btn_add.setToolTip("Добавить в запрос")
-        btn_add.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #3e3e42;
-                color: #e0e0e0;
-                border: none;
-                border-radius: 4px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: #4e4e52; }
-        """
-        )
-        btn_add.clicked.connect(lambda: self.addClicked.emit(self.gemini_name))
-        layout.addWidget(btn_add)
 
         # Delete button
         btn_delete = QPushButton("🗑")
@@ -189,7 +167,6 @@ class ChatListItem(QFrame):
 
     clicked = Signal(str)  # conversation_id
     doubleClicked = Signal(str)  # conversation_id
-    fileAddClicked = Signal(str, str)  # conversation_id, gemini_name
     fileDeleteClicked = Signal(str, str)  # conversation_id, gemini_name
 
     def __init__(self, conversation_data: dict, parent=None):
@@ -403,17 +380,12 @@ class ChatListItem(QFrame):
         # Add file widgets
         for file_data in files:
             file_widget = FileItemWidget(file_data)
-            file_widget.addClicked.connect(self._on_file_add)
             file_widget.deleteClicked.connect(self._on_file_delete)
             self.files_layout.addWidget(file_widget)
 
         # Update stats
         self.conversation_data["file_count"] = len(files)
         self.stats_label.setText(self._format_stats())
-
-    def _on_file_add(self, gemini_name: str):
-        """Handle file add click"""
-        self.fileAddClicked.emit(self.conversation_id, gemini_name)
 
     def _on_file_delete(self, gemini_name: str):
         """Handle file delete click"""

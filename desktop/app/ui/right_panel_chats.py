@@ -67,7 +67,6 @@ class RightPanelChatsMixin:
                 chat_item = ChatListItem(conv_data)
                 chat_item.clicked.connect(self._on_chat_item_clicked)
                 chat_item.doubleClicked.connect(self._on_chat_item_double_clicked)
-                chat_item.fileAddClicked.connect(self._on_file_add_clicked)
                 chat_item.fileDeleteClicked.connect(self._on_file_delete_clicked)
 
                 # Load files for this conversation
