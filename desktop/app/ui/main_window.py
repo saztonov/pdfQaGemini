@@ -453,15 +453,18 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
 
     async def _load_gemini_models(self):
         """Load available Gemini models"""
-        if not self.gemini_client:
-            return
+        from app.models.schemas import AVAILABLE_MODELS
 
         try:
-            models = await self.gemini_client.list_models()
+            # In server mode gemini_client is None, use AVAILABLE_MODELS directly
+            if self.gemini_client:
+                models = await self.gemini_client.list_models()
+            else:
+                models = AVAILABLE_MODELS.copy()
 
             if self.chat_panel and models:
                 self.chat_panel.set_models(models)
-                self.toast_manager.success(f"Загружено {len(models)} моделей")
+                logger.info(f"Загружено {len(models)} моделей")
 
         except Exception as e:
             logger.error(f"Ошибка загрузки моделей: {e}", exc_info=True)
