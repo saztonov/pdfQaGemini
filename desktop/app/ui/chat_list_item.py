@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QSizePolicy,
 )
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QEasingCurve
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,7 @@ class ChatListItem(QFrame):
         self._expanded = False
         self._files: list[dict] = []
         self._selected = False
+        self._animation: QPropertyAnimation | None = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -272,8 +273,14 @@ class ChatListItem(QFrame):
         )
         self.files_layout.addWidget(files_header)
 
-        self.files_container.setVisible(False)
+        self.files_container.setMaximumHeight(0)
+        self.files_container.setVisible(True)
         main_layout.addWidget(self.files_container)
+
+        # Setup animation
+        self._animation = QPropertyAnimation(self.files_container, b"maximumHeight")
+        self._animation.setDuration(200)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def _get_frame_style(self) -> str:
         if self._selected:
@@ -344,10 +351,44 @@ class ChatListItem(QFrame):
         return False
 
     def _toggle_expand(self):
-        """Toggle files section visibility"""
-        self._expanded = not self._expanded
-        self.files_container.setVisible(self._expanded)
-        self.btn_expand.setText("˅" if self._expanded else "›")
+        """Toggle files section visibility with animation"""
+        if self._expanded:
+            self._animate_collapse()
+        else:
+            self._animate_expand()
+
+    def _animate_expand(self):
+        """Animate expanding the files container"""
+        if self._expanded:
+            return
+        self._expanded = True
+        self.btn_expand.setText("˅")
+
+        # Calculate target height
+        self.files_container.setMaximumHeight(16777215)  # Reset to get proper size
+        target_height = self.files_container.sizeHint().height()
+        self.files_container.setMaximumHeight(0)
+
+        # Animate
+        if self._animation:
+            self._animation.stop()
+            self._animation.setStartValue(0)
+            self._animation.setEndValue(target_height)
+            self._animation.start()
+
+    def _animate_collapse(self):
+        """Animate collapsing the files container"""
+        if not self._expanded:
+            return
+        self._expanded = False
+        self.btn_expand.setText("›")
+
+        # Animate
+        if self._animation:
+            self._animation.stop()
+            self._animation.setStartValue(self.files_container.height())
+            self._animation.setEndValue(0)
+            self._animation.start()
 
     def set_files(self, files: list[dict]):
         """Set files for this chat"""
@@ -396,11 +437,9 @@ class ChatListItem(QFrame):
         super().mouseDoubleClickEvent(event)
 
     def expand(self):
-        """Expand files section"""
-        if not self._expanded:
-            self._toggle_expand()
+        """Expand files section with animation"""
+        self._animate_expand()
 
     def collapse(self):
-        """Collapse files section"""
-        if self._expanded:
-            self._toggle_expand()
+        """Collapse files section with animation"""
+        self._animate_collapse()

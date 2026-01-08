@@ -219,11 +219,13 @@ class RightContextPanel(
 
     def _on_chat_item_clicked(self, conversation_id: str):
         """Handle chat item click"""
-        # Deselect all items
-        for item in self._chat_items.values():
+        # Deselect and collapse all items
+        for conv_id, item in self._chat_items.items():
             item.set_selected(False)
+            if conv_id != conversation_id:
+                item.collapse()
 
-        # Select clicked item
+        # Select clicked item and expand
         if conversation_id in self._chat_items:
             chat_item = self._chat_items[conversation_id]
             chat_item.set_selected(True)
