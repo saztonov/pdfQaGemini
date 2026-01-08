@@ -172,9 +172,18 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
 
             self.toast_manager.info("Запрос отправлен, ожидаю ответ...")
 
-            # Poll for job completion as fallback (realtime may not work)
+            # Use Realtime if connected, otherwise fallback to polling
             if job_id:
-                await self._poll_job_status(job_id)
+                if self.realtime_client and self.realtime_client.is_connected:
+                    # Realtime connected - set timeout fallback in case Realtime fails
+                    logger.info(f"Realtime connected, waiting for job {job_id} via Realtime")
+                    self._active_job_id = job_id
+                    import asyncio
+                    asyncio.create_task(self._realtime_timeout_fallback(job_id, timeout=120))
+                else:
+                    # Realtime not connected - use polling
+                    logger.info("Realtime not connected, using polling fallback")
+                    await self._poll_job_status(job_id)
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}", exc_info=True)
@@ -259,3 +268,15 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             self.chat_panel.set_input_enabled(True)
             self.chat_panel.add_system_message("Таймаут ожидания ответа. Попробуйте обновить чат.", "warning")
         self.toast_manager.warning("Таймаут ожидания ответа")
+
+    async def _realtime_timeout_fallback(self: "MainWindow", job_id: str, timeout: float = 120):
+        """Fallback to polling if Realtime doesn't deliver result within timeout"""
+        import asyncio
+
+        await asyncio.sleep(timeout)
+
+        # Check if job is still active (not completed via Realtime)
+        if getattr(self, "_active_job_id", None) == job_id:
+            logger.warning(f"Realtime timeout for job {job_id}, falling back to polling")
+            self._active_job_id = None
+            await self._poll_job_status(job_id, max_attempts=30, interval=2.0)

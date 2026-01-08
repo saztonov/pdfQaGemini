@@ -58,6 +58,12 @@ def setup_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=handlers,
     )
+
+    # Suppress verbose realtime and httpx logs
+    logging.getLogger("realtime._async.client").setLevel(logging.WARNING)
+    logging.getLogger("realtime._async.channel").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     logger = logging.getLogger(__name__)
     logger.info("=== ЗАПУСК ПРИЛОЖЕНИЯ pdfQaGemini ===")
     logger.info(f"Логи сохраняются в: {log_file}")

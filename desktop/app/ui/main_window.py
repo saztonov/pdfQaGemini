@@ -57,6 +57,7 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
         self.realtime_client: Optional[RealtimeClient] = None
         self.server_mode: bool = False  # True when using server API
         self._pending_request: Optional[dict] = None  # For tracing in server mode
+        self._active_job_id: Optional[str] = None  # For Realtime timeout tracking
 
         # Inspector window (singleton)
         self.inspector_window: Optional[ModelInspectorWindow] = None
@@ -581,6 +582,10 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             return
 
         if job_update.status == "completed":
+            # Clear active job to cancel timeout fallback
+            if self._active_job_id == job_update.job_id:
+                self._active_job_id = None
+
             # Job completed - hide loading indicator and enable input
             if self.chat_panel:
                 self.chat_panel.set_loading(False)
@@ -588,9 +593,13 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
 
             # Note: Don't show result_text here - it will come via _on_realtime_message
             # to avoid duplicate messages. Only log completion.
-            logger.info(f"Job {job_update.job_id} completed")
+            logger.info(f"Job {job_update.job_id} completed via Realtime")
 
         elif job_update.status == "failed":
+            # Clear active job to cancel timeout fallback
+            if self._active_job_id == job_update.job_id:
+                self._active_job_id = None
+
             # Job failed - show error and enable input
             if self.chat_panel:
                 self.chat_panel.set_loading(False)
