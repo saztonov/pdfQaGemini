@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2026-01-07T14:54:41.696508
+-- Generated: 2026-01-08T22:23:44.480938
 -- Database: postgres
 -- Host: aws-1-eu-north-1.pooler.supabase.com
 
@@ -588,10 +588,12 @@ CREATE TABLE IF NOT EXISTS public.qa_gemini_files (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     expires_at timestamp with time zone,
+    token_count bigint,
     CONSTRAINT qa_gemini_files_gemini_name_key UNIQUE (gemini_name),
     CONSTRAINT qa_gemini_files_pkey PRIMARY KEY (id),
     CONSTRAINT qa_gemini_files_source_node_file_id_fkey FOREIGN KEY (source_node_file_id) REFERENCES public.node_files(id)
 );
+COMMENT ON COLUMN public.qa_gemini_files.token_count IS 'Token count calculated by tiktoken';
 
 -- Table: public.qa_jobs
 -- Description: Tracks async LLM job processing for client-server architecture

@@ -3243,6 +3243,13 @@
         "default": null,
         "data_type": "timestamp with time zone",
         "is_nullable": true
+      },
+      {
+        "name": "token_count",
+        "comment": "Token count calculated by tiktoken",
+        "default": null,
+        "data_type": "bigint",
+        "is_nullable": true
       }
     ],
     "constraints": [
