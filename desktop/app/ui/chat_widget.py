@@ -143,8 +143,9 @@ class MessageBubble(QFrame):
     def _user_style(self) -> str:
         return """
             QFrame#bubble {
-                background-color: #2563eb;
+                background-color: #1e3a5f;
                 border-radius: 12px;
+                border-left: 3px solid #3b82f6;
             }
         """
 
@@ -193,7 +194,7 @@ class MessageBubble(QFrame):
 
     def _header_style(self) -> str:
         if self.role == "user":
-            return "color: #93c5fd; font-size: 12px; font-weight: bold;"
+            return "color: #60a5fa; font-size: 12px; font-weight: bold;"
         elif self.role == "assistant":
             return "color: #4ade80; font-size: 12px; font-weight: bold;"
         elif self.role == "thinking":
@@ -295,12 +296,18 @@ class MessageBubble(QFrame):
         return " · ".join(parts)
 
     def _create_files_widget(self, file_refs: list) -> QWidget:
-        """Create widget showing attached files"""
+        """Create widget showing attached files with names"""
         widget = QWidget()
-        layout = QHBoxLayout(widget)
-        layout.setContentsMargins(0, 6, 0, 0)
-        layout.setSpacing(6)
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setSpacing(4)
 
+        # Header
+        header = QLabel(f"📎 Файлы ({len(file_refs)}):")
+        header.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        layout.addWidget(header)
+
+        # Files list
         for file_info in file_refs[:5]:  # Limit to 5 files shown
             mime_type = file_info.get("mime_type", "")
             if mime_type.startswith("image/"):
@@ -310,24 +317,30 @@ class MessageBubble(QFrame):
             else:
                 icon = "📎"
 
-            chip = QLabel(icon)
+            # Get display name and truncate if too long
+            display_name = file_info.get("display_name", "")
+            if not display_name:
+                uri = file_info.get("uri", "")
+                display_name = uri.split("/")[-1] if uri else "Файл"
+            if len(display_name) > 40:
+                display_name = display_name[:37] + "..."
+
+            chip = QLabel(f"{icon} {display_name}")
             chip.setStyleSheet(
                 """
-                background-color: rgba(255,255,255,0.15);
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 14px;
+                color: #d1d5db;
+                font-size: 12px;
+                padding: 2px 0;
             """
             )
             chip.setToolTip(file_info.get("display_name", file_info.get("uri", "")))
             layout.addWidget(chip)
 
         if len(file_refs) > 5:
-            more = QLabel(f"+{len(file_refs) - 5}")
-            more.setStyleSheet("color: #93c5fd; font-size: 11px;")
+            more = QLabel(f"... и ещё {len(file_refs) - 5}")
+            more.setStyleSheet("color: #6b7280; font-size: 11px;")
             layout.addWidget(more)
 
-        layout.addStretch()
         return widget
 
 
