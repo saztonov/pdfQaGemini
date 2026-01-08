@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QTimer
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ class RealtimeClient(QObject):
         self._messages_channel = None
         self._connected = False
         self._subscribed_conversation_ids: set[str] = set()
-        self._listen_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> bool:
         """
@@ -98,8 +97,7 @@ class RealtimeClient(QObject):
             )
             await self._messages_channel.subscribe()
 
-            # Start listening in background
-            self._listen_task = asyncio.create_task(self._listen_loop())
+            # No need to call listen() - realtime-py handles it internally after subscribe()
 
             self._connected = True
             self.connectionStatusChanged.emit(True)
@@ -117,29 +115,9 @@ class RealtimeClient(QObject):
             self.connectionStatusChanged.emit(False)
             return False
 
-    async def _listen_loop(self):
-        """Background task to listen for realtime events"""
-        try:
-            if self._client and self._client.realtime:
-                await self._client.realtime.listen()
-        except asyncio.CancelledError:
-            logger.info("Realtime listen loop cancelled")
-        except Exception as e:
-            logger.error(f"Realtime listen error: {e}", exc_info=True)
-            self._connected = False
-            self.connectionStatusChanged.emit(False)
-
     async def disconnect(self):
         """Disconnect from Supabase Realtime"""
         try:
-            # Cancel listen task
-            if self._listen_task and not self._listen_task.done():
-                self._listen_task.cancel()
-                try:
-                    await self._listen_task
-                except asyncio.CancelledError:
-                    pass
-
             # Unsubscribe from channels
             if self._jobs_channel:
                 await self._jobs_channel.unsubscribe()
@@ -185,7 +163,7 @@ class RealtimeClient(QObject):
         return self._connected
 
     def _on_job_change(self, payload: dict):
-        """Handle job table changes"""
+        """Handle job table changes - called from websocket thread"""
         try:
             record = payload.get("record") or payload.get("new", {})
             if not record:
@@ -214,13 +192,15 @@ class RealtimeClient(QObject):
             )
 
             logger.info(f"Realtime job update: {job_update.job_id} -> {job_update.status}")
-            self.jobUpdated.emit(job_update)
+
+            # Thread-safe emit using QTimer.singleShot to run in main thread
+            QTimer.singleShot(0, lambda: self.jobUpdated.emit(job_update))
 
         except Exception as e:
             logger.error(f"Error handling job change: {e}", exc_info=True)
 
     def _on_message_insert(self, payload: dict):
-        """Handle new message inserts"""
+        """Handle new message inserts - called from websocket thread"""
         try:
             record = payload.get("record") or payload.get("new", {})
             if not record:
@@ -246,7 +226,9 @@ class RealtimeClient(QObject):
             )
 
             logger.info(f"Realtime new message: {message_update.message_id} in {conversation_id}")
-            self.messageReceived.emit(message_update)
+
+            # Thread-safe emit using QTimer.singleShot to run in main thread
+            QTimer.singleShot(0, lambda: self.messageReceived.emit(message_update))
 
         except Exception as e:
             logger.error(f"Error handling message insert: {e}", exc_info=True)

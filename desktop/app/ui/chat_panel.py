@@ -457,14 +457,39 @@ class ChatPanel(QWidget):
         logger.info(
             f"_on_send: model={model_name}, thinking={thinking_level}, budget={thinking_budget}, files={len(file_refs)}, system_prompt_len={len(system_prompt)}, user_text_template_len={len(user_text_template)}"
         )
+
+        # Validation: model must be selected
         if not model_name:
             logger.warning("No model selected!")
+            self._show_validation_error("Выберите модель")
+            return
+
+        # Validation: files must be selected
+        if not file_refs:
+            logger.warning("No files selected!")
+            self._show_validation_error("Выберите файлы контекста для отправки запроса")
+            return
+
+        # Validation: prompt must be selected (not "Без промта")
+        prompt_id = self.prompt_combo.currentData()
+        if prompt_id is None:
+            logger.warning("No prompt selected!")
+            self._show_validation_error("Выберите промт для отправки запроса")
             return
 
         self.askModelRequested.emit(
             text, system_prompt, user_text_template, model_name, thinking_level, thinking_budget, file_refs
         )
         self.input_field.clear()
+
+    def _show_validation_error(self, message: str):
+        """Show validation error message in chat"""
+        self.chat_history.add_message(
+            role="system",
+            content=f"⚠️ {message}",
+            meta={},
+            timestamp="",
+        )
 
     def _on_model_changed(self, index: int):
         """Update thinking levels when model changes"""
@@ -657,28 +682,41 @@ class ChatPanel(QWidget):
         self.chat_history.load_messages(chat_messages)
 
     def set_prompts(self, prompts: list[dict]):
-        """Set available prompts"""
+        """Set available prompts. Auto-selects 'default' prompt on first load."""
         self._available_prompts = prompts
         self.prompt_combo.blockSignals(True)
 
         # Save current selection
         current_id = self.prompt_combo.currentData()
+        is_first_load = self.prompt_combo.count() <= 1  # Only "Без промта" exists
 
         self.prompt_combo.clear()
         self.prompt_combo.addItem("Без промта", None)
 
-        for prompt in prompts:
+        default_prompt_idx = -1
+        for i, prompt in enumerate(prompts):
             prompt_id = prompt.get("id")
             title = prompt.get("title", "Без названия")
             self.prompt_combo.addItem(title, prompt_id)
+            # Track default prompt index (title == "default", case-insensitive)
+            if title.lower() == "default":
+                default_prompt_idx = i + 1  # +1 because "Без промта" is at index 0
 
-        # Restore selection
+        # Restore previous selection or auto-select default on first load
         if current_id:
             idx = self.prompt_combo.findData(current_id)
             if idx >= 0:
                 self.prompt_combo.setCurrentIndex(idx)
+        elif is_first_load and default_prompt_idx >= 0:
+            # Auto-select "default" prompt on first load
+            self.prompt_combo.setCurrentIndex(default_prompt_idx)
+            logger.info("Auto-selected 'default' prompt")
 
         self.prompt_combo.blockSignals(False)
+
+        # Trigger prompt change to load system_prompt and user_text_template
+        if is_first_load and default_prompt_idx >= 0:
+            self._on_prompt_changed(default_prompt_idx)
 
     def _on_prompt_changed(self, index: int):
         """Handle prompt selection change"""
