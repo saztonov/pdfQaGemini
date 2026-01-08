@@ -306,6 +306,9 @@ class RightPanelFilesMixin:
             await self.refresh_files(conversation_id=self.conversation_id)
             await self.refresh_chats()
 
+            # Notify that files list changed (for ChatPanel sync)
+            self.filesListChanged.emit()
+
             if self.toast_manager:
                 self.toast_manager.success(f"Удалено {len(file_names)} файлов")
 
@@ -471,6 +474,9 @@ class RightPanelFilesMixin:
 
         await self.refresh_files(conversation_id=self.conversation_id)
         await self.refresh_chats()
+
+        # Notify that files list changed (for ChatPanel sync)
+        self.filesListChanged.emit()
 
         # Show result
         if success_count > 0 and failed_count == 0:

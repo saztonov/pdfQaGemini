@@ -117,6 +117,7 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
         if self.right_panel:
             self.right_panel.refreshGeminiRequested.connect(self._on_refresh_gemini_async)
             self.right_panel.filesSelectionChanged.connect(self._on_files_selection_changed)
+            self.right_panel.filesListChanged.connect(self._sync_files_to_chat)
             self.right_panel.chatSelected.connect(self._on_chat_selected)
             self.right_panel.chatCreated.connect(self._on_chat_created)
             self.right_panel.chatDeleted.connect(self._on_chat_deleted)

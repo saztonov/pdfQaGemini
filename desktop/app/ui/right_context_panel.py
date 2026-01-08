@@ -39,6 +39,7 @@ class RightContextPanel(
     # Signals
     refreshGeminiRequested = Signal()
     filesSelectionChanged = Signal(list)  # list[dict] selected files
+    filesListChanged = Signal()  # emitted when files list changes (add/delete)
     chatSelected = Signal(str)  # conversation_id
     chatCreated = Signal(str, str)  # conversation_id, title
     chatDeleted = Signal(str)  # conversation_id
