@@ -43,27 +43,23 @@ class MessageBubble(QFrame):
         bubble = QFrame()
         bubble.setObjectName("bubble")
 
-        # Role-specific styling
+        # Role-specific styling - adaptive width (no fixed maxWidth)
         if self.role == "user":
             # User message - right aligned, blue background
             outer_layout.addStretch(1)
             bubble.setStyleSheet(self._user_style())
-            bubble.setMaximumWidth(700)
         elif self.role == "assistant":
-            # AI message - left aligned, dark gray background
+            # AI message - left aligned, dark gray background, full width
             bubble.setStyleSheet(self._assistant_style())
-            bubble.setMaximumWidth(800)
             outer_layout.addStretch(0)
         elif self.role == "thinking":
             # Thinking - left aligned, subtle background
             bubble.setStyleSheet(self._thinking_style())
-            bubble.setMaximumWidth(750)
             outer_layout.addStretch(0)
         elif self.role == "system":
             # System message - centered, info style
             outer_layout.addStretch(1)
             bubble.setStyleSheet(self._system_style())
-            bubble.setMaximumWidth(600)
         elif self.role == "loading":
             # Loading indicator
             bubble.setStyleSheet(self._loading_style())
@@ -71,7 +67,6 @@ class MessageBubble(QFrame):
             outer_layout.addStretch(0)
         else:
             bubble.setStyleSheet(self._default_style())
-            bubble.setMaximumWidth(700)
 
         # Bubble inner layout
         bubble_layout = QVBoxLayout(bubble)

@@ -108,7 +108,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
         thinking_budget: int,
         file_refs: list,
     ):
-        """Handle ask model in server mode - send via API and wait for realtime update"""
+        """Handle ask model in server mode - send via API and wait for Realtime update"""
         if not self.api_client:
             self.toast_manager.error("API клиент не инициализирован")
             return
@@ -159,7 +159,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
 
             self.toast_manager.info("Запрос отправлен, ожидаю ответ...")
 
-            # Response will arrive via realtime subscription
+            # Response will arrive via Realtime subscription
             # The _on_job_updated and _on_realtime_message handlers in main_window.py
             # will process the response when it arrives
 

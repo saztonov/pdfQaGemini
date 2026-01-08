@@ -1,12 +1,11 @@
-"""Supabase Realtime client for live updates"""
+"""Supabase Realtime client for live updates using async client"""
 
 import asyncio
 import logging
-from typing import Optional, Callable
+from typing import Optional
 from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal
-from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +41,7 @@ class RealtimeClient(QObject):
 
     Subscribes to qa_jobs and qa_messages tables for live updates.
     Emits signals when jobs complete or new messages arrive.
+    Uses async Supabase client for Realtime support.
     """
 
     # Signals
@@ -54,38 +54,109 @@ class RealtimeClient(QObject):
         self.supabase_url = supabase_url
         self.supabase_key = supabase_key
         self.client_id = client_id
-        self._client: Optional[Client] = None
-        self._channel = None
+        self._client = None
+        self._jobs_channel = None
+        self._messages_channel = None
         self._connected = False
         self._subscribed_conversation_ids: set[str] = set()
-
-    def _get_client(self) -> Client:
-        """Lazy init Supabase client"""
-        if self._client is None:
-            self._client = create_client(self.supabase_url, self.supabase_key)
-        return self._client
+        self._listen_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> bool:
         """
-        Connect to Supabase Realtime.
+        Connect to Supabase Realtime using async client.
 
         Returns True if connection successful.
-        Note: supabase-py v2+ requires async client for Realtime.
-        Currently disabled - app works via polling instead.
         """
-        # Realtime is not supported with sync client in supabase-py v2+
-        # The app will work without live updates - uses polling instead
-        logger.warning("Realtime disabled: supabase-py v2+ requires async client for Realtime")
-        self._connected = False
-        self.connectionStatusChanged.emit(False)
-        return False
+        try:
+            from supabase._async.client import create_client as acreate_client
+
+            logger.info("Connecting to Supabase Realtime...")
+
+            # Create async client
+            self._client = await acreate_client(self.supabase_url, self.supabase_key)
+
+            # Connect to realtime
+            await self._client.realtime.connect()
+
+            # Subscribe to qa_jobs table changes (UPDATE events for status changes)
+            self._jobs_channel = self._client.channel("qa_jobs_changes")
+            self._jobs_channel.on_postgres_changes(
+                event="UPDATE",
+                schema="public",
+                table="qa_jobs",
+                callback=self._on_job_change,
+            )
+            await self._jobs_channel.subscribe()
+
+            # Subscribe to qa_messages table changes (INSERT events for new messages)
+            self._messages_channel = self._client.channel("qa_messages_changes")
+            self._messages_channel.on_postgres_changes(
+                event="INSERT",
+                schema="public",
+                table="qa_messages",
+                callback=self._on_message_insert,
+            )
+            await self._messages_channel.subscribe()
+
+            # Start listening in background
+            self._listen_task = asyncio.create_task(self._listen_loop())
+
+            self._connected = True
+            self.connectionStatusChanged.emit(True)
+            logger.info("Supabase Realtime connected successfully")
+            return True
+
+        except ImportError as e:
+            logger.error(f"Failed to import async Supabase client: {e}")
+            self._connected = False
+            self.connectionStatusChanged.emit(False)
+            return False
+        except Exception as e:
+            logger.error(f"Failed to connect to Supabase Realtime: {e}", exc_info=True)
+            self._connected = False
+            self.connectionStatusChanged.emit(False)
+            return False
+
+    async def _listen_loop(self):
+        """Background task to listen for realtime events"""
+        try:
+            if self._client and self._client.realtime:
+                await self._client.realtime.listen()
+        except asyncio.CancelledError:
+            logger.info("Realtime listen loop cancelled")
+        except Exception as e:
+            logger.error(f"Realtime listen error: {e}", exc_info=True)
+            self._connected = False
+            self.connectionStatusChanged.emit(False)
 
     async def disconnect(self):
         """Disconnect from Supabase Realtime"""
         try:
-            if self._channel:
-                await asyncio.to_thread(self._channel.unsubscribe)
-                self._channel = None
+            # Cancel listen task
+            if self._listen_task and not self._listen_task.done():
+                self._listen_task.cancel()
+                try:
+                    await self._listen_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Unsubscribe from channels
+            if self._jobs_channel:
+                await self._jobs_channel.unsubscribe()
+                self._jobs_channel = None
+
+            if self._messages_channel:
+                await self._messages_channel.unsubscribe()
+                self._messages_channel = None
+
+            # Disconnect realtime
+            if self._client and self._client.realtime:
+                await self._client.realtime.disconnect()
+
+            # Close client
+            if self._client:
+                await self._client.aclose()
+                self._client = None
 
             self._connected = False
             self.connectionStatusChanged.emit(False)
@@ -142,7 +213,7 @@ class RealtimeClient(QObject):
                 error_message=record.get("error_message"),
             )
 
-            logger.info(f"Job update: {job_update.job_id} -> {job_update.status}")
+            logger.info(f"Realtime job update: {job_update.job_id} -> {job_update.status}")
             self.jobUpdated.emit(job_update)
 
         except Exception as e:
@@ -174,7 +245,7 @@ class RealtimeClient(QObject):
                 meta=record.get("meta"),
             )
 
-            logger.info(f"New message: {message_update.message_id} in {conversation_id}")
+            logger.info(f"Realtime new message: {message_update.message_id} in {conversation_id}")
             self.messageReceived.emit(message_update)
 
         except Exception as e:

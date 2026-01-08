@@ -579,17 +579,24 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             return
 
         if job_update.status == "completed":
-            # Job completed - hide loading indicator
+            # Job completed - hide loading indicator and enable input
             if self.chat_panel:
                 self.chat_panel.set_loading(False)
+                self.chat_panel.set_input_enabled(True)
 
-            # The message will arrive via messageReceived signal
+            # Note: Don't show result_text here - it will come via _on_realtime_message
+            # to avoid duplicate messages. Only log completion.
             logger.info(f"Job {job_update.job_id} completed")
 
         elif job_update.status == "failed":
-            # Job failed - show error
+            # Job failed - show error and enable input
             if self.chat_panel:
                 self.chat_panel.set_loading(False)
+                self.chat_panel.set_input_enabled(True)
+                self.chat_panel.add_system_message(
+                    f"Ошибка: {job_update.error_message or 'Неизвестная ошибка'}",
+                    "error"
+                )
 
             error_msg = job_update.error_message or "Неизвестная ошибка"
             self.toast_manager.error(f"Ошибка: {error_msg}")
@@ -612,12 +619,18 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             from app.utils.time_utils import format_time
             from datetime import datetime
 
+            # Hide loading and enable input
+            self.chat_panel.set_loading(False)
+            self.chat_panel.set_input_enabled(True)
+
             self.chat_panel.add_message(
                 role="assistant",
                 content=message_update.content,
                 meta=message_update.meta,
                 timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
             )
+
+            self.toast_manager.success("✓ Ответ получен")
 
             # Process actions if present
             if message_update.meta and message_update.meta.get("actions"):

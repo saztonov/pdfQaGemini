@@ -39,139 +39,59 @@ def build_user_prompt(
 
 # ========== JSON SCHEMAS ==========
 
+# Flat schema without oneOf - compatible with Gemini 3 Flash Preview
+# which has stricter nesting depth limits
 MODEL_REPLY_SCHEMA_STRICT = {
     "type": "object",
-    "additionalProperties": False,
     "properties": {
         "assistant_text": {"type": "string"},
         "is_final": {"type": "boolean"},
         "actions": {
             "type": "array",
             "items": {
-                "oneOf": [
-                    # --- request_files ---
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "request_files"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "items": {
-                                        "type": "array",
-                                        "minItems": 1,
-                                        "maxItems": 5,
-                                        "items": {
-                                            "type": "object",
-                                            "additionalProperties": False,
-                                            "properties": {
-                                                "context_item_id": {"type": "string"},
-                                                "kind": {
-                                                    "type": "string",
-                                                    "enum": ["crop", "text"],
-                                                },
-                                                "reason": {"type": "string"},
-                                                "priority": {
-                                                    "type": "string",
-                                                    "enum": ["high", "medium", "low"],
-                                                },
-                                                "crop_id": {"type": "string"},
-                                            },
-                                            "required": ["context_item_id", "kind", "reason"],
-                                        },
-                                    },
-                                },
-                                "required": ["items"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": ["request_files", "open_image", "request_roi", "final"],
                     },
-                    # --- open_image ---
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "open_image"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "context_item_id": {"type": "string"},
-                                    "purpose": {"type": "string"},
-                                },
-                                "required": ["context_item_id"],
+                    # Flat payload - all fields at same level
+                    # For request_files:
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "context_item_id": {"type": "string"},
+                                "kind": {"type": "string"},
+                                "reason": {"type": "string"},
+                                "priority": {"type": "string"},
+                                "crop_id": {"type": "string"},
                             },
-                            "note": {"type": "string"},
+                            "required": ["context_item_id", "kind", "reason"],
                         },
-                        "required": ["type", "payload"],
                     },
-                    # --- request_roi ---
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "request_roi"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "image_ref": {
-                                        "type": "object",
-                                        "additionalProperties": False,
-                                        "properties": {
-                                            "context_item_id": {"type": "string"},
-                                        },
-                                        "required": ["context_item_id"],
-                                    },
-                                    "goal": {"type": "string"},
-                                    "dpi": {"type": "integer", "minimum": 120, "maximum": 800},
-                                    "suggested_bbox_norm": {
-                                        "type": "object",
-                                        "additionalProperties": False,
-                                        "properties": {
-                                            "x1": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                                            "y1": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                                            "x2": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                                            "y2": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                                        },
-                                        "required": ["x1", "y1", "x2", "y2"],
-                                    },
-                                },
-                                "required": ["image_ref", "goal"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
+                    # For open_image:
+                    "context_item_id": {"type": "string"},
+                    "purpose": {"type": "string"},
+                    # For request_roi:
+                    "image_context_item_id": {"type": "string"},
+                    "goal": {"type": "string"},
+                    "dpi": {"type": "integer"},
+                    "bbox_x1": {"type": "number"},
+                    "bbox_y1": {"type": "number"},
+                    "bbox_x2": {"type": "number"},
+                    "bbox_y2": {"type": "number"},
+                    # For final:
+                    "confidence": {"type": "string"},
+                    "used_context_item_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
                     },
-                    # --- final ---
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "type": {"const": "final"},
-                            "payload": {
-                                "type": "object",
-                                "additionalProperties": False,
-                                "properties": {
-                                    "confidence": {
-                                        "type": "string",
-                                        "enum": ["low", "medium", "high"],
-                                    },
-                                    "used_context_item_ids": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                    },
-                                },
-                                "required": ["confidence", "used_context_item_ids"],
-                            },
-                            "note": {"type": "string"},
-                        },
-                        "required": ["type", "payload"],
-                    },
-                ],
+                    # Common
+                    "note": {"type": "string"},
+                },
+                "required": ["type"],
             },
         },
     },
