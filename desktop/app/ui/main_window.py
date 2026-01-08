@@ -522,9 +522,8 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             if self.chat_panel:
                 self.chat_panel.load_history(chat_messages)
 
-            # Refresh Gemini files (filtered by current chat)
+            # Sync files to chat (files already loaded in ChatListItem)
             if self.right_panel:
-                await self.right_panel.refresh_files(conversation_id=conversation_id)
                 self._sync_files_to_chat()
 
             logger.info(f"Чат загружен: {len(messages)} сообщений")
