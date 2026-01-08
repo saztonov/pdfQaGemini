@@ -172,9 +172,9 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
 
             self.toast_manager.info("Запрос отправлен, ожидаю ответ...")
 
-            # Response will arrive via Realtime subscription
-            # The _on_job_updated and _on_realtime_message handlers in main_window.py
-            # will process the response when it arrives
+            # Poll for job completion as fallback (realtime may not work)
+            if job_id:
+                await self._poll_job_status(job_id)
 
         except Exception as e:
             logger.error(f"Ошибка отправки сообщения: {e}", exc_info=True)
@@ -183,3 +183,79 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                 self.chat_panel.set_loading(False)
                 self.chat_panel.add_system_message(f"Ошибка: {e}", "error")
                 self.chat_panel.set_input_enabled(True)
+
+    async def _poll_job_status(self: "MainWindow", job_id: str, max_attempts: int = 120, interval: float = 2.0):
+        """Poll job status until completed or failed (fallback for realtime)"""
+        import asyncio
+        from app.utils.time_utils import format_time
+        from datetime import datetime
+
+        logger.info(f"Starting job polling for {job_id}")
+
+        for attempt in range(max_attempts):
+            try:
+                job_data = await self.api_client.get_job(job_id)
+                status = job_data.get("status", "unknown")
+
+                if status == "completed":
+                    logger.info(f"Job {job_id} completed via polling")
+
+                    # Fetch messages for conversation to get the response
+                    if self.current_conversation_id:
+                        messages = await self.api_client.list_messages(str(self.current_conversation_id))
+
+                        # Find the assistant message (last one with role=assistant)
+                        assistant_msg = None
+                        for msg in reversed(messages):
+                            if msg.get("role") == "assistant":
+                                assistant_msg = msg
+                                break
+
+                        if assistant_msg and self.chat_panel:
+                            self.chat_panel.set_loading(False)
+                            self.chat_panel.set_input_enabled(True)
+                            self.chat_panel.add_message(
+                                role="assistant",
+                                content=assistant_msg.get("content", ""),
+                                meta=assistant_msg.get("meta", {}),
+                                timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
+                            )
+                            self.toast_manager.success("✓ Ответ получен")
+
+                            # Create trace
+                            from app.services.realtime_client import MessageUpdate
+                            message_update = MessageUpdate(
+                                message_id=assistant_msg.get("id", ""),
+                                conversation_id=str(self.current_conversation_id),
+                                role="assistant",
+                                content=assistant_msg.get("content", ""),
+                                meta=assistant_msg.get("meta"),
+                            )
+                            self._create_trace_from_response(message_update)
+                    return
+
+                elif status == "failed":
+                    error_msg = job_data.get("error_message", "Неизвестная ошибка")
+                    logger.error(f"Job {job_id} failed: {error_msg}")
+
+                    if self.chat_panel:
+                        self.chat_panel.set_loading(False)
+                        self.chat_panel.set_input_enabled(True)
+                        self.chat_panel.add_system_message(f"Ошибка: {error_msg}", "error")
+                    self.toast_manager.error(f"Ошибка: {error_msg}")
+                    return
+
+                # Still processing, wait and retry
+                await asyncio.sleep(interval)
+
+            except Exception as e:
+                logger.error(f"Error polling job status: {e}")
+                await asyncio.sleep(interval)
+
+        # Timeout - enable input anyway
+        logger.warning(f"Job {job_id} polling timeout after {max_attempts * interval}s")
+        if self.chat_panel:
+            self.chat_panel.set_loading(False)
+            self.chat_panel.set_input_enabled(True)
+            self.chat_panel.add_system_message("Таймаут ожидания ответа. Попробуйте обновить чат.", "warning")
+        self.toast_manager.warning("Таймаут ожидания ответа")

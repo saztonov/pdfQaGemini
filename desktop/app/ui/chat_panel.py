@@ -283,8 +283,6 @@ class ChatPanel(QWidget):
             chip.clicked.connect(self._on_file_chip_clicked)
             self.files_layout.insertWidget(self.files_layout.count() - 1, chip)
 
-        self._update_files_count()
-
     def _on_file_chip_clicked(self, file_name: str, is_selected: bool):
         """Handle file chip click"""
         if is_selected:
@@ -295,8 +293,6 @@ class ChatPanel(QWidget):
                     break
         else:
             self._selected_files.pop(file_name, None)
-
-        self._update_files_count()
 
     def _select_all_files(self):
         """Select all available files"""
@@ -324,7 +320,6 @@ class ChatPanel(QWidget):
             # Select it
             self._selected_files[name] = f
         self._rebuild_file_chips()
-        self._update_files_count()
 
 
     def get_selected_file_refs(self) -> list[dict]:
