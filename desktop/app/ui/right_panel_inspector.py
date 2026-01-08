@@ -206,9 +206,11 @@ class RightPanelInspectorMixin:
     def _refresh_inspector(self):
         """Refresh inspector trace list"""
         if not self.trace_store:
+            logger.debug("[INSPECTOR] _refresh_inspector: trace_store is None")
             return
 
         traces = self.trace_store.list()
+        logger.debug(f"[INSPECTOR] _refresh_inspector: found {len(traces)} traces")
         self.trace_count_label.setText(f"Запросов: {len(traces)}")
 
         # Update list

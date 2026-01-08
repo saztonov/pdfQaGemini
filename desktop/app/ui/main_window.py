@@ -336,6 +336,7 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
                     server_mode=self.server_mode,
                 )
                 self.right_panel.trace_store = self.trace_store
+                logger.info(f"[INSPECTOR] trace_store assigned to right_panel, count={self.trace_store.count()}")
 
             # Load chats list
             if self.right_panel:
@@ -609,7 +610,7 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
 
     def _on_realtime_message(self, message_update: MessageUpdate):
         """Handle new message from realtime"""
-        logger.info(f"New message received: {message_update.message_id}")
+        logger.info(f"[INSPECTOR] _on_realtime_message called: {message_update.message_id}, role={message_update.role}")
 
         # Only process if this is for the current conversation
         if self.current_conversation_id and message_update.conversation_id != str(self.current_conversation_id):
@@ -646,8 +647,10 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
         from datetime import datetime
         from app.services.trace import ModelTrace
 
+        logger.info(f"[INSPECTOR] _create_trace_from_response called, pending_request={self._pending_request is not None}")
+
         if not self._pending_request:
-            logger.warning("No pending request for trace")
+            logger.warning("[INSPECTOR] No pending request for trace - skipping")
             return
 
         try:
@@ -688,13 +691,13 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
             )
 
             self.trace_store.add(trace)
-            logger.info(f"Trace created: {trace.id}")
+            logger.info(f"[INSPECTOR] Trace created and added: {trace.id}, total traces: {self.trace_store.count()}")
 
             # Clear pending request
             self._pending_request = None
 
         except Exception as e:
-            logger.error(f"Failed to create trace: {e}", exc_info=True)
+            logger.error(f"[INSPECTOR] Failed to create trace: {e}", exc_info=True)
 
     def _on_realtime_status(self, is_connected: bool):
         """Handle realtime connection status change"""

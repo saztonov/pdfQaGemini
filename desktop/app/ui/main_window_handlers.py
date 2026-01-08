@@ -124,6 +124,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             "thinking_level": thinking_level,
             "file_refs": file_refs,
         }
+        logger.info(f"[INSPECTOR] Saved pending request: model={model_name}, user_text={user_text[:50]}...")
 
         # Ensure conversation exists via API
         if not self.current_conversation_id:

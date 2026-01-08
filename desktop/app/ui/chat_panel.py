@@ -76,41 +76,7 @@ class ChatPanel(QWidget):
         input_main_layout.setContentsMargins(12, 10, 12, 10)
         input_main_layout.setSpacing(8)
 
-        # Files selection area
-        self.files_header = QHBoxLayout()
-        self.files_header.setSpacing(8)
-
-        files_label = QLabel("📎 Файлы:")
-        files_label.setStyleSheet("color: #888; font-size: 11px;")
-        self.files_header.addWidget(files_label)
-
-        self.files_count_label = QLabel("0 выбрано")
-        self.files_count_label.setStyleSheet("color: #60a5fa; font-size: 11px;")
-        self.files_header.addWidget(self.files_count_label)
-
-        self.btn_toggle_files = QPushButton("▼")
-        self.btn_toggle_files.setFixedSize(24, 24)
-        self.btn_toggle_files.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle_files.setToolTip("Показать/скрыть файлы")
-        self.btn_toggle_files.setStyleSheet(
-            """
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                color: #888;
-                font-size: 10px;
-            }
-            QPushButton:hover { color: #fff; }
-        """
-        )
-        self.btn_toggle_files.clicked.connect(self._toggle_files_panel)
-        self.files_header.addWidget(self.btn_toggle_files)
-
-        self.files_header.addStretch()
-
-        input_main_layout.addLayout(self.files_header)
-
-        # Files chips container (collapsible)
+        # Files chips container (only chips, no header)
         self.files_scroll = QScrollArea()
         self.files_scroll.setWidgetResizable(True)
         self.files_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -236,8 +202,6 @@ class ChatPanel(QWidget):
 
         layout.addWidget(self.input_container)
 
-        self._files_panel_visible = True
-        
         # Connect prompt combo signal AFTER all widgets are created
         self.prompt_combo.currentIndexChanged.connect(self._on_prompt_changed)
         
@@ -285,17 +249,11 @@ class ChatPanel(QWidget):
             }
         """
 
-    def _toggle_files_panel(self):
-        """Toggle files panel visibility"""
-        self._files_panel_visible = not self._files_panel_visible
-        self.btn_toggle_files.setText("▲" if self._files_panel_visible else "▼")
-        self._update_files_visibility()
-
     def _update_files_visibility(self):
         """Update files panel visibility"""
         has_files = len(self._available_files) > 0
-        self.files_scroll.setVisible(self._files_panel_visible and has_files)
-        self.no_files_label.setVisible(self._files_panel_visible and not has_files)
+        self.files_scroll.setVisible(has_files)
+        self.no_files_label.setVisible(not has_files)
 
     def _show_welcome(self):
         """Show welcome message"""
@@ -368,16 +326,6 @@ class ChatPanel(QWidget):
         self._rebuild_file_chips()
         self._update_files_count()
 
-    def _update_files_count(self):
-        """Update files count label"""
-        count = len(self._selected_files)
-        total = len(self._available_files)
-        if count == 0:
-            self.files_count_label.setText(f"{total} доступно")
-            self.files_count_label.setStyleSheet("color: #6b7280; font-size: 11px;")
-        else:
-            self.files_count_label.setText(f"{count} из {total} выбрано")
-            self.files_count_label.setStyleSheet("color: #60a5fa; font-size: 11px;")
 
     def get_selected_file_refs(self) -> list[dict]:
         """Get selected file references for request"""
