@@ -150,6 +150,9 @@ class InspectorPanel(QWidget):
     def set_trace_store(self, trace_store: TraceStore):
         """Set trace store after initialization"""
         self.trace_store = trace_store
+        logger.info(f"[INSPECTOR] set_trace_store called, trace_store={trace_store is not None}")
+        # Force immediate refresh
+        self._refresh_inspector()
 
     def _setup_ui(self):
         """Initialize UI"""
@@ -341,15 +344,16 @@ class InspectorPanel(QWidget):
         self.inspector_timer = QTimer(self)
         self.inspector_timer.timeout.connect(self._refresh_inspector)
         self.inspector_timer.start(2000)
+        logger.info("[INSPECTOR] Timer started (2000ms interval)")
 
     def _refresh_inspector(self):
         """Refresh inspector trace list"""
         if not self.trace_store:
-            logger.debug("[INSPECTOR] _refresh_inspector: trace_store is None")
+            logger.warning("[INSPECTOR] _refresh_inspector: trace_store is None")
             return
 
         traces = self.trace_store.list()
-        logger.debug(f"[INSPECTOR] _refresh_inspector: found {len(traces)} traces")
+        logger.info(f"[INSPECTOR] _refresh_inspector: found {len(traces)} traces")
         self.trace_count_label.setText(f"Requests: {len(traces)}")
 
         # Update list

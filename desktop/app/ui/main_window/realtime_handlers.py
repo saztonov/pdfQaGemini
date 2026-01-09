@@ -86,6 +86,13 @@ class RealtimeHandlersMixin:
                 timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
             )
 
+            # Update token counter
+            if message_update.meta:
+                self.chat_panel.add_tokens(
+                    input_tokens=message_update.meta.get("input_tokens", 0),
+                    output_tokens=message_update.meta.get("output_tokens", 0)
+                )
+
             self.toast_manager.success("✓ Ответ получен")
 
             # Create trace for inspector
@@ -128,6 +135,7 @@ class RealtimeHandlersMixin:
             trace = ModelTrace(
                 ts=request_ts,
                 conversation_id=self.current_conversation_id,
+                client_id=self.client_id,
                 model=self._pending_request.get("model_name", "unknown"),
                 thinking_level=self._pending_request.get("thinking_level", "low"),
                 system_prompt=self._pending_request.get("system_prompt", ""),
