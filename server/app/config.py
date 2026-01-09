@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     redis_password: str = ""
     redis_db: int = 0
 
+    # Worker settings (defaults, can be overridden in Supabase qa_app_settings)
+    worker_max_jobs: int = 10
+    worker_job_timeout: int = 300
+    worker_max_retries: int = 3
+
     @property
     def redis_dsn(self) -> str:
         """Build Redis DSN"""
