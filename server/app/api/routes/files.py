@@ -21,6 +21,7 @@ router = APIRouter()
 async def upload_file(
     file: UploadFile = File(...),
     conversation_id: str = Form(...),
+    source_r2_key: str = Form(default=None),
     x_client_id: str = Header(default="default"),
 ):
     """Upload file to Gemini Files API"""
@@ -52,6 +53,7 @@ async def upload_file(
             mime_type=result["mime_type"],
             size_bytes=result.get("size_bytes"),
             token_count=token_count,
+            source_r2_key=source_r2_key,  # For context_catalog lookup
             client_id=x_client_id,
         )
 

@@ -10,8 +10,11 @@ class SendHandlingMixin:
 
     def _on_send(self):
         """Handle send button click"""
+        logger.info("=== _on_send called ===")
         text = self.input_field.toPlainText().strip()
+        logger.info(f"  text length: {len(text)}")
         if not text:
+            logger.info("  Empty text, returning")
             return
 
         model_name = self.model_combo.currentData()
@@ -34,8 +37,9 @@ class SendHandlingMixin:
             return
 
         # Validation: files must be selected
+        logger.info(f"  file_refs count: {len(file_refs)}")
         if not file_refs:
-            logger.warning("No files selected!")
+            logger.warning("  No files selected!")
             self._show_validation_error("Выберите файлы контекста для отправки запроса")
             return
 

@@ -353,7 +353,7 @@ class InspectorPanel(QWidget):
             return
 
         traces = self.trace_store.list()
-        logger.info(f"[INSPECTOR] _refresh_inspector: found {len(traces)} traces")
+        logger.debug(f"[INSPECTOR] _refresh_inspector: found {len(traces)} traces")
         self.trace_count_label.setText(f"Requests: {len(traces)}")
 
         # Update list

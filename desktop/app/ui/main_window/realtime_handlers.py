@@ -71,6 +71,10 @@ class RealtimeHandlersMixin:
         ):
             return
 
+        # Clear active job to prevent timeout fallback from duplicating the message
+        if message_update.role == "assistant":
+            self._active_job_id = None
+
         # Add message to chat panel
         if self.chat_panel and message_update.role == "assistant":
             from app.utils.time_utils import format_time

@@ -289,6 +289,7 @@ class UploadHandlersMixin:
                         conversation_id=str(self.current_conversation_id),
                         file_name=file_name,
                         mime_type=mime_type,
+                        source_r2_key=r2_key,
                     )
                     # Server returns GeminiFileResponse with gemini_name, gemini_uri
                     gemini_name = result.get("gemini_name")

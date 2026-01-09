@@ -191,6 +191,7 @@ class APIClient:
         conversation_id: str,
         file_name: str = None,
         mime_type: str = None,
+        source_r2_key: str = None,
     ) -> dict:
         """Upload file to Gemini via server"""
         import mimetypes
@@ -211,6 +212,8 @@ class APIClient:
             # Pass explicit filename and mime_type in tuple format
             files = {"file": (actual_name, f, mime_type)}
             data = {"conversation_id": conversation_id}
+            if source_r2_key:
+                data["source_r2_key"] = source_r2_key
             response = await client.post("/api/v1/files/upload", files=files, data=data)
         response.raise_for_status()
         return response.json()
