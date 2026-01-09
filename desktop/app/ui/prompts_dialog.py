@@ -1,6 +1,8 @@
 """Prompts management dialog"""
 
+import json
 import logging
+from pathlib import Path
 from typing import Optional
 from PySide6.QtWidgets import (
     QDialog,
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QMessageBox,
     QSplitter,
+    QFileDialog,
 )
 from PySide6.QtCore import Qt
 from qasync import asyncSlot
@@ -142,11 +145,25 @@ class PromptsDialog(QDialog):
         self.user_text_edit.setPlaceholderText("Текст пользовательского запроса")
         layout.addWidget(self.user_text_edit)
 
-        # Save button
+        # Buttons row
+        buttons_layout = QHBoxLayout()
+
+        self.btn_import = QPushButton("Импорт JSON")
+        self.btn_import.clicked.connect(self._on_import_prompt)
+        buttons_layout.addWidget(self.btn_import)
+
+        self.btn_export = QPushButton("Экспорт JSON")
+        self.btn_export.clicked.connect(self._on_export_prompt)
+        buttons_layout.addWidget(self.btn_export)
+
+        buttons_layout.addStretch()
+
         self.btn_save = QPushButton("Сохранить")
         self.btn_save.clicked.connect(self._on_save_prompt)
         self.btn_save.setDefault(True)
-        layout.addWidget(self.btn_save)
+        buttons_layout.addWidget(self.btn_save)
+
+        layout.addLayout(buttons_layout)
 
         return widget
 
@@ -296,3 +313,89 @@ class PromptsDialog(QDialog):
         except Exception as e:
             logger.error(f"Error deleting prompt: {e}", exc_info=True)
             self.toast_manager.error(f"Ошибка удаления: {e}")
+
+    def _on_import_prompt(self):
+        """Import prompt from JSON file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Импорт промта",
+            str(Path.home()),
+            "JSON файлы (*.json);;Все файлы (*.*)",
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            # Validate required fields
+            if not isinstance(data, dict):
+                raise ValueError("JSON должен быть объектом")
+
+            # Fill form with imported data
+            title = data.get("title", "")
+            system_prompt = data.get("system_prompt", "")
+            user_text = data.get("user_text", "")
+
+            self.title_edit.setText(title)
+            self.system_prompt_edit.setPlainText(system_prompt)
+            self.user_text_edit.setPlainText(user_text)
+
+            # Clear current selection (will create new prompt on save)
+            self.current_prompt_id = None
+            self.edit_title_label.setText(f"Импортировано: {title or 'Без названия'}")
+            self.btn_delete.setEnabled(False)
+            self.prompts_list.clearSelection()
+
+            self.toast_manager.success(f"Промт импортирован из {Path(file_path).name}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}")
+            self.toast_manager.error(f"Ошибка парсинга JSON: {e}")
+        except Exception as e:
+            logger.error(f"Import error: {e}", exc_info=True)
+            self.toast_manager.error(f"Ошибка импорта: {e}")
+
+    def _on_export_prompt(self):
+        """Export current prompt to JSON file"""
+        title = self.title_edit.text().strip()
+        system_prompt = self.system_prompt_edit.toPlainText().strip()
+        user_text = self.user_text_edit.toPlainText().strip()
+
+        if not title and not system_prompt and not user_text:
+            self.toast_manager.warning("Нечего экспортировать - заполните поля")
+            return
+
+        # Suggest filename based on title
+        suggested_name = title.replace(" ", "_").lower() if title else "prompt"
+        suggested_name = "".join(c for c in suggested_name if c.isalnum() or c == "_")
+        suggested_name = f"{suggested_name}.json"
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Экспорт промта",
+            str(Path.home() / suggested_name),
+            "JSON файлы (*.json);;Все файлы (*.*)",
+        )
+
+        if not file_path:
+            return
+
+        try:
+            data = {
+                "title": title,
+                "version": "1.0",
+                "system_prompt": system_prompt,
+                "user_text": user_text,
+            }
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            self.toast_manager.success(f"Промт экспортирован в {Path(file_path).name}")
+
+        except Exception as e:
+            logger.error(f"Export error: {e}", exc_info=True)
+            self.toast_manager.error(f"Ошибка экспорта: {e}")
