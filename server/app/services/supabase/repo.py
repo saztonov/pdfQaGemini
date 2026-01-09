@@ -4,13 +4,10 @@ import logging
 from typing import Optional
 from supabase import create_client, Client
 
-from app.services.supabase.tree_ops import TreeOpsMixin
 from app.services.supabase.conversation_ops import ConversationOpsMixin
 from app.services.supabase.message_ops import MessageOpsMixin
 from app.services.supabase.job_ops import JobOpsMixin
 from app.services.supabase.gemini_file_ops import GeminiFileOpsMixin
-from app.services.supabase.context_file_ops import ContextFileOpsMixin
-from app.services.supabase.artifacts_ops import ArtifactsOpsMixin
 from app.services.supabase.prompts_ops import PromptsOpsMixin
 from app.services.supabase.auth_ops import AuthOpsMixin
 
@@ -18,13 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 class SupabaseRepo(
-    TreeOpsMixin,
     ConversationOpsMixin,
     MessageOpsMixin,
     JobOpsMixin,
     GeminiFileOpsMixin,
-    ContextFileOpsMixin,
-    ArtifactsOpsMixin,
     PromptsOpsMixin,
     AuthOpsMixin,
 ):

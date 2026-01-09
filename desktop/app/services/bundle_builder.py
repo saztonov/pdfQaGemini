@@ -214,13 +214,3 @@ class DocumentBundleBuilder:
             bundle_text = bundle_text[:MAX_BUNDLE_CHARS] + "\n... (обрезано)"
 
         return bundle_text.encode("utf-8"), crop_index
-
-    def format_crop_index_section(self, crop_index: list[dict]) -> str:
-        """Format crop index as text section for bundle"""
-        if not crop_index:
-            return ""
-
-        lines = ["CROPS:"]
-        for crop in crop_index:
-            lines.append(f"  {crop['crop_id']}")
-        return "\n".join(lines)

@@ -47,49 +47,6 @@ class JobOpsMixin:
 
         return await asyncio.to_thread(_sync_create)
 
-    async def claim_next_job(self) -> Optional[dict]:
-        """Atomically claim next queued job for processing"""
-
-        def _sync_claim():
-            client = self._get_client()
-            now = datetime.utcnow().isoformat()
-
-            # Find oldest queued job and update to processing atomically
-            # Note: This is a simplified version - for high concurrency you'd use
-            # a proper queue system or PostgreSQL advisory locks
-
-            # First get the oldest queued job
-            response = (
-                client.table("qa_jobs")
-                .select("*")
-                .eq("status", "queued")
-                .order("created_at")
-                .limit(1)
-                .execute()
-            )
-
-            if not response.data:
-                return None
-
-            job = response.data[0]
-            job_id = job["id"]
-
-            # Try to claim it by updating status
-            # In production, you'd want to use a transaction or RPC
-            update_response = (
-                client.table("qa_jobs")
-                .update({"status": "processing", "started_at": now, "updated_at": now})
-                .eq("id", job_id)
-                .eq("status", "queued")  # Only if still queued
-                .execute()
-            )
-
-            if update_response.data:
-                return update_response.data[0]
-            return None
-
-        return await asyncio.to_thread(_sync_claim)
-
     async def update_job_status(
         self,
         job_id: str,

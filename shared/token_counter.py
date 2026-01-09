@@ -73,11 +73,3 @@ def count_tokens_bytes(data: bytes, encoding: str = "utf-8") -> int:
         logger.warning(f"Error decoding bytes for token count: {e}")
         # Fallback: ~4 bytes per token
         return len(data) // 4
-
-
-def estimate_tokens_from_size(size_bytes: int) -> int:
-    """Estimate tokens from file size (fallback when content unavailable)"""
-    if size_bytes <= 0:
-        return 0
-    # Rough estimate: ~4 bytes per token for UTF-8 text
-    return size_bytes // 4
