@@ -25,10 +25,10 @@ class ChatManagementMixin:
                 self.current_conversation_id = conv.id
 
                 # Refresh chats list
-                if self.right_panel:
-                    await self.right_panel.refresh_chats()
+                if self.chats_dock:
+                    await self.chats_dock.refresh_chats()
 
-                self.toast_manager.info("Создан новый чат")
+                self.toast_manager.info("New chat created")
             except Exception as e:
                 logger.error(f"Ошибка создания разговора: {e}", exc_info=True)
                 self.toast_manager.error(f"Ошибка создания разговора: {e}")
@@ -70,10 +70,9 @@ class ChatManagementMixin:
                 self.chat_panel.load_history(chat_messages)
 
             # Sync files to chat (files already loaded in ChatListItem)
-            if self.right_panel:
-                self._sync_files_to_chat()
+            self._sync_files_to_chat()
 
-            logger.info(f"Чат загружен: {len(messages)} сообщений")
+            logger.info(f"Chat loaded: {len(messages)} messages")
 
         except Exception as e:
             logger.error(f"Ошибка переключения чата: {e}", exc_info=True)

@@ -19,32 +19,31 @@ class ToolbarHandlersMixin:
     @asyncSlot()
     async def _on_refresh_tree(self):
         """Refresh projects tree"""
-        self.toast_manager.info("Обновление дерева...")
-        if self.left_panel:
-            await self.left_panel.load_roots(client_id=self.client_id)
-            self.toast_manager.success("✓ Дерево обновлено")
+        self.toast_manager.info("Refreshing tree...")
+        if self.projects_dock:
+            await self.projects_dock.load_roots(client_id=self.client_id)
+            self.toast_manager.success("Tree refreshed")
 
     @asyncSlot()
     async def _on_upload_selected(self):
         """Upload selected items from tree to Gemini"""
-        if self.left_panel:
-            await self.left_panel.add_selected_to_context()
+        if self.projects_dock:
+            await self.projects_dock.add_selected_to_context()
 
     @asyncSlot()
     async def _on_refresh_gemini(self):
         """Refresh Gemini Files list"""
-        if self.right_panel:
+        if self.chats_dock:
             conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
-            await self.right_panel.refresh_files(conversation_id=conv_id)
+            await self.chats_dock.refresh_files(conversation_id=conv_id)
             self._sync_files_to_chat()
-            # Refresh chats list to update file count
-            await self.right_panel.refresh_chats()
+            await self.chats_dock.refresh_chats()
 
     @asyncSlot()
     async def _on_refresh_gemini_async(self):
         """Async refresh Gemini files"""
-        if self.right_panel:
-            await self.right_panel.refresh_files()
+        if self.chats_dock:
+            await self.chats_dock.refresh_files()
             self._sync_files_to_chat()
 
     def _on_open_inspector(self):
@@ -57,20 +56,6 @@ class ToolbarHandlersMixin:
         self.inspector_window.show()
         self.inspector_window.raise_()
         self.inspector_window.activateWindow()
-
-    def _toggle_left_panel(self):
-        """Toggle left panel visibility"""
-        if self.left_panel:
-            is_visible = self.left_panel.isVisible()
-            self.left_panel.setVisible(not is_visible)
-            self.action_toggle_left.setChecked(not is_visible)
-
-    def _toggle_right_panel(self):
-        """Toggle right panel visibility"""
-        if self.right_panel:
-            is_visible = self.right_panel.isVisible()
-            self.right_panel.setVisible(not is_visible)
-            self.action_toggle_right.setChecked(not is_visible)
 
     async def _load_gemini_models(self):
         """Load available Gemini models"""

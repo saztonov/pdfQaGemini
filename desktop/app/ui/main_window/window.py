@@ -1,16 +1,14 @@
-"""Main application window"""
+"""Main application window with dockable panels"""
 
 from typing import Optional
 from uuid import UUID
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QMainWindow
+from PySide6.QtCore import QTimer
 import asyncio
 import logging
 
 from app.ui.toast import ToastManager
-from app.ui.left_projects_panel import LeftProjectsPanel
 from app.ui.chat_panel import ChatPanel
-from app.ui.right_context_panel import RightContextPanel
 from app.ui.connection_status import ConnectionStatusWidget
 from app.ui.main_window_handlers import MainWindowHandlers
 from app.ui.main_window_actions import ModelActionsHandler
@@ -25,11 +23,13 @@ from app.ui.main_window.settings_handlers import SettingsHandlersMixin
 from app.ui.main_window.chat_management import ChatManagementMixin
 from app.ui.main_window.realtime_handlers import RealtimeHandlersMixin
 from app.ui.main_window.toolbar_handlers import ToolbarHandlersMixin
+from app.ui.main_window.dock_manager import DockManagerMixin
 
 logger = logging.getLogger(__name__)
 
 
 class MainWindow(
+    DockManagerMixin,
     MenuSetupMixin,
     MainWindowHandlers,
     ModelActionsHandler,
@@ -40,7 +40,7 @@ class MainWindow(
     ToolbarHandlersMixin,
     QMainWindow,
 ):
-    """Main application window"""
+    """Main application window with dockable panels"""
 
     def __init__(self):
         super().__init__()
@@ -74,78 +74,74 @@ class MainWindow(
         # Inspector window (singleton)
         self.inspector_window = None
 
-        # UI Components
-        self.left_panel: Optional[LeftProjectsPanel] = None
+        # UI Components - docks initialized in _setup_docks()
+        self.projects_dock = None
+        self.chats_dock = None
+        self.inspector_dock = None
         self.chat_panel: Optional[ChatPanel] = None
-        self.right_panel: Optional[RightContextPanel] = None
         self.connection_status: Optional[ConnectionStatusWidget] = None
 
+        # Flag to track dock state restoration
+        self._dock_state_restored = False
+
         self._setup_ui()
+        self._setup_docks()
         self._connect_signals()
 
         # Auto-connect after event loop starts
         QTimer.singleShot(500, lambda: asyncio.create_task(self._auto_connect()))
 
+        # Restore dock state after UI is ready
+        QTimer.singleShot(100, self._restore_dock_state)
+
     def _setup_ui(self):
-        """Initialize UI components"""
+        """Initialize UI components - ChatPanel as central widget"""
         self._setup_menu()
 
-        central = QWidget()
-        self.setCentralWidget(central)
-
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self.splitter = QSplitter(Qt.Horizontal)
-
-        self.left_panel = LeftProjectsPanel(
-            supabase_repo=self.supabase_repo, toast_manager=self.toast_manager
-        )
+        # ChatPanel is the central widget (always visible)
         self.chat_panel = ChatPanel()
-        self.right_panel = RightContextPanel(
-            supabase_repo=self.supabase_repo,
-            gemini_client=self.gemini_client,
-            r2_client=self.r2_client,
-            toast_manager=self.toast_manager,
-            trace_store=self.trace_store,
-        )
+        self.setCentralWidget(self.chat_panel)
 
-        self.splitter.addWidget(self.left_panel)
-        self.splitter.addWidget(self.chat_panel)
-        self.splitter.addWidget(self.right_panel)
-
-        self.splitter.setSizes([280, 700, 420])
-
-        layout.addWidget(self.splitter)
-
-        # Connection status bar at bottom right
+        # Connection status in status bar
         self.connection_status = ConnectionStatusWidget(self)
-        layout.addWidget(self.connection_status)
+        self.statusBar().addPermanentWidget(self.connection_status)
 
     def _connect_signals(self):
-        """Connect panel signals"""
-        if self.left_panel:
-            self.left_panel.addToContextRequested.connect(self._on_nodes_add_context)
-            self.left_panel.addFilesToContextRequested.connect(self._on_files_add_context)
+        """Connect dock panel signals"""
+        # Projects dock signals
+        if self.projects_dock:
+            self.projects_dock.addToContextRequested.connect(self._on_nodes_add_context)
+            self.projects_dock.addFilesToContextRequested.connect(self._on_files_add_context)
 
-        if self.right_panel:
-            self.right_panel.refreshGeminiRequested.connect(self._on_refresh_gemini_async)
-            self.right_panel.filesSelectionChanged.connect(self._on_files_selection_changed)
-            self.right_panel.filesListChanged.connect(self._sync_files_to_chat)
-            self.right_panel.chatSelected.connect(self._on_chat_selected)
-            self.right_panel.chatCreated.connect(self._on_chat_created)
-            self.right_panel.chatDeleted.connect(self._on_chat_deleted)
+        # Chats dock signals
+        if self.chats_dock:
+            self.chats_dock.filesSelectionChanged.connect(self._on_files_selection_changed)
+            self.chats_dock.filesListChanged.connect(self._sync_files_to_chat)
+            self.chats_dock.chatSelected.connect(self._on_chat_selected)
+            self.chats_dock.chatCreated.connect(self._on_chat_created)
+            self.chats_dock.chatDeleted.connect(self._on_chat_deleted)
 
+        # Chat panel signals (central widget)
         if self.chat_panel:
             self.chat_panel.askModelRequested.connect(self._on_ask_model)
             self.chat_panel.editPromptRequested.connect(self._on_edit_prompt_from_chat)
 
-    async def closeEvent(self, event):
+    def closeEvent(self, event):
         """Clean up on window close"""
+        # Save dock layout state
+        self._save_dock_state()
+
         # Stop connection checker
         if self.connection_status:
             self.connection_status.cleanup()
 
+        # Schedule async cleanup
+        asyncio.create_task(self._async_cleanup())
+
+        event.accept()
+
+    async def _async_cleanup(self):
+        """Async cleanup on window close"""
         # Disconnect realtime client
         if self.realtime_client:
             await self.realtime_client.disconnect()
@@ -158,4 +154,13 @@ class MainWindow(
         if self.r2_client:
             await self.r2_client.close()
 
-        event.accept()
+    # Compatibility properties for code that still uses old panel names
+    @property
+    def left_panel(self):
+        """Compatibility: return projects dock panel"""
+        return self.projects_dock.panel if self.projects_dock else None
+
+    @property
+    def right_panel(self):
+        """Compatibility: return chats dock panel"""
+        return self.chats_dock.panel if self.chats_dock else None

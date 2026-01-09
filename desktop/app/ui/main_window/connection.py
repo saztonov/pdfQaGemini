@@ -127,40 +127,24 @@ class ConnectionMixin:
             # Agent not needed - server handles LLM
             self.agent = None
 
-            # Update panels with services
-            if self.left_panel:
-                self.left_panel.set_services(self.supabase_repo, self.r2_client, self.toast_manager)
-
-            if self.right_panel:
-                self.right_panel.set_services(
-                    self.supabase_repo,
-                    self.gemini_client,
-                    self.r2_client,
-                    self.toast_manager,
-                    client_id=self.client_id,
-                    api_client=self.api_client,
-                    server_mode=self.server_mode,
-                )
-                self.right_panel.trace_store = self.trace_store
-                logger.info(
-                    f"[INSPECTOR] trace_store assigned to right_panel, count={self.trace_store.count()}"
-                )
+            # Update dock panels with services
+            self._set_dock_services()
 
             # Load chats list
-            if self.right_panel:
-                await self.right_panel.refresh_chats()
+            if self.chats_dock:
+                await self.chats_dock.refresh_chats()
 
             # Load Gemini files if conversation exists
-            if self.right_panel and self.current_conversation_id:
+            if self.chats_dock and self.current_conversation_id:
                 conv_id = str(self.current_conversation_id)
-                await self.right_panel.refresh_files(conversation_id=conv_id)
+                await self.chats_dock.refresh_files(conversation_id=conv_id)
                 self._sync_files_to_chat()
 
             self._enable_actions()
 
             # Load tree with correct client_id
-            if self.left_panel:
-                await self.left_panel.load_roots(client_id=self.client_id)
+            if self.projects_dock:
+                await self.projects_dock.load_roots(client_id=self.client_id)
 
             # Set default model in chat panel
             if self.chat_panel:

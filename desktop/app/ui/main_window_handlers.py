@@ -138,8 +138,8 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                 logger.info(f"Created conversation via API: {self.current_conversation_id}")
 
                 # Refresh chats list
-                if self.right_panel:
-                    await self.right_panel.refresh_chats()
+                if self.chats_dock:
+                    await self.chats_dock.refresh_chats()
 
             except Exception as e:
                 logger.error(f"Failed to create conversation: {e}", exc_info=True)

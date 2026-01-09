@@ -110,51 +110,73 @@ class MenuSetupMixin:
         file_menu.addAction(action_exit)
 
     def _setup_view_menu(self: "MainWindow", menubar):
-        """Настройка меню 'Вид'"""
-        view_menu = menubar.addMenu("👁 Вид")
+        """Setup View menu with dock panel actions"""
+        view_menu = menubar.addMenu("View")
 
-        self.action_refresh_tree = QAction("🔄  Обновить дерево проектов", self)
+        self.action_refresh_tree = QAction("Refresh Projects Tree", self)
         self.action_refresh_tree.setShortcut("Ctrl+R")
-        self.action_refresh_tree.setToolTip("Обновить дерево проектов")
+        self.action_refresh_tree.setToolTip("Refresh projects tree")
         self.action_refresh_tree.triggered.connect(self._on_refresh_tree)
         self.action_refresh_tree.setEnabled(False)
         view_menu.addAction(self.action_refresh_tree)
 
-        self.action_refresh_gemini = QAction("🔄  Обновить Gemini Files", self)
+        self.action_refresh_gemini = QAction("Refresh Gemini Files", self)
         self.action_refresh_gemini.setShortcut("Ctrl+Shift+R")
-        self.action_refresh_gemini.setToolTip("Обновить список Gemini Files")
+        self.action_refresh_gemini.setToolTip("Refresh Gemini Files list")
         self.action_refresh_gemini.triggered.connect(self._on_refresh_gemini)
         self.action_refresh_gemini.setEnabled(False)
         view_menu.addAction(self.action_refresh_gemini)
 
         view_menu.addSeparator()
 
-        self.action_model_inspector = QAction("🔍  Инспектор модели", self)
+        self.action_model_inspector = QAction("Model Inspector Window", self)
         self.action_model_inspector.setShortcut("Ctrl+I")
         self.action_model_inspector.setToolTip(
-            "Открыть инспектор модели с полными логами, мыслями и токенами"
+            "Open separate model inspector window with full logs"
         )
         self.action_model_inspector.triggered.connect(self._on_open_inspector)
         view_menu.addAction(self.action_model_inspector)
 
         view_menu.addSeparator()
 
-        # Подменю "Панели"
-        panels_menu = view_menu.addMenu("📋  Панели")
+        # Panels submenu - uses dock.toggleViewAction() for automatic sync
+        panels_menu = view_menu.addMenu("Panels")
 
-        self.action_toggle_left = QAction("📂  Панель проектов", self)
-        self.action_toggle_left.setCheckable(True)
-        self.action_toggle_left.setChecked(True)
-        self.action_toggle_left.setShortcut("Ctrl+1")
-        self.action_toggle_left.triggered.connect(self._toggle_left_panel)
-        panels_menu.addAction(self.action_toggle_left)
+        # Note: Dock toggle actions will be added after docks are created
+        # Store menu reference for later use
+        self._panels_menu = panels_menu
 
-        self.action_toggle_right = QAction("📎  Панель контекста", self)
-        self.action_toggle_right.setCheckable(True)
-        self.action_toggle_right.setChecked(True)
-        self.action_toggle_right.setShortcut("Ctrl+2")
-        self.action_toggle_right.triggered.connect(self._toggle_right_panel)
-        panels_menu.addAction(self.action_toggle_right)
+    def _setup_dock_menu_actions(self: "MainWindow"):
+        """Setup dock toggle actions in Panels menu (called after docks are created)"""
+        if not hasattr(self, "_panels_menu"):
+            return
+
+        # Get toggle actions from docks (automatically synced with visibility)
+        if self.projects_dock:
+            action = self.projects_dock.toggleViewAction()
+            action.setText("Projects Panel")
+            action.setShortcut("Ctrl+1")
+            self._panels_menu.addAction(action)
+
+        if self.chats_dock:
+            action = self.chats_dock.toggleViewAction()
+            action.setText("Chats Panel")
+            action.setShortcut("Ctrl+2")
+            self._panels_menu.addAction(action)
+
+        if self.inspector_dock:
+            action = self.inspector_dock.toggleViewAction()
+            action.setText("Inspector Panel")
+            action.setShortcut("Ctrl+3")
+            self._panels_menu.addAction(action)
+
+        self._panels_menu.addSeparator()
+
+        # Reset layout action
+        self.action_reset_layout = QAction("Reset Layout", self)
+        self.action_reset_layout.setToolTip("Reset panels to default layout")
+        self.action_reset_layout.triggered.connect(self._reset_dock_layout)
+        self._panels_menu.addAction(self.action_reset_layout)
 
     def _setup_settings_menu(self: "MainWindow", menubar):
         """Настройка меню 'Настройки'"""

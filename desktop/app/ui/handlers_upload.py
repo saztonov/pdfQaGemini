@@ -181,17 +181,17 @@ class UploadHandlersMixin:
                                 logger.error(f"Failed to attach bundle: {e}")
 
             # Refresh panels
-            if self.right_panel:
+            if self.chats_dock:
                 conv_id = (
                     str(self.current_conversation_id) if self.current_conversation_id else None
                 )
-                await self.right_panel.refresh_files(conversation_id=conv_id)
+                await self.chats_dock.refresh_files(conversation_id=conv_id)
 
                 if gemini_name:
-                    self.right_panel.select_file_for_request(gemini_name)
+                    self.chats_dock.select_file_for_request(gemini_name)
 
                 self._sync_files_to_chat()
-                await self.right_panel.refresh_chats()
+                await self.chats_dock.refresh_chats()
 
             self.toast_manager.success(f"✓ Bundle загружен ({len(bundle_bytes)} bytes)")
 
@@ -349,19 +349,19 @@ class UploadHandlersMixin:
                 failed_count += 1
 
         # Refresh Gemini Files panel
-        if self.right_panel:
+        if self.chats_dock:
             conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
-            await self.right_panel.refresh_files(conversation_id=conv_id)
+            await self.chats_dock.refresh_files(conversation_id=conv_id)
 
             # Auto-select newly uploaded files
             for name in uploaded_names:
-                self.right_panel.select_file_for_request(name)
+                self.chats_dock.select_file_for_request(name)
 
             # Sync to chat panel
             self._sync_files_to_chat()
 
             # Refresh chats list to update file count
-            await self.right_panel.refresh_chats()
+            await self.chats_dock.refresh_chats()
 
         # Show result
         if uploaded_count > 0:
@@ -371,7 +371,7 @@ class UploadHandlersMixin:
 
     def _sync_files_to_chat(self: "MainWindow"):
         """Sync available Gemini files to chat panel"""
-        if self.right_panel and self.chat_panel:
-            files = self.right_panel.gemini_files
+        if self.chats_dock and self.chat_panel:
+            files = self.chats_dock.gemini_files
             self.chat_panel.set_available_files(files)
-            logger.info(f"Синхронизировано {len(files)} файлов с ChatPanel")
+            logger.info(f"Synced {len(files)} files to ChatPanel")

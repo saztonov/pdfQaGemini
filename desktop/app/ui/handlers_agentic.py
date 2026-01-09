@@ -87,13 +87,13 @@ class AgenticHandlersMixin:
                         new_refs, uploaded_file_infos = await self._fetch_and_upload_crops(items)
                         current_file_refs.extend(new_refs)
                         if uploaded_file_infos:
-                            if self.right_panel:
+                            if self.chats_dock:
                                 conv_id = (
                                     str(self.current_conversation_id)
                                     if self.current_conversation_id
                                     else None
                                 )
-                                await self.right_panel.refresh_files(conversation_id=conv_id)
+                                await self.chats_dock.refresh_files(conversation_id=conv_id)
                             if self.chat_panel:
                                 self.chat_panel.add_selected_files(uploaded_file_infos)
                         should_continue = True
@@ -179,10 +179,10 @@ class AgenticHandlersMixin:
         """Build minimal context catalog JSON from available files"""
         catalog = {"crops": [], "text_files": []}
 
-        if not self.right_panel:
+        if not self.chats_dock:
             return catalog
 
-        for item in getattr(self.right_panel, "context_items", []):
+        for item in getattr(self.chats_dock.panel, "context_items", []):
             entry = {
                 "context_item_id": item.id,
                 "title": item.title,
@@ -213,8 +213,8 @@ class AgenticHandlersMixin:
 
             # Find context item by id
             context_item = None
-            if self.right_panel:
-                for ci in getattr(self.right_panel, "context_items", []):
+            if self.chats_dock:
+                for ci in getattr(self.chats_dock.panel, "context_items", []):
                     if ci.id == context_item_id:
                         context_item = ci
                         break
@@ -272,8 +272,8 @@ class AgenticHandlersMixin:
 
         # Find context item
         context_item = None
-        if self.right_panel:
-            for ci in getattr(self.right_panel, "context_items", []):
+        if self.chats_dock:
+            for ci in getattr(self.chats_dock.panel, "context_items", []):
                 if ci.id == context_item_id:
                     context_item = ci
                     break
