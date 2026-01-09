@@ -76,6 +76,7 @@ async def send_message(
         thinking_level=request.thinking_level,
         thinking_budget=request.thinking_budget,
         file_refs=request.file_refs,
+        context_catalog=request.context_catalog,
     )
 
     # 3. Enqueue job to Redis for processing
@@ -86,9 +87,11 @@ async def send_message(
         user_text=request.user_text,
         model_name=request.model_name,
         system_prompt=request.system_prompt,
+        user_text_template=request.user_text_template,
         thinking_level=request.thinking_level,
         thinking_budget=request.thinking_budget,
         file_refs=request.file_refs,
+        context_catalog=request.context_catalog,
     )
 
     # 4. Update conversation timestamp

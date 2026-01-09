@@ -20,6 +20,7 @@ class SendMessageRequest(BaseModel):
     thinking_level: Literal["low", "medium", "high"] = "low"
     thinking_budget: Optional[int] = None
     file_refs: list[dict] = Field(default_factory=list)
+    context_catalog: str = ""  # JSON string with available context items for agentic requests
 
 
 class CreateConversationRequest(BaseModel):

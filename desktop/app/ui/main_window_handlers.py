@@ -9,6 +9,10 @@ from qasync import asyncSlot
 # Import handler mixins
 from app.ui.handlers_upload import UploadHandlersMixin
 from app.ui.handlers_agentic import AgenticHandlersMixin
+from app.services.context_catalog_builder import (
+    build_context_catalog_for_conversation,
+    context_catalog_to_json,
+)
 
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
@@ -116,6 +120,22 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             self.toast_manager.error("API клиент не инициализирован")
             return
 
+        # Build context_catalog from conversation files
+        context_catalog_json = ""
+        if self.current_conversation_id and self.supabase_repo:
+            try:
+                catalog, node_ids = await build_context_catalog_for_conversation(
+                    self.supabase_repo,
+                    str(self.current_conversation_id),
+                )
+                if catalog:
+                    context_catalog_json = context_catalog_to_json(catalog)
+                    logger.info(
+                        f"Built context_catalog: {len(catalog)} items from {len(node_ids)} nodes"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to build context_catalog: {e}")
+
         # Save request data for tracing
         self._pending_request = {
             "ts": datetime.utcnow(),
@@ -124,6 +144,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             "model_name": model_name,
             "thinking_level": thinking_level,
             "file_refs": file_refs,
+            "context_catalog_len": len(context_catalog_json) if context_catalog_json else 0,
         }
         logger.info(
             f"[INSPECTOR] Saved pending request: model={model_name}, user_text={user_text[:50]}..."
@@ -167,6 +188,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                 thinking_level=thinking_level,
                 thinking_budget=thinking_budget,
                 file_refs=file_refs,
+                context_catalog=context_catalog_json,
             )
 
             job_info = result.get("job", {})

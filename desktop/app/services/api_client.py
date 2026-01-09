@@ -123,9 +123,13 @@ class APIClient:
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
         file_refs: Optional[list[dict]] = None,
+        context_catalog: str = "",
     ) -> dict:
         """
         Send message and get job ID for tracking.
+
+        Args:
+            context_catalog: JSON string with available context items for agentic requests
 
         Returns dict with 'user_message' and 'job' keys.
         """
@@ -140,6 +144,7 @@ class APIClient:
                 "thinking_level": thinking_level,
                 "thinking_budget": thinking_budget,
                 "file_refs": file_refs or [],
+                "context_catalog": context_catalog,
             },
         )
         response.raise_for_status()

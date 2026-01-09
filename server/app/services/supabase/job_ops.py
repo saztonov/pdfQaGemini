@@ -20,6 +20,7 @@ class JobOpsMixin:
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
         file_refs: Optional[list[dict]] = None,
+        context_catalog: str = "",
     ) -> dict:
         """Create new LLM job"""
 
@@ -38,6 +39,7 @@ class JobOpsMixin:
                 "thinking_level": thinking_level,
                 "thinking_budget": thinking_budget,
                 "file_refs": file_refs or [],
+                "context_catalog": context_catalog,
                 "status": "queued",
                 "created_at": now,
                 "updated_at": now,

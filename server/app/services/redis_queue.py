@@ -42,9 +42,11 @@ class RedisQueue:
         user_text: str,
         model_name: str,
         system_prompt: str = "",
+        user_text_template: str = "",
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
         file_refs: Optional[list[dict]] = None,
+        context_catalog: str = "",
     ) -> str:
         """Enqueue LLM processing job"""
         if not self._pool:
@@ -57,9 +59,11 @@ class RedisQueue:
             user_text=user_text,
             model_name=model_name,
             system_prompt=system_prompt,
+            user_text_template=user_text_template,
             thinking_level=thinking_level,
             thinking_budget=thinking_budget,
             file_refs=file_refs or [],
+            context_catalog=context_catalog,
             _job_id=job_id,
             _queue_name="arq:llm_jobs",
         )
