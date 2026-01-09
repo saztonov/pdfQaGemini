@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from app.api.dependencies import get_supabase_repo
+from app.api.dependencies import get_supabase_repo, reset_clients
 from app.app_settings import refresh_app_settings
 
 router = APIRouter()
@@ -104,8 +104,9 @@ async def update_setting(
     if not success:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
 
-    # Refresh cached settings
+    # Refresh cached settings and reset clients
     await refresh_app_settings()
+    reset_clients()
 
     return {"key": key, "updated": True}
 
@@ -125,7 +126,8 @@ async def update_settings_batch(
 
     updated_count = await repo.set_settings_batch(request.settings)
 
-    # Refresh cached settings
+    # Refresh cached settings and reset clients
     await refresh_app_settings()
+    reset_clients()
 
     return {"updated_count": updated_count, "total_requested": len(request.settings)}

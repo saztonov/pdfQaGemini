@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.routes import health, conversations, messages, jobs, files, prompts, auth, settings as settings_routes
 from app.services.redis_queue import init_redis_queue
+from app.app_settings import load_app_settings
 
 
 def setup_logging():
@@ -53,6 +54,9 @@ logger.info(f"Логи сохраняются в: {log_file_path}")
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown"""
     logger.info("Starting pdfQaGemini server...")
+
+    # Load application settings from Supabase
+    await load_app_settings()
 
     # Initialize Redis queue
     redis_queue = init_redis_queue()
