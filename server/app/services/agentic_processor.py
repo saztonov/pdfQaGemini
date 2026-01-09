@@ -161,6 +161,11 @@ class AgenticProcessor:
                     context_catalog_json=ctx.context_catalog,
                     user_text_template=ctx.user_text_template,
                 )
+                logger.info(f"  user_text_template length: {len(ctx.user_text_template)}")
+                logger.info(f"  context_catalog length: {len(ctx.context_catalog)}")
+                logger.info(f"  Built user_prompt length: {len(user_prompt)}")
+                # Log first 500 chars of user_prompt to verify context_catalog inclusion
+                logger.info(f"  user_prompt preview: {user_prompt[:500]}...")
             else:
                 # Follow-up iterations use original question
                 user_prompt = ctx.user_text
