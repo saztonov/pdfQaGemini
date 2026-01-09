@@ -75,11 +75,12 @@ async def upload_file(
             size_bytes=result.get("size_bytes"),
             token_count=token_count,
             source_r2_key=source_r2_key,  # For context_catalog lookup
+            crop_index=parsed_crop_index,  # Save crop_index for agentic loop
             client_id=x_client_id,
         )
 
-        # Note: crop_index is logged but not persisted on server.
-        # The client stores crop_index and sends context_catalog with each message request.
+        if parsed_crop_index:
+            logger.info(f"Saved crop_index with {len(parsed_crop_index)} items to DB")
 
         # Attach file to conversation
         if gemini_file_record and conversation_id:

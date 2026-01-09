@@ -62,20 +62,27 @@ async def build_context_catalog_from_gemini_file(
     gemini_file_data: dict,
 ) -> Optional[list[dict]]:
     """
-    Build context_catalog from a Gemini file's source_node_file_id.
+    Build context_catalog from a Gemini file's saved crop_index or source_node_file_id.
 
     Args:
         supabase_repo: SupabaseRepo instance
-        gemini_file_data: Dict with gemini file info including source_node_file_id
+        gemini_file_data: Dict with gemini file info including crop_index or source_node_file_id
 
     Returns:
         Context catalog or None if unable to build
     """
+    # First priority: use saved crop_index directly
+    crop_index = gemini_file_data.get("crop_index")
+    if crop_index and isinstance(crop_index, list) and len(crop_index) > 0:
+        logger.info(f"Using saved crop_index: {len(crop_index)} items")
+        return crop_index
+
+    # Fallback: try to build from source_node_file_id or source_r2_key
     source_node_file_id = gemini_file_data.get("source_node_file_id")
     source_r2_key = gemini_file_data.get("source_r2_key")
 
     if not source_node_file_id and not source_r2_key:
-        logger.debug(f"Gemini file has no source_node_file_id or source_r2_key")
+        logger.debug("Gemini file has no crop_index, source_node_file_id or source_r2_key")
         return None
 
     node_id = None

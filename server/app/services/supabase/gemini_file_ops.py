@@ -25,6 +25,7 @@ class GeminiFileOpsMixin:
         source_node_file_id: Optional[str] = None,
         source_r2_key: Optional[str] = None,
         expires_at: Optional[str] = None,
+        crop_index: Optional[list] = None,
     ) -> dict:
         """Upsert Gemini File cache entry"""
 
@@ -43,6 +44,7 @@ class GeminiFileOpsMixin:
                 "source_node_file_id": source_node_file_id,
                 "source_r2_key": source_r2_key,
                 "expires_at": expires_at,
+                "crop_index": crop_index,
                 "updated_at": now,
             }
             response = (
