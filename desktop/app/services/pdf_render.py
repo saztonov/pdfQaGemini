@@ -1,4 +1,5 @@
 """PDF rendering utilities using PyMuPDF"""
+
 import fitz  # PyMuPDF
 from pathlib import Path
 from typing import Tuple

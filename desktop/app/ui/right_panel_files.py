@@ -1,4 +1,5 @@
 """Files management mixin for RightContextPanel"""
+
 import asyncio
 import logging
 from typing import Optional
@@ -23,12 +24,14 @@ class RightPanelFilesMixin:
             for f in item._files:
                 name = f.get("name", "")
                 if name in self._selected_for_request:
-                    selected.append({
-                        "name": name,
-                        "uri": f.get("uri"),
-                        "mime_type": f.get("mime_type"),
-                        "display_name": f.get("display_name"),
-                    })
+                    selected.append(
+                        {
+                            "name": name,
+                            "uri": f.get("uri"),
+                            "mime_type": f.get("mime_type"),
+                            "display_name": f.get("display_name"),
+                        }
+                    )
         return selected
 
     def select_file_for_request(self, file_name: str):
@@ -103,6 +106,7 @@ class RightPanelFilesMixin:
             return None
 
         try:
+
             def _sync_get():
                 client = self.supabase_repo._get_client()
                 response = (

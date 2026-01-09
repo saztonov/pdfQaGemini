@@ -87,9 +87,7 @@ class TreeContextMenuMixin:
         else:
             action_add = menu.addAction("📤  Добавить в Gemini Files")
 
-        action_add.triggered.connect(
-            lambda: asyncio.create_task(self.add_selected_to_context())
-        )
+        action_add.triggered.connect(lambda: asyncio.create_task(self.add_selected_to_context()))
 
     def _add_download_action(self: "LeftProjectsPanel", menu: QMenu):
         """Добавить действие 'Скачать документы'"""

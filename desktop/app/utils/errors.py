@@ -1,4 +1,5 @@
 """Custom exceptions - re-export from shared module"""
+
 import sys
 from pathlib import Path
 

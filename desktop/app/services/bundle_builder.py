@@ -1,4 +1,5 @@
 """Document bundle builder for Gemini context"""
+
 import json
 import logging
 import re

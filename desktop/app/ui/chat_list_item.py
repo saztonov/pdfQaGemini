@@ -1,14 +1,13 @@
 """Expandable chat item widget with inline files list"""
+
 import logging
 from datetime import datetime, timezone
 from PySide6.QtWidgets import (
-    QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QFrame,
-    QSizePolicy,
 )
 from PySide6.QtCore import Signal, Qt, QPropertyAnimation, QEasingCurve
 

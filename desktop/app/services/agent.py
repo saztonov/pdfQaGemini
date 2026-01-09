@@ -1,4 +1,5 @@
 """Agent logic - orchestrates Gemini interactions"""
+
 import sys
 from pathlib import Path
 import logging

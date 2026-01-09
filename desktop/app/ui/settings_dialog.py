@@ -1,4 +1,5 @@
 """Settings dialog - simplified for centralized config"""
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -128,7 +129,9 @@ class SettingsDialog(QDialog):
         settings.setValue("server_config/supabase_url", config.get("supabase_url", ""))
         settings.setValue("server_config/supabase_key", config.get("supabase_key", ""))
         settings.setValue("server_config/r2_public_base_url", config.get("r2_public_base_url", ""))
-        settings.setValue("server_config/default_model", config.get("default_model", "gemini-2.0-flash"))
+        settings.setValue(
+            "server_config/default_model", config.get("default_model", "gemini-2.0-flash")
+        )
         settings.sync()
 
     @staticmethod

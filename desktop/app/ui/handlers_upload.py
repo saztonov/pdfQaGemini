@@ -1,4 +1,5 @@
 """Upload handlers for MainWindow"""
+
 import logging
 import sys
 import tempfile
@@ -173,7 +174,9 @@ class UploadHandlersMixin:
                                     conversation_id=str(self.current_conversation_id),
                                     gemini_file_id=gemini_file_id,
                                 )
-                                logger.info(f"Bundle attached to chat {self.current_conversation_id}")
+                                logger.info(
+                                    f"Bundle attached to chat {self.current_conversation_id}"
+                                )
                             except Exception as e:
                                 logger.error(f"Failed to attach bundle: {e}")
 

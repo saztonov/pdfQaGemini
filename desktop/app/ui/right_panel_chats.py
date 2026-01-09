@@ -1,4 +1,5 @@
 """Chats tab mixin for RightContextPanel"""
+
 import asyncio
 import logging
 from PySide6.QtWidgets import QInputDialog, QMessageBox
@@ -72,7 +73,9 @@ class RightPanelChatsMixin:
                 # Load files for this conversation
                 try:
                     conv_files = await self.supabase_repo.qa_get_conversation_files(conv_id)
-                    db_files_map = {f.get("gemini_name"): f for f in conv_files if f.get("gemini_name")}
+                    db_files_map = {
+                        f.get("gemini_name"): f for f in conv_files if f.get("gemini_name")
+                    }
 
                     # Merge files data
                     merged_files = []
@@ -80,15 +83,19 @@ class RightPanelChatsMixin:
                         name = f.get("name")
                         if name in db_files_map:
                             db_file = db_files_map[name]
-                            merged_files.append({
-                                "name": name,
-                                "uri": f.get("uri"),
-                                "display_name": db_file.get("display_name") or f.get("display_name"),
-                                "mime_type": db_file.get("mime_type") or f.get("mime_type"),
-                                "size_bytes": db_file.get("size_bytes") or f.get("size_bytes"),
-                                "token_count": db_file.get("token_count") or f.get("token_count"),
-                                "expiration_time": f.get("expiration_time"),
-                            })
+                            merged_files.append(
+                                {
+                                    "name": name,
+                                    "uri": f.get("uri"),
+                                    "display_name": db_file.get("display_name")
+                                    or f.get("display_name"),
+                                    "mime_type": db_file.get("mime_type") or f.get("mime_type"),
+                                    "size_bytes": db_file.get("size_bytes") or f.get("size_bytes"),
+                                    "token_count": db_file.get("token_count")
+                                    or f.get("token_count"),
+                                    "expiration_time": f.get("expiration_time"),
+                                }
+                            )
 
                     chat_item.set_files(merged_files)
                 except Exception as e:
@@ -203,7 +210,9 @@ class RightPanelChatsMixin:
         # Get current title
         current_title = "Новый чат"
         if conversation_id in self._chat_items:
-            current_title = self._chat_items[conversation_id].conversation_data.get("title", "Новый чат")
+            current_title = self._chat_items[conversation_id].conversation_data.get(
+                "title", "Новый чат"
+            )
 
         # Ask for new title
         new_title, ok = QInputDialog.getText(

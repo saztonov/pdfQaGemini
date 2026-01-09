@@ -1,4 +1,5 @@
 """Gemini Files tab widget"""
+
 import logging
 from PySide6.QtWidgets import (
     QWidget,

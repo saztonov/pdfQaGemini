@@ -1,4 +1,5 @@
 """Context tab widget"""
+
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (

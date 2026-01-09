@@ -1,5 +1,5 @@
 """Tree download operations - download files from R2 to Downloads folder"""
-import asyncio
+
 import logging
 import os
 import platform
@@ -20,10 +20,11 @@ def get_downloads_folder() -> Path:
     """Get user's Downloads folder path"""
     if platform.system() == "Windows":
         import winreg
+
         try:
             with winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
             ) as key:
                 downloads = winreg.QueryValueEx(key, "{374DE290-123F-4565-9164-39C4925E467B}")[0]
                 return Path(downloads)
@@ -50,7 +51,6 @@ class TreeDownloadMixin:
 
     async def download_selected_documents(self: "LeftProjectsPanel"):
         """Download selected documents to Downloads folder"""
-        from uuid import UUID
 
         if not self.r2_client:
             if self.toast_manager:
@@ -118,6 +118,7 @@ class TreeDownloadMixin:
             # If multiple files - create zip archive
             if len(downloaded_files) > 1:
                 from datetime import datetime
+
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 zip_name = f"documents_{timestamp}.zip"
                 zip_path = downloads_folder / zip_name
@@ -150,11 +151,7 @@ class TreeDownloadMixin:
             if self.toast_manager:
                 self.toast_manager.error(f"Ошибка скачивания: {e}")
 
-    async def _collect_files_for_download(
-        self: "LeftProjectsPanel",
-        item,
-        files_list: list[dict]
-    ):
+    async def _collect_files_for_download(self: "LeftProjectsPanel", item, files_list: list[dict]):
         """Recursively collect files from tree item"""
         from uuid import UUID
 

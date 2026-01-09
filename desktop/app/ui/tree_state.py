@@ -1,4 +1,5 @@
 """Tree state management (expand/collapse persistence)"""
+
 import logging
 from typing import TYPE_CHECKING
 from PySide6.QtCore import QSettings

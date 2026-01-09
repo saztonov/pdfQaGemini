@@ -1,4 +1,5 @@
 """HTML message rendering for chat panel"""
+
 import re
 
 
@@ -50,7 +51,7 @@ class MessageRenderer:
             for file_info in files_info:
                 mime_type = file_info.get("mime_type", "")
                 display_name = file_info.get("display_name") or file_info.get("name", "file")
-                
+
                 # Определяем иконку по mime_type
                 if mime_type.startswith("image/"):
                     icon = "🖼️"
@@ -68,18 +69,18 @@ class MessageRenderer:
                     icon = "📎"
                     color = "#f5f5f5"
                     border_color = "#bdbdbd"
-                
+
                 # Обрезаем длинное имя
                 short_name = display_name[:25] + "..." if len(display_name) > 28 else display_name
-                
-                files_html += f'''
+
+                files_html += f"""
                     <div style="border: 1px solid {border_color}; border-radius: 6px; padding: 6px 10px; background: {color}; display: inline-flex; align-items: center; gap: 6px;">
                         <span style="font-size: 16px;">{icon}</span>
                         <span style="font-size: 11px; color: #444;">{self._escape_html(short_name)}</span>
                     </div>
-                '''
-            files_html += '</div>'
-        
+                """
+            files_html += "</div>"
+
         return f"""
             <div style="margin: 12px 0; padding: 12px 16px; background-color: #f0f7ff; border: 1px solid #d0e4ff; border-radius: 16px;">
                 <div style="font-weight: bold; color: #1976d2; margin-bottom: 6px; font-size: 12px;">
@@ -165,19 +166,19 @@ class MessageRenderer:
         thinking = meta.get("thinking_level", "")
         input_tokens = meta.get("input_tokens")
         output_tokens = meta.get("output_tokens")
-        
+
         meta_parts = []
         if model:
             short_model = model.replace("gemini-3-", "").replace("-preview", "").title()
             meta_parts.append(short_model)
         if thinking:
             meta_parts.append(thinking.title())
-        
+
         # Add tokens info
         if input_tokens is not None and output_tokens is not None:
             meta_parts.append(f"📥 {input_tokens:,} токенов")
             meta_parts.append(f"📤 {output_tokens:,} токенов")
-        
+
         if meta_parts:
             return f"""<div style="font-size: 11px; color: #666; margin-top: 8px;">{' · '.join(meta_parts)}</div>"""
         return ""

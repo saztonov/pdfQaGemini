@@ -1,7 +1,7 @@
 """Left panel - Projects Tree"""
+
 from typing import Optional
 import logging
-import asyncio
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -17,7 +17,7 @@ from PySide6.QtCore import Signal, Qt, QEvent
 from PySide6.QtGui import QColor, QBrush
 from qasync import asyncSlot
 from app.services.supabase_repo import SupabaseRepo
-from app.models.schemas import TreeNode, FileType, FILE_TYPE_ICONS, FILE_TYPE_COLORS
+from app.models.schemas import TreeNode, FileType
 from app.ui.tree_delegates import VersionHighlightDelegate
 from app.ui.tree_state import TreeStateMixin, TreeFilterMixin
 from app.ui.tree_context import TreeContextMixin
@@ -50,7 +50,7 @@ def get_node_icon(node: TreeNode) -> str:
     # First check if node_type is in icons
     if node.node_type in NODE_ICONS:
         return NODE_ICONS[node.node_type]
-    
+
     # Fallback: folder icon for all types except document
     return "📁" if node.node_type != "document" else "📄"
 
@@ -60,7 +60,14 @@ def get_node_color(node: TreeNode) -> str:
     return NODE_COLORS.get(node.node_type, "#e0e0e0")
 
 
-class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMixin, TreeContextMenuMixin, TreeDownloadMixin):
+class LeftProjectsPanel(
+    QWidget,
+    TreeStateMixin,
+    TreeFilterMixin,
+    TreeContextMixin,
+    TreeContextMenuMixin,
+    TreeDownloadMixin,
+):
     """Projects tree panel with lazy loading"""
 
     # Signals
@@ -389,13 +396,17 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
             # Get parent node type from tree item
             parent_node_type = parent_item.data(0, Qt.UserRole + 1)
             parent_name = parent_item.text(0)
-            logger.debug(f"[TREE] Loading children for: {parent_name} (type={parent_node_type}, id={parent_id})")
+            logger.debug(
+                f"[TREE] Loading children for: {parent_name} (type={parent_node_type}, id={parent_id})"
+            )
 
             if parent_node_type == "document":
                 node_files = await self.supabase_repo.fetch_node_files_single(parent_id)
                 logger.debug(f"[TREE] Document '{parent_name}' has {len(node_files)} total files:")
                 for nf in node_files:
-                    logger.debug(f"[TREE]   - {nf.file_name} (type={nf.file_type}, r2_key={nf.r2_key})")
+                    logger.debug(
+                        f"[TREE]   - {nf.file_name} (type={nf.file_type}, r2_key={nf.r2_key})"
+                    )
 
                 # Filter: only show OCR_HTML and RESULT_MD files
                 allowed_types = {FileType.OCR_HTML.value, FileType.RESULT_MD.value}
@@ -442,7 +453,9 @@ class LeftProjectsPanel(QWidget, TreeStateMixin, TreeFilterMixin, TreeContextMix
     def _add_node_item(self, parent: Optional[QTreeWidgetItem], node: TreeNode):
         """Add tree node to widget"""
         parent_name = parent.text(0) if parent else "ROOT"
-        logger.debug(f"[TREE] Adding node: {node.name} (type={node.node_type}) under '{parent_name}'")
+        logger.debug(
+            f"[TREE] Adding node: {node.name} (type={node.node_type}) under '{parent_name}'"
+        )
 
         item = QTreeWidgetItem()
 

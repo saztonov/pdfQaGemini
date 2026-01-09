@@ -1,4 +1,5 @@
 """Model actions handlers (ROI, Image Viewer)"""
+
 import asyncio
 import tempfile
 import hashlib
@@ -210,13 +211,22 @@ class ModelActionsHandler:
                         actions_data = []
                         for a in reply.actions:
                             action_dict = {"type": a.type}
-                            for field in ["context_item_id", "kind", "reason", "priority", 
-                                         "r2_key", "goal", "dpi", "bbox_norm", "note"]:
+                            for field in [
+                                "context_item_id",
+                                "kind",
+                                "reason",
+                                "priority",
+                                "r2_key",
+                                "goal",
+                                "dpi",
+                                "bbox_norm",
+                                "note",
+                            ]:
                                 val = getattr(a, field, None)
                                 if val is not None:
                                     action_dict[field] = val
                             actions_data.append(action_dict)
-                        
+
                         meta = {
                             "model": current_model,
                             "thinking_level": "low",

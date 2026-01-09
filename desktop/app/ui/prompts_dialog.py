@@ -1,4 +1,5 @@
 """Prompts management dialog"""
+
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (
@@ -23,7 +24,9 @@ logger = logging.getLogger(__name__)
 class PromptsDialog(QDialog):
     """Dialog for managing user prompts"""
 
-    def __init__(self, supabase_repo, r2_client, toast_manager, parent=None, client_id: str = "default"):
+    def __init__(
+        self, supabase_repo, r2_client, toast_manager, parent=None, client_id: str = "default"
+    ):
         super().__init__(parent)
         self.supabase_repo = supabase_repo
         self.r2_client = r2_client
@@ -230,8 +233,10 @@ class PromptsDialog(QDialog):
             else:
                 # Create new
                 prompt = await self.supabase_repo.prompts_create(
-                    title=title, system_prompt=system_prompt, user_text=user_text,
-                    client_id=self.client_id
+                    title=title,
+                    system_prompt=system_prompt,
+                    user_text=user_text,
+                    client_id=self.client_id,
                 )
 
                 # Save to R2

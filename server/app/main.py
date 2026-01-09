@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.api.routes import health, conversations, messages, jobs, files, prompts, auth
-from app.services.redis_queue import init_redis_queue, get_redis_queue
+from app.services.redis_queue import init_redis_queue
 
 
 def setup_logging():
@@ -94,6 +94,7 @@ async def log_requests(request, call_next):
     logger.info(f"<<< Response: {response.status_code}")
     return response
 
+
 # Register routes
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["conversations"])
@@ -108,7 +109,7 @@ if __name__ == "__main__":
     import uvicorn
 
     print(f"*** Starting uvicorn on {settings.host}:{settings.port} ***")
-    
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,

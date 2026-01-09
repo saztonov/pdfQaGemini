@@ -16,6 +16,7 @@ def _get_encoding():
     if _encoding is None:
         try:
             import tiktoken
+
             # Use cl100k_base encoding (GPT-4, similar to Gemini)
             _encoding = tiktoken.get_encoding("cl100k_base")
         except ImportError:

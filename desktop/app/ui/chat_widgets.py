@@ -1,4 +1,5 @@
 """Custom widgets for ChatPanel"""
+
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QKeyEvent

@@ -1,6 +1,5 @@
 """Supabase Realtime client for live updates using async client"""
 
-import asyncio
 import logging
 from typing import Optional
 from dataclasses import dataclass
@@ -177,7 +176,10 @@ class RealtimeClient(QObject):
                 return
 
             # Filter by subscribed conversations (if any)
-            if self._subscribed_conversation_ids and conversation_id not in self._subscribed_conversation_ids:
+            if (
+                self._subscribed_conversation_ids
+                and conversation_id not in self._subscribed_conversation_ids
+            ):
                 return
 
             job_update = JobUpdate(
@@ -209,7 +211,10 @@ class RealtimeClient(QObject):
             conversation_id = record.get("conversation_id")
 
             # Filter by subscribed conversations (if any)
-            if self._subscribed_conversation_ids and conversation_id not in self._subscribed_conversation_ids:
+            if (
+                self._subscribed_conversation_ids
+                and conversation_id not in self._subscribed_conversation_ids
+            ):
                 return
 
             # Only emit for assistant messages (user messages we send ourselves)

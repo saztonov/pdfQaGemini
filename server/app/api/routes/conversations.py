@@ -1,6 +1,5 @@
 """Conversations API routes"""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Header

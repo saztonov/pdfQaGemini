@@ -1,4 +1,5 @@
 """Toast notification system"""
+
 from enum import Enum
 from PySide6.QtWidgets import QLabel, QGraphicsOpacityEffect, QWidget, QFrame, QVBoxLayout
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QPoint

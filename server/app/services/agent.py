@@ -1,4 +1,5 @@
 """Agent logic - orchestrates Gemini interactions (server version)"""
+
 import sys
 from pathlib import Path
 import logging
@@ -6,7 +7,7 @@ import time
 from typing import Optional
 from dataclasses import dataclass
 
-from pydantic import ValidationError, BaseModel
+from pydantic import ValidationError
 
 from app.services.gemini_client import GeminiClient
 
@@ -23,6 +24,7 @@ from shared.agent_core import (
     MODEL_REPLY_SCHEMA_STRICT,
     MODEL_REPLY_SCHEMA_SIMPLE,
 )
+from shared.models import ModelAction, ModelReply
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +40,6 @@ __all__ = [
     "ModelAction",
     "ModelReply",
 ]
-
-
-# ========== PYDANTIC MODELS ==========
-
-
-class ModelAction(BaseModel):
-    """Single model action"""
-
-    type: str
-    payload: Optional[dict] = None
-    note: Optional[str] = None
-
-
-class ModelReply(BaseModel):
-    """Model structured reply"""
-
-    assistant_text: str
-    actions: list[ModelAction] = []
-    is_final: bool = False
 
 
 @dataclass

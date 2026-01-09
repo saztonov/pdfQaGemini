@@ -1,4 +1,5 @@
 """Tracing for model calls"""
+
 import logging
 from datetime import datetime
 from typing import Optional
@@ -142,9 +143,7 @@ class TraceStore:
             return
 
         try:
-            traces = await self.supabase_repo.qa_list_traces(
-                client_id=self.client_id, limit=limit
-            )
+            traces = await self.supabase_repo.qa_list_traces(client_id=self.client_id, limit=limit)
             # Clear and reload (traces come newest first, we want oldest first in deque)
             self._traces.clear()
             for trace in reversed(traces):

@@ -1,4 +1,5 @@
 """Right panel - Chats, Gemini Files and Request Inspector"""
+
 import logging
 from typing import Optional
 from PySide6.QtWidgets import (
@@ -243,6 +244,7 @@ class RightContextPanel(
     def _on_file_delete_clicked(self, conversation_id: str, gemini_name: str):
         """Handle file delete button click"""
         import asyncio
+
         asyncio.create_task(self._delete_file_by_name(gemini_name))
 
     async def _delete_file_by_name(self, gemini_name: str):

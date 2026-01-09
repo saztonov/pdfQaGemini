@@ -1,4 +1,5 @@
 """Agentic loop handlers for MainWindow"""
+
 import json
 import logging
 import tempfile
@@ -259,9 +260,7 @@ class AgenticHandlersMixin:
 
         return new_refs, uploaded_file_infos
 
-    async def _handle_roi_action_agentic(
-        self: "MainWindow", action, payload
-    ) -> dict | None:
+    async def _handle_roi_action_agentic(self: "MainWindow", action, payload) -> dict | None:
         """Handle ROI action in agentic mode, return file_ref or None"""
         from app.ui.image_viewer import ImageViewerDialog
         from datetime import datetime

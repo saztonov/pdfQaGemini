@@ -1,4 +1,5 @@
 """Event handlers for MainWindow"""
+
 import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -124,7 +125,9 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             "thinking_level": thinking_level,
             "file_refs": file_refs,
         }
-        logger.info(f"[INSPECTOR] Saved pending request: model={model_name}, user_text={user_text[:50]}...")
+        logger.info(
+            f"[INSPECTOR] Saved pending request: model={model_name}, user_text={user_text[:50]}..."
+        )
 
         # Ensure conversation exists via API
         if not self.current_conversation_id:
@@ -179,6 +182,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                     logger.info(f"Realtime connected, waiting for job {job_id} via Realtime")
                     self._active_job_id = job_id
                     import asyncio
+
                     asyncio.create_task(self._realtime_timeout_fallback(job_id, timeout=120))
                 else:
                     # Realtime not connected - use polling
@@ -193,7 +197,9 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                 self.chat_panel.add_system_message(f"Ошибка: {e}", "error")
                 self.chat_panel.set_input_enabled(True)
 
-    async def _poll_job_status(self: "MainWindow", job_id: str, max_attempts: int = 120, interval: float = 2.0):
+    async def _poll_job_status(
+        self: "MainWindow", job_id: str, max_attempts: int = 120, interval: float = 2.0
+    ):
         """Poll job status until completed or failed (fallback for realtime)"""
         import asyncio
         from app.utils.time_utils import format_time
@@ -211,7 +217,9 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
 
                     # Fetch messages for conversation to get the response
                     if self.current_conversation_id:
-                        messages = await self.api_client.list_messages(str(self.current_conversation_id))
+                        messages = await self.api_client.list_messages(
+                            str(self.current_conversation_id)
+                        )
 
                         # Find the assistant message (last one with role=assistant)
                         assistant_msg = None
@@ -233,6 +241,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
 
                             # Create trace
                             from app.services.realtime_client import MessageUpdate
+
                             message_update = MessageUpdate(
                                 message_id=assistant_msg.get("id", ""),
                                 conversation_id=str(self.current_conversation_id),
@@ -266,7 +275,9 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
         if self.chat_panel:
             self.chat_panel.set_loading(False)
             self.chat_panel.set_input_enabled(True)
-            self.chat_panel.add_system_message("Таймаут ожидания ответа. Попробуйте обновить чат.", "warning")
+            self.chat_panel.add_system_message(
+                "Таймаут ожидания ответа. Попробуйте обновить чат.", "warning"
+            )
         self.toast_manager.warning("Таймаут ожидания ответа")
 
     async def _realtime_timeout_fallback(self: "MainWindow", job_id: str, timeout: float = 120):

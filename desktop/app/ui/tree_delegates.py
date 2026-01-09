@@ -1,4 +1,5 @@
 """Delegates for custom tree item rendering"""
+
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem, QStyle
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter

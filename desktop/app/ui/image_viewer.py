@@ -1,4 +1,5 @@
 """Image viewer with ROI selection"""
+
 from typing import Optional, Tuple, List
 from PySide6.QtWidgets import (
     QDialog,

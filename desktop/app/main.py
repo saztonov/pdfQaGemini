@@ -1,4 +1,5 @@
 """Application entry point"""
+
 import sys
 import os
 import asyncio

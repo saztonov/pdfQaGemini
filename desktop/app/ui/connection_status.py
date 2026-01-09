@@ -1,5 +1,5 @@
 """Connection status indicator widget"""
-import asyncio
+
 import socket
 from enum import Enum
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel
@@ -78,6 +78,7 @@ class ConnectionChecker(QObject):
         try:
             # Method 2: HTTP check
             import urllib.request
+
             urllib.request.urlopen("https://www.google.com", timeout=3)
             return True
         except Exception:
@@ -171,12 +172,14 @@ class ConnectionStatusWidget(QWidget):
         server_layout.addWidget(self.server_icon)
         layout.addWidget(server_container)
 
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QWidget {
                 background-color: #252526;
                 border-top: 1px solid #3e3e42;
             }
-        """)
+        """
+        )
         self.setFixedHeight(28)
 
     def _on_internet_status(self, is_connected: bool):
