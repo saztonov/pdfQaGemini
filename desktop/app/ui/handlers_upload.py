@@ -84,14 +84,22 @@ class UploadHandlersMixin:
         crop_files = [nf for nf in node_files if nf.file_type == FileType.CROP.value]
         logger.info(f"Found {len(crop_files)} crop files")
 
-        # Get document name from first node
+        # Get document name from TreeNode (first node_id)
         doc_name = "document"
-        if node_files:
-            # Try to get meaningful name
-            first_file = node_files[0]
-            doc_name = (
-                first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
-            )
+        if node_ids and self.supabase_repo:
+            try:
+                tree_node = await self.supabase_repo.fetch_node_by_id(node_ids[0])
+                if tree_node:
+                    doc_name = tree_node.name
+                    logger.info(f"Using TreeNode name as doc_name: {doc_name}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch TreeNode name: {e}")
+                # Fallback to file_name
+                if node_files:
+                    first_file = node_files[0]
+                    doc_name = (
+                        first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
+                    )
 
         # Build bundle
         bundle_bytes, crop_index = builder.build_bundle(
@@ -242,6 +250,18 @@ class UploadHandlersMixin:
                 file_name = file_info.get("file_name", "file")
                 mime_type = file_info.get("mime_type", "application/octet-stream")
                 file_id = file_info.get("id", str(idx))
+                node_id = file_info.get("node_id")
+
+                # Get display_name from TreeNode if available
+                display_name = file_name
+                if node_id and self.supabase_repo:
+                    try:
+                        tree_node = await self.supabase_repo.fetch_node_by_id(node_id)
+                        if tree_node:
+                            display_name = tree_node.name
+                            logger.info(f"Using TreeNode name as display_name: {display_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch TreeNode name: {e}")
 
                 if not r2_key:
                     logger.warning(f"Файл {file_name} не имеет r2_key, пропуск")
@@ -279,7 +299,7 @@ class UploadHandlersMixin:
                     result = await self.gemini_client.upload_file(
                         cached_path,
                         mime_type=mime_type,
-                        display_name=file_name,
+                        display_name=display_name,
                     )
                     gemini_name = result.get("name")
                     gemini_uri = result.get("uri", "")
@@ -296,7 +316,7 @@ class UploadHandlersMixin:
                             gemini_file_result = await self.supabase_repo.qa_upsert_gemini_file(
                                 gemini_name=gemini_name,
                                 gemini_uri=gemini_uri,
-                                display_name=file_name,
+                                display_name=display_name,
                                 mime_type=mime_type,
                                 size_bytes=result.get("size_bytes"),
                                 token_count=token_count,

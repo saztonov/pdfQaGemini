@@ -153,3 +153,15 @@ class TreeOpsMixin:
 
         # Filter crops
         return [f for f in all_files if f.file_type == "crop"]
+
+    async def fetch_node_by_id(self, node_id: str) -> TreeNode | None:
+        """Fetch single TreeNode by ID"""
+
+        def _sync_fetch():
+            client = self._get_client()
+            response = client.table("tree_nodes").select("*").eq("id", node_id).execute()
+            if response.data:
+                return TreeNode(**response.data[0])
+            return None
+
+        return await asyncio.to_thread(_sync_fetch)

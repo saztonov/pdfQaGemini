@@ -83,6 +83,7 @@ class FileHandlingMixin:
                 {
                     "uri": f.get("uri"),
                     "mime_type": f.get("mime_type", "application/octet-stream"),
+                    "display_name": f.get("display_name"),
                 }
             )
         return refs
