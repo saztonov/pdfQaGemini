@@ -318,9 +318,11 @@ class MainWindow(MenuSetupMixin, MainWindowHandlers, ModelActionsHandler, QMainW
                 self.r2_client = None
                 self.toast_manager.warning("R2 не настроен на сервере")
 
-            # Update trace store with R2 client
-            self.trace_store.r2_client = self.r2_client
+            # Update trace store with Supabase repo and load history
+            self.trace_store.supabase_repo = self.supabase_repo
             self.trace_store.client_id = self.client_id
+            await self.trace_store.load_from_db()
+            logger.info(f"[INSPECTOR] Loaded {self.trace_store.count()} traces from DB")
 
             # Agent not needed - server handles LLM
             self.agent = None

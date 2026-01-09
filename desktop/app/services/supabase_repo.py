@@ -547,6 +547,11 @@ class SupabaseRepo:
         def _sync_delete():
             client = self._get_client()
 
+            # Delete traces
+            client.table("qa_model_traces").delete().eq(
+                "conversation_id", conversation_id
+            ).execute()
+
             # Delete messages
             client.table("qa_messages").delete().eq("conversation_id", conversation_id).execute()
 
@@ -573,6 +578,60 @@ class SupabaseRepo:
 
         await asyncio.to_thread(_sync_delete)
 
+    # Model Traces
+
+    async def qa_add_trace(self, trace: "ModelTrace") -> dict:
+        """Add model trace to database"""
+        from app.services.trace import ModelTrace
+
+        def _sync_add():
+            client = self._get_client()
+            data = trace.to_db_dict()
+            response = client.table("qa_model_traces").insert(data).execute()
+            return response.data[0]
+
+        return await asyncio.to_thread(_sync_add)
+
+    async def qa_list_traces(
+        self, client_id: str = "default", limit: int = 200
+    ) -> list["ModelTrace"]:
+        """List all traces for client (newest first)"""
+        from app.services.trace import ModelTrace
+
+        def _sync_list():
+            client = self._get_client()
+            response = (
+                client.table("qa_model_traces")
+                .select("*")
+                .eq("client_id", client_id)
+                .order("ts", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return [ModelTrace.from_db_row(row) for row in response.data]
+
+        return await asyncio.to_thread(_sync_list)
+
+    async def qa_list_traces_by_conversation(
+        self, conversation_id: str, limit: int = 100
+    ) -> list["ModelTrace"]:
+        """List traces for specific conversation (newest first)"""
+        from app.services.trace import ModelTrace
+
+        def _sync_list():
+            client = self._get_client()
+            response = (
+                client.table("qa_model_traces")
+                .select("*")
+                .eq("conversation_id", conversation_id)
+                .order("ts", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return [ModelTrace.from_db_row(row) for row in response.data]
+
+        return await asyncio.to_thread(_sync_list)
+
     async def qa_delete_all_conversations(self, client_id: str = "default") -> None:
         """Delete all conversations and related data for client"""
 
@@ -593,6 +652,11 @@ class SupabaseRepo:
 
             # Delete all related data for these conversations
             # Using .in_() for batch deletion
+
+            # Delete traces
+            client.table("qa_model_traces").delete().in_(
+                "conversation_id", conversation_ids
+            ).execute()
 
             # Delete messages
             client.table("qa_messages").delete().in_("conversation_id", conversation_ids).execute()
