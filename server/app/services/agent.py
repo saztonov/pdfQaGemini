@@ -100,6 +100,12 @@ class Agent:
         logger.info(f"  file_refs count: {len(file_refs)}, has_roi: {has_roi}")
         logger.info(f"  media_resolution: {effective_resolution}")
         logger.info(f"  history: {len(history) if history else 0} messages")
+        logger.info(f"  user_text length: {len(user_text)}")
+        # Log if context_catalog appears in user_text
+        has_context_catalog = "context_catalog" in user_text.lower()
+        logger.info(f"  contains 'context_catalog': {has_context_catalog}")
+        if has_context_catalog:
+            logger.info(f"  user_text preview (first 800 chars): {user_text[:800]}...")
 
         start_time = time.perf_counter()
         raw_response = None
@@ -136,6 +142,12 @@ class Agent:
             latency_ms = (time.perf_counter() - start_time) * 1000
             usage = raw_response.pop("_usage", {})
 
+            # Log raw response actions for debugging
+            raw_actions = raw_response.get("actions", [])
+            logger.info(f"  raw_response actions count: {len(raw_actions)}")
+            for i, act in enumerate(raw_actions):
+                logger.info(f"    action[{i}]: type={act.get('type')}, has_items={bool(act.get('items'))}, items_count={len(act.get('items', []))}")
+
             # Validate and parse to ModelReply
             try:
                 reply = ModelReply.model_validate(raw_response)
@@ -153,13 +165,42 @@ class Agent:
                     is_final=False,
                 )
 
-            # Build parsed actions
+            # Build parsed actions - include both legacy payload and flat schema fields
             for action in reply.actions:
                 action_dict = {"type": action.type}
+                # Legacy nested payload
                 if action.payload is not None:
                     action_dict["payload"] = action.payload
                 if action.note is not None:
                     action_dict["note"] = action.note
+                # Flat schema fields for request_files
+                if action.items is not None:
+                    action_dict["items"] = action.items
+                # Flat schema fields for open_image
+                if action.context_item_id is not None:
+                    action_dict["context_item_id"] = action.context_item_id
+                if action.purpose is not None:
+                    action_dict["purpose"] = action.purpose
+                # Flat schema fields for request_roi
+                if action.image_context_item_id is not None:
+                    action_dict["image_context_item_id"] = action.image_context_item_id
+                if action.goal is not None:
+                    action_dict["goal"] = action.goal
+                if action.dpi is not None:
+                    action_dict["dpi"] = action.dpi
+                if action.bbox_x1 is not None:
+                    action_dict["bbox_x1"] = action.bbox_x1
+                if action.bbox_y1 is not None:
+                    action_dict["bbox_y1"] = action.bbox_y1
+                if action.bbox_x2 is not None:
+                    action_dict["bbox_x2"] = action.bbox_x2
+                if action.bbox_y2 is not None:
+                    action_dict["bbox_y2"] = action.bbox_y2
+                # Flat schema fields for final
+                if action.confidence is not None:
+                    action_dict["confidence"] = action.confidence
+                if action.used_context_item_ids is not None:
+                    action_dict["used_context_item_ids"] = action.used_context_item_ids
                 parsed_actions.append(action_dict)
 
             return AgentResult(
