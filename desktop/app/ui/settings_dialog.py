@@ -358,6 +358,10 @@ class SettingsDialog(QDialog):
         self.settings.setValue("general/cache_size_mb", self.cache_size_edit.text().strip())
         self.settings.sync()
 
+    def _is_masked(self, value: str) -> bool:
+        """Check if value is a masked placeholder (contains ***)"""
+        return "***" in value if value else False
+
     async def _do_save_remote_settings(self):
         """Save remote settings to server"""
         try:
@@ -365,8 +369,9 @@ class SettingsDialog(QDialog):
             new_settings = {}
 
             # Only include non-masked values (don't overwrite with masked values)
+            # Masked values look like "AIza***xyz9" (first 4 + *** + last 4)
             gemini_key = self.gemini_api_key_edit.text()
-            if gemini_key and not gemini_key.startswith("****"):
+            if gemini_key and not self._is_masked(gemini_key):
                 new_settings["gemini_api_key"] = gemini_key
 
             new_settings["default_model"] = self.default_model_edit.text()
@@ -375,11 +380,11 @@ class SettingsDialog(QDialog):
             new_settings["r2_account_id"] = self.r2_account_id_edit.text()
 
             r2_access = self.r2_access_key_edit.text()
-            if r2_access and not r2_access.startswith("****"):
+            if r2_access and not self._is_masked(r2_access):
                 new_settings["r2_access_key_id"] = r2_access
 
             r2_secret = self.r2_secret_key_edit.text()
-            if r2_secret and not r2_secret.startswith("****"):
+            if r2_secret and not self._is_masked(r2_secret):
                 new_settings["r2_secret_access_key"] = r2_secret
 
             new_settings["r2_bucket_name"] = self.r2_bucket_edit.text()

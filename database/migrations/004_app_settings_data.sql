@@ -1,19 +1,21 @@
 -- Script to populate qa_app_settings with actual values
 -- Run this after 004_app_settings.sql migration
--- Replace placeholder values with your actual credentials
+--
+-- IMPORTANT: Sensitive values (API keys, secrets) should be set via the
+-- desktop Settings dialog or API, NOT directly in SQL. They will be encrypted
+-- automatically by the server using AES-256-GCM.
+--
+-- This script only sets NON-SENSITIVE values.
 
 -- =====================================================
--- IMPORTANT: Replace all <YOUR_...> placeholders below
+-- NON-SENSITIVE SETTINGS (safe to set directly in SQL)
 -- =====================================================
 
--- Gemini API settings
-UPDATE public.qa_app_settings SET value = '<YOUR_GEMINI_API_KEY>' WHERE key = 'gemini_api_key';
+-- Default model
 UPDATE public.qa_app_settings SET value = 'gemini-2.0-flash' WHERE key = 'default_model';
 
--- R2 Storage settings
+-- R2 non-secret settings
 UPDATE public.qa_app_settings SET value = '<YOUR_R2_ACCOUNT_ID>' WHERE key = 'r2_account_id';
-UPDATE public.qa_app_settings SET value = '<YOUR_R2_ACCESS_KEY_ID>' WHERE key = 'r2_access_key_id';
-UPDATE public.qa_app_settings SET value = '<YOUR_R2_SECRET_ACCESS_KEY>' WHERE key = 'r2_secret_access_key';
 UPDATE public.qa_app_settings SET value = '<YOUR_R2_BUCKET_NAME>' WHERE key = 'r2_bucket_name';
 UPDATE public.qa_app_settings SET value = '<YOUR_R2_PUBLIC_URL>' WHERE key = 'r2_public_url';
 
@@ -26,13 +28,29 @@ UPDATE public.qa_app_settings SET value = '300' WHERE key = 'worker_job_timeout'
 UPDATE public.qa_app_settings SET value = '3' WHERE key = 'worker_max_retries';
 
 -- =====================================================
--- Verify settings were updated
+-- SENSITIVE SETTINGS - DO NOT SET HERE!
+-- =====================================================
+-- The following keys must be set via Settings dialog or API:
+--   - gemini_api_key
+--   - r2_access_key_id
+--   - r2_secret_access_key
+--
+-- These values will be encrypted server-side before storage.
+-- Direct SQL inserts will NOT be encrypted and will fail decryption.
+
+-- =====================================================
+-- Verify settings (shows masked sensitive values)
 -- =====================================================
 SELECT key,
-       CASE WHEN key LIKE '%key%' OR key LIKE '%secret%'
-            THEN LEFT(value, 4) || '****'
-            ELSE value
-       END as value_masked,
+       CASE
+           WHEN key IN ('gemini_api_key', 'r2_access_key_id', 'r2_secret_access_key')
+           THEN CASE
+               WHEN value IS NULL OR value = '' THEN '(not set)'
+               WHEN value LIKE 'enc:v1:%' THEN '(encrypted)'
+               ELSE '(WARNING: not encrypted!)'
+           END
+           ELSE COALESCE(value, '(not set)')
+       END as value_status,
        value_type,
        updated_at
 FROM public.qa_app_settings

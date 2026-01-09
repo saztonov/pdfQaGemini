@@ -1,4 +1,10 @@
-"""Settings API routes - manage application settings in Supabase"""
+"""Settings API routes - manage application settings in Supabase
+
+Sensitive values (API keys, secrets) are:
+- Stored encrypted in database using AES-256-GCM
+- Returned masked to clients (e.g., "AIza***xyz9")
+- Only saved when client sends non-masked value (new key)
+"""
 
 from typing import Any
 from fastapi import APIRouter, Header, HTTPException
@@ -6,6 +12,7 @@ from pydantic import BaseModel
 
 from app.api.dependencies import get_supabase_repo, reset_clients
 from app.app_settings import refresh_app_settings
+from app.services.crypto import is_sensitive_key, mask_sensitive_value
 
 router = APIRouter()
 
@@ -34,12 +41,17 @@ class SettingsBatchUpdateRequest(BaseModel):
     settings: dict[str, Any]
 
 
+def _is_masked_value(value: str) -> bool:
+    """Check if value is a masked placeholder (contains ***)"""
+    return isinstance(value, str) and "***" in value
+
+
 @router.get("", response_model=SettingsResponse)
 async def get_all_settings(x_api_token: str = Header(...)):
     """Get all application settings.
 
-    Returns settings that are safe to expose to clients.
-    Sensitive settings (API keys, secrets) are masked.
+    Returns settings with sensitive values masked (e.g., "AIza***xyz9").
+    Masked values indicate the field has a value but it's hidden for security.
     """
     repo = get_supabase_repo()
 
@@ -48,25 +60,15 @@ async def get_all_settings(x_api_token: str = Header(...)):
     if not client:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
-    all_settings = await repo.get_all_settings()
+    # Get settings with masked sensitive values
+    masked_settings = await repo.get_settings_masked()
 
-    # Mask sensitive values for response
-    safe_settings = {}
-    sensitive_keys = {"gemini_api_key", "r2_secret_access_key", "r2_access_key_id"}
-
-    for key, value in all_settings.items():
-        if key in sensitive_keys and value:
-            # Mask sensitive values - show only last 4 chars
-            safe_settings[key] = "****" + str(value)[-4:] if len(str(value)) > 4 else "****"
-        else:
-            safe_settings[key] = value
-
-    return SettingsResponse(settings=safe_settings)
+    return SettingsResponse(settings=masked_settings)
 
 
 @router.get("/{key}")
 async def get_setting(key: str, x_api_token: str = Header(...)):
-    """Get a single setting value"""
+    """Get a single setting value (masked if sensitive)"""
     repo = get_supabase_repo()
 
     # Verify token
@@ -74,14 +76,14 @@ async def get_setting(key: str, x_api_token: str = Header(...)):
     if not client:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
-    value = await repo.get_setting(key)
+    # Get raw value without decryption for masking
+    value = await repo.get_setting(key, decrypt=False)
     if value is None:
         raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
 
     # Mask sensitive values
-    sensitive_keys = {"gemini_api_key", "r2_secret_access_key", "r2_access_key_id"}
-    if key in sensitive_keys and value:
-        value = "****" + str(value)[-4:] if len(str(value)) > 4 else "****"
+    if is_sensitive_key(key) and value:
+        value = mask_sensitive_value(value, key)
 
     return {"key": key, "value": value}
 
@@ -92,13 +94,22 @@ async def update_setting(
     request: SettingUpdateRequest,
     x_api_token: str = Header(...),
 ):
-    """Update a single setting"""
+    """Update a single setting.
+
+    For sensitive values:
+    - If value contains '***', it's ignored (user didn't change it)
+    - If value is a new unmasked string, it will be encrypted and saved
+    """
     repo = get_supabase_repo()
 
     # Verify token
     client = await repo.get_client_by_token(x_api_token)
     if not client:
         raise HTTPException(status_code=401, detail="Invalid API token")
+
+    # Skip if masked value (user didn't change it)
+    if is_sensitive_key(key) and _is_masked_value(str(request.value)):
+        return {"key": key, "updated": False, "reason": "masked_value_skipped"}
 
     success = await repo.set_setting(key, request.value)
     if not success:
@@ -116,7 +127,12 @@ async def update_settings_batch(
     request: SettingsBatchUpdateRequest,
     x_api_token: str = Header(...),
 ):
-    """Update multiple settings at once"""
+    """Update multiple settings at once.
+
+    For sensitive values:
+    - Masked values (containing '***') are skipped
+    - Only new unmasked values are encrypted and saved
+    """
     repo = get_supabase_repo()
 
     # Verify token
@@ -124,10 +140,28 @@ async def update_settings_batch(
     if not client:
         raise HTTPException(status_code=401, detail="Invalid API token")
 
-    updated_count = await repo.set_settings_batch(request.settings)
+    # Filter out masked sensitive values - don't overwrite with masked placeholders
+    filtered_settings = {}
+    skipped_count = 0
 
-    # Refresh cached settings and reset clients
-    await refresh_app_settings()
-    reset_clients()
+    for key, value in request.settings.items():
+        if is_sensitive_key(key) and _is_masked_value(str(value)):
+            # Skip masked values - user didn't change them
+            skipped_count += 1
+            continue
+        filtered_settings[key] = value
 
-    return {"updated_count": updated_count, "total_requested": len(request.settings)}
+    # Only update if there's something to update
+    updated_count = 0
+    if filtered_settings:
+        updated_count = await repo.set_settings_batch(filtered_settings)
+
+        # Refresh cached settings and reset clients
+        await refresh_app_settings()
+        reset_clients()
+
+    return {
+        "updated_count": updated_count,
+        "skipped_count": skipped_count,
+        "total_requested": len(request.settings),
+    }
