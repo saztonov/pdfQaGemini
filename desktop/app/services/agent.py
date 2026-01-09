@@ -17,6 +17,7 @@ from app.services.gemini_client import GeminiClient
 from app.services.supabase_repo import SupabaseRepo
 from app.services.trace import TraceStore, ModelTrace
 from app.models.schemas import ModelReply, ModelAction
+from app.ui.settings_dialog import SettingsDialog
 
 # Import from shared
 from shared.agent_core import (
@@ -104,6 +105,23 @@ class Agent:
         parsed_actions = []
         used_simple_schema = False
 
+        # Load conversation history BEFORE saving new message
+        # Get max_history_pairs from server config (loaded from Supabase via server)
+        server_config = SettingsDialog.get_server_config()
+        max_history_pairs = int(server_config.get("max_history_pairs", 5))
+
+        all_messages = await self.load_conversation_history(conversation_id)
+        # Filter only user/assistant messages and take last N pairs
+        history_filtered = [
+            m for m in all_messages if m["role"] in ("user", "assistant")
+        ]
+        history = history_filtered[-(max_history_pairs * 2):] if max_history_pairs > 0 else []
+        # Simplify format for API
+        history_simple = [
+            {"role": msg["role"], "content": msg["content"]} for msg in history
+        ]
+        logger.info(f"  history: {len(history_simple)} messages loaded (max_pairs={max_history_pairs})")
+
         # Create trace with all inputs
         trace = ModelTrace(
             conversation_id=conversation_id,
@@ -134,6 +152,7 @@ class Agent:
                     user_text=user_text,
                     file_refs=file_refs,
                     schema=MODEL_REPLY_SCHEMA_STRICT,
+                    history=history_simple,
                     thinking_level=thinking_level,
                     thinking_budget=thinking_budget,
                     media_resolution=effective_resolution,
@@ -147,6 +166,7 @@ class Agent:
                     user_text=user_text,
                     file_refs=file_refs,
                     schema=MODEL_REPLY_SCHEMA_SIMPLE,
+                    history=history_simple,
                     thinking_level=thinking_level,
                     thinking_budget=thinking_budget,
                     media_resolution=effective_resolution,

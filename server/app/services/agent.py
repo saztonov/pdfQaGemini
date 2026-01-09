@@ -70,6 +70,7 @@ class Agent:
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
         media_resolution: Optional[str] = None,
+        history: Optional[list[dict]] = None,
     ) -> AgentResult:
         """
         Ask question to Gemini with structured output.
@@ -82,6 +83,8 @@ class Agent:
             thinking_level: "low", "medium", or "high"
             thinking_budget: Optional max thinking tokens
             media_resolution: Override resolution ("low", "medium", "high")
+            history: Previous messages for multi-turn context.
+                     Format: [{"role": "user"|"assistant", "content": "..."}]
 
         Returns:
             AgentResult with assistant text, actions, and metadata
@@ -96,6 +99,7 @@ class Agent:
         logger.info(f"  thinking_level: {thinking_level}")
         logger.info(f"  file_refs count: {len(file_refs)}, has_roi: {has_roi}")
         logger.info(f"  media_resolution: {effective_resolution}")
+        logger.info(f"  history: {len(history) if history else 0} messages")
 
         start_time = time.perf_counter()
         raw_response = None
@@ -110,6 +114,7 @@ class Agent:
                     user_text=user_text,
                     file_refs=file_refs,
                     schema=MODEL_REPLY_SCHEMA_STRICT,
+                    history=history,
                     thinking_level=thinking_level,
                     thinking_budget=thinking_budget,
                     media_resolution=effective_resolution,
@@ -122,6 +127,7 @@ class Agent:
                     user_text=user_text,
                     file_refs=file_refs,
                     schema=MODEL_REPLY_SCHEMA_SIMPLE,
+                    history=history,
                     thinking_level=thinking_level,
                     thinking_budget=thinking_budget,
                     media_resolution=effective_resolution,

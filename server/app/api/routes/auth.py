@@ -21,10 +21,11 @@ async def get_client_config(x_api_token: str = Header(..., description="Client A
     Client sends their API token and receives configuration needed for:
     - Connecting to Supabase Realtime
     - Loading files from R2
-    - Default model settings
+    - Default model and chat settings
 
-    Server settings (Supabase URL/Key, R2 public URL) come from server .env
-    Client-specific settings (client_id, default_model) come from qa_clients table.
+    Infrastructure settings (Supabase URL/Key) come from server .env.
+    Application settings (R2 URL, default_model, max_history_pairs) come from Supabase qa_app_settings.
+    Client-specific overrides (client_id, default_model) come from qa_clients table.
 
     Secrets like gemini_api_key, r2_credentials are NOT returned - all operations go through server.
     """
@@ -38,8 +39,15 @@ async def get_client_config(x_api_token: str = Header(..., description="Client A
         raise HTTPException(status_code=401, detail="Invalid API token")
 
     client_id = client_record.get("client_id", "default")
-    # Use client's default_model if set, otherwise server's default
-    default_model = client_record.get("default_model") or settings.default_model
+
+    # Load app settings from Supabase
+    app_settings = await repo.get_all_settings()
+
+    # Use client's default_model if set, otherwise from app_settings
+    default_model = (
+        client_record.get("default_model")
+        or app_settings.get("default_model", "gemini-3-flash-preview")
+    )
 
     logger.info(f"Client authenticated: {client_id}")
 
@@ -47,6 +55,7 @@ async def get_client_config(x_api_token: str = Header(..., description="Client A
         client_id=client_id,
         supabase_url=settings.supabase_url,
         supabase_key=settings.supabase_key,  # anon key for Realtime
-        r2_public_base_url=settings.r2_public_url,
+        r2_public_base_url=app_settings.get("r2_public_url", ""),
         default_model=default_model,
+        max_history_pairs=app_settings.get("max_history_pairs", 5),
     )

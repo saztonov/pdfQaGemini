@@ -10,6 +10,7 @@ from app.services.supabase.job_ops import JobOpsMixin
 from app.services.supabase.gemini_file_ops import GeminiFileOpsMixin
 from app.services.supabase.prompts_ops import PromptsOpsMixin
 from app.services.supabase.auth_ops import AuthOpsMixin
+from app.services.supabase.settings_ops import SettingsOpsMixin
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class SupabaseRepo(
     GeminiFileOpsMixin,
     PromptsOpsMixin,
     AuthOpsMixin,
+    SettingsOpsMixin,
 ):
     """Async Supabase data access layer for server"""
 

@@ -195,15 +195,33 @@ class GeminiClient:
         user_text: str,
         file_refs: list[dict],
         schema: dict,
+        history: Optional[list[dict]] = None,
         thinking_level: str = "low",
         thinking_budget: Optional[int] = None,
         media_resolution: str = "low",
     ) -> dict:
-        """Generate structured output using JSON schema (native async)"""
+        """Generate structured output using JSON schema (native async)
+
+        Args:
+            history: Previous messages for multi-turn context.
+                     Format: [{"role": "user"|"assistant", "content": "..."}]
+        """
         client = self._get_client()
         try:
-            # Build contents - files FIRST, then text
             contents_list = []
+
+            # 1. Add conversation history (text only, no files)
+            if history:
+                for msg in history:
+                    # Map "assistant" -> "model" for Gemini API
+                    role = "user" if msg["role"] == "user" else "model"
+                    contents_list.append(
+                        types.Content(role=role, parts=[types.Part(text=msg["content"])])
+                    )
+                logger.info(f"Added {len(history)} history messages to context")
+
+            # 2. Build current request parts (files + text)
+            current_parts = []
 
             for file_ref in file_refs:
                 uri = file_ref.get("uri", "")
@@ -223,14 +241,18 @@ class GeminiClient:
                         if file_mime == "application/json":
                             file_mime = "text/plain"
 
-                        contents_list.append(
+                        current_parts.append(
                             types.Part.from_uri(file_uri=file_uri, mime_type=file_mime)
                         )
                     except Exception as e:
                         logger.error(f"  Failed to get file {file_name}: {e}")
 
             if user_text:
-                contents_list.append(user_text)
+                current_parts.append(types.Part(text=user_text))
+
+            # Add current request as user message
+            if current_parts:
+                contents_list.append(types.Content(role="user", parts=current_parts))
 
             # Map media_resolution string to enum
             resolution_map = {
@@ -251,8 +273,10 @@ class GeminiClient:
 
             model_id = model.removeprefix("models/")
 
+            history_count = len(history) if history else 0
             logger.info(
-                f"generate_structured: model={model_id}, files={len(file_refs)}, resolution={resolution_value}"
+                f"generate_structured: model={model_id}, files={len(file_refs)}, "
+                f"history={history_count}, resolution={resolution_value}"
             )
 
             # Native async generate

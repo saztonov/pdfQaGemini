@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api.routes import health, conversations, messages, jobs, files, prompts, auth
+from app.api.routes import health, conversations, messages, jobs, files, prompts, auth, settings as settings_routes
 from app.services.redis_queue import init_redis_queue
 
 
@@ -103,6 +103,7 @@ app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(settings_routes.router, prefix="/api/v1/settings", tags=["settings"])
 
 
 if __name__ == "__main__":

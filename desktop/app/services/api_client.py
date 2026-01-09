@@ -290,3 +290,26 @@ class APIClient:
         client = self._get_client()
         response = await client.delete(f"/api/v1/prompts/{prompt_id}")
         response.raise_for_status()
+
+    # === Settings ===
+
+    async def get_settings(self) -> dict:
+        """Get all application settings from server"""
+        client = self._get_client()
+        response = await client.get("/api/v1/settings")
+        response.raise_for_status()
+        return response.json().get("settings", {})
+
+    async def update_setting(self, key: str, value) -> bool:
+        """Update a single setting"""
+        client = self._get_client()
+        response = await client.patch(f"/api/v1/settings/{key}", json={"value": value})
+        response.raise_for_status()
+        return response.json().get("updated", False)
+
+    async def update_settings_batch(self, settings: dict) -> int:
+        """Update multiple settings at once"""
+        client = self._get_client()
+        response = await client.patch("/api/v1/settings", json={"settings": settings})
+        response.raise_for_status()
+        return response.json().get("updated_count", 0)

@@ -140,10 +140,15 @@ class ErrorResponse(BaseModel):
 
 
 class ClientConfigResponse(BaseModel):
-    """Client configuration response - returned after token authentication"""
+    """Client configuration response - returned after token authentication.
+
+    Contains all settings needed by the client, loaded from Supabase qa_app_settings table.
+    """
 
     client_id: str
     supabase_url: str
     supabase_key: str
     r2_public_base_url: str
-    default_model: str = "gemini-2.0-flash"
+    default_model: str = "gemini-3-flash-preview"
+    # Chat settings
+    max_history_pairs: int = 5

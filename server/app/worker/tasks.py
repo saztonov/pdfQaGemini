@@ -39,6 +39,24 @@ async def process_llm_job(
     )
 
     try:
+        # Load conversation history for multi-turn context
+        # Get max_history_pairs from Supabase settings
+        max_history_pairs = await repo.get_setting("max_history_pairs", 5)
+        all_messages = await repo.qa_list_messages(conversation_id)
+        # Filter only user/assistant messages and take last N pairs
+        history_filtered = [
+            m for m in all_messages if m.get("role") in ("user", "assistant")
+        ]
+        history = history_filtered[-(max_history_pairs * 2):] if max_history_pairs > 0 else []
+        # Simplify format for API
+        history_simple = [
+            {"role": msg["role"], "content": msg["content"]} for msg in history
+        ]
+        logger.info(
+            f"Loaded {len(history_simple)} history messages for conversation {conversation_id} "
+            f"(max_pairs={max_history_pairs})"
+        )
+
         result = await agent.ask_question(
             user_text=user_text,
             file_refs=file_refs or [],
@@ -46,6 +64,7 @@ async def process_llm_job(
             system_prompt=system_prompt,
             thinking_level=thinking_level,
             thinking_budget=thinking_budget,
+            history=history_simple,
         )
 
         assistant_msg = await repo.qa_add_message(
@@ -98,12 +117,19 @@ async def startup(ctx: dict) -> None:
     """Worker startup - initialize services"""
     logger.info("arq worker starting up...")
 
-    ctx["supabase_repo"] = SupabaseRepo(
+    # Initialize Supabase repo (uses infrastructure settings from .env)
+    repo = SupabaseRepo(
         url=settings.supabase_url,
         key=settings.supabase_key,
     )
+    ctx["supabase_repo"] = repo
 
-    gemini_client = GeminiClient(api_key=settings.gemini_api_key)
+    # Load Gemini API key from Supabase settings
+    gemini_api_key = await repo.get_setting("gemini_api_key", "")
+    if not gemini_api_key:
+        logger.warning("gemini_api_key not configured in Supabase settings!")
+
+    gemini_client = GeminiClient(api_key=gemini_api_key)
     ctx["agent"] = Agent(gemini_client)
 
     logger.info("arq worker started")
