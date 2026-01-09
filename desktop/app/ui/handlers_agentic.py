@@ -43,6 +43,13 @@ class AgenticHandlersMixin:
         for iteration in range(MAX_ITER):
             logger.info(f"=== Agentic iteration {iteration + 1}/{MAX_ITER} ===")
 
+            # Show iteration in chat (except first)
+            if iteration > 0 and self.chat_panel:
+                self.chat_panel.add_system_message(
+                    f"🔄 Итерация {iteration + 1}...",
+                    level="info"
+                )
+
             # Build prompt with catalog (only first iteration)
             if iteration == 0:
                 # Use user_text_template if provided, otherwise use default
@@ -62,6 +69,21 @@ class AgenticHandlersMixin:
             )
 
             logger.info(f"  Reply: is_final={reply.is_final}, actions={len(reply.actions)}")
+
+            # Update token counter
+            if self.chat_panel and hasattr(reply, "input_tokens"):
+                self.chat_panel.add_tokens(
+                    input_tokens=getattr(reply, "input_tokens", 0),
+                    output_tokens=getattr(reply, "output_tokens", 0)
+                )
+
+            # Show intermediate response (if not final and has text)
+            if not reply.is_final and reply.assistant_text and self.chat_panel:
+                self.chat_panel.add_message(
+                    role="thinking",
+                    content=reply.assistant_text,
+                    meta={"iteration": iteration + 1}
+                )
 
             # Process actions
             should_continue = False
@@ -83,8 +105,27 @@ class AgenticHandlersMixin:
                             }
                             for item in payload.items
                         ]
+
+                        # Show in chat
+                        if self.chat_panel:
+                            titles = [item.context_item_id[:20] for item in payload.items[:3]]
+                            preview = ", ".join(titles)
+                            if len(payload.items) > 3:
+                                preview += f" (+{len(payload.items) - 3})"
+                            self.chat_panel.add_system_message(
+                                f"📥 Запрашиваю файлы: {preview}",
+                                level="info"
+                            )
+
                         self.toast_manager.info(f"Докачиваю {len(items)} файлов...")
                         new_refs, uploaded_file_infos = await self._fetch_and_upload_crops(items)
+
+                        # Show success in chat
+                        if self.chat_panel and new_refs:
+                            self.chat_panel.add_system_message(
+                                f"✓ Загружено {len(new_refs)} файл(ов)",
+                                level="success"
+                            )
                         current_file_refs.extend(new_refs)
                         if uploaded_file_infos:
                             if self.chats_dock:
@@ -103,12 +144,32 @@ class AgenticHandlersMixin:
                 elif action_type == "request_roi":
                     payload = action.get_request_roi_payload()
                     if payload:
+                        # Show in chat
+                        if self.chat_panel:
+                            goal = payload.goal[:80] + "..." if len(payload.goal) > 80 else payload.goal
+                            self.chat_panel.add_system_message(
+                                f"🔍 Требуется выделить область: {goal}",
+                                level="info"
+                            )
+
                         self.toast_manager.info("Рендерю ROI...")
                         roi_ref = await self._handle_roi_action_agentic(action, payload)
+
                         if roi_ref:
+                            if self.chat_panel:
+                                self.chat_panel.add_system_message(
+                                    "✓ Область выделена",
+                                    level="success"
+                                )
                             roi_ref["is_roi"] = True
                             current_file_refs.append(roi_ref)
                             should_continue = True
+                        else:
+                            if self.chat_panel:
+                                self.chat_panel.add_system_message(
+                                    "⚠️ Выделение отменено",
+                                    level="warning"
+                                )
                     else:
                         logger.warning("request_roi action without valid payload")
 

@@ -86,8 +86,9 @@ class MessageHandlingMixin:
         self.chat_history.add_message("system", text, timestamp, {"level": level})
 
     def clear_chat(self):
-        """Clear chat history"""
+        """Clear chat history and reset tokens"""
         self.chat_history.clear()
+        self.reset_tokens()
         self._show_welcome()
 
     def set_input_enabled(self, enabled: bool):
@@ -128,3 +129,36 @@ class MessageHandlingMixin:
             )
 
         self.chat_history.load_messages(chat_messages)
+
+        # Calculate tokens from history
+        self.reset_tokens()
+        for msg in messages:
+            meta = msg.get("meta", {})
+            input_tokens = meta.get("input_tokens", 0)
+            output_tokens = meta.get("output_tokens", 0)
+            if input_tokens or output_tokens:
+                self.add_tokens(input_tokens, output_tokens)
+
+    # ========== Token Tracking ==========
+
+    def add_tokens(self, input_tokens: int = 0, output_tokens: int = 0):
+        """Add tokens to running total and update display"""
+        self._total_input_tokens += input_tokens or 0
+        self._total_output_tokens += output_tokens or 0
+        self._update_tokens_display()
+
+    def reset_tokens(self):
+        """Reset token counters"""
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
+        self._update_tokens_display()
+
+    def _update_tokens_display(self):
+        """Update tokens status bar"""
+        if self._total_input_tokens > 0 or self._total_output_tokens > 0:
+            total = self._total_input_tokens + self._total_output_tokens
+            text = f"📥 {self._total_input_tokens:,}  📤 {self._total_output_tokens:,}  📊 {total:,}"
+            self.tokens_status.setText(text)
+            self.tokens_status.show()
+        else:
+            self.tokens_status.hide()

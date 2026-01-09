@@ -54,6 +54,8 @@ class ChatPanel(
         self._current_user_text_template: str = (
             ""  # Template with {question} and {context_catalog_json}
         )
+        self._total_input_tokens = 0
+        self._total_output_tokens = 0
         self._setup_ui()
 
     def _setup_ui(self):
@@ -69,6 +71,21 @@ class ChatPanel(
         self.chat_history = ChatWidget()
         self.chat_history.linkClicked.connect(self._on_link_clicked)
         layout.addWidget(self.chat_history, 1)
+
+        # Token status bar
+        self.tokens_status = QLabel("")
+        self.tokens_status.setStyleSheet("""
+            QLabel {
+                color: #6b7280;
+                font-size: 11px;
+                padding: 4px 16px;
+                background: #1f1f1f;
+                border-top: 1px solid #333;
+            }
+        """)
+        self.tokens_status.setAlignment(Qt.AlignRight)
+        self.tokens_status.hide()
+        layout.addWidget(self.tokens_status)
 
         # Input Block - dark theme style
         self.input_container = QFrame()

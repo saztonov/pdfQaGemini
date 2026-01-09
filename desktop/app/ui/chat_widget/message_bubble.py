@@ -9,8 +9,11 @@ from PySide6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QTextBrowser,
+    QPushButton,
+    QApplication,
 )
-from PySide6.QtCore import Qt, Signal, QUrl
+from PySide6.QtCore import Qt, Signal, QUrl, QTimer
+from PySide6.QtGui import QCursor
 
 from app.ui.chat_widget.styles import (
     get_user_bubble_style,
@@ -49,6 +52,7 @@ class MessageBubble(QFrame):
         super().__init__(parent)
         self.role = role
         self.meta = meta or {}
+        self._raw_text = text
         self._setup_ui(text, timestamp)
 
     def _setup_ui(self, text: str, timestamp: str):
@@ -96,6 +100,27 @@ class MessageBubble(QFrame):
             time_label = QLabel(timestamp)
             time_label.setStyleSheet("color: #888; font-size: 11px;")
             header.addWidget(time_label)
+
+        # Copy button for user and assistant messages
+        if self.role in ("user", "assistant"):
+            copy_btn = QPushButton("📋")
+            copy_btn.setToolTip("Копировать")
+            copy_btn.setCursor(QCursor(Qt.PointingHandCursor))
+            copy_btn.setFixedSize(24, 24)
+            copy_btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    font-size: 14px;
+                    padding: 0;
+                }
+                QPushButton:hover {
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 4px;
+                }
+            """)
+            copy_btn.clicked.connect(self._copy_to_clipboard)
+            header.addWidget(copy_btn)
 
         header.addStretch()
         bubble_layout.addLayout(header)
@@ -235,3 +260,15 @@ class MessageBubble(QFrame):
             layout.addWidget(more)
 
         return widget
+
+    def _copy_to_clipboard(self):
+        """Copy message text to clipboard"""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self._raw_text)
+
+        # Visual feedback
+        btn = self.sender()
+        if btn:
+            original = btn.text()
+            btn.setText("✓")
+            QTimer.singleShot(1000, lambda: btn.setText(original))
