@@ -146,7 +146,8 @@ class ConnectionMixin:
             if self.projects_dock:
                 await self.projects_dock.load_roots(client_id=self.client_id)
 
-            # Set default model in chat panel
+            # Load all available models first, then set default
+            await self._load_gemini_models()
             if self.chat_panel:
                 self.chat_panel.set_default_model(default_model)
 

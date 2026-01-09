@@ -246,6 +246,7 @@ class GeminiClient:
                 response_json_schema=schema,
                 thinking_config=types.ThinkingConfig(thinking_level=thinking_level),
                 media_resolution=resolution_value,
+                temperature=1.0,
             )
 
             model_id = model.removeprefix("models/")
@@ -342,9 +343,12 @@ class GeminiClient:
 
             model_id = model.removeprefix("models/")
 
+            config = types.GenerateContentConfig(temperature=1.0)
+
             response = await client.aio.models.generate_content(
                 model=model_id,
                 contents=[types.Content(role="user", parts=parts)],
+                config=config,
             )
 
             return response.text
@@ -399,6 +403,7 @@ class GeminiClient:
             config = types.GenerateContentConfig(
                 system_instruction=system_prompt if system_prompt else None,
                 thinking_config=types.ThinkingConfig(**thinking_config_params),
+                temperature=1.0,
             )
 
             model_id = model.removeprefix("models/")
