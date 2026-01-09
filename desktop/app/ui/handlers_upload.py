@@ -130,9 +130,26 @@ class UploadHandlersMixin:
 
             if self.server_mode:
                 # Server mode: upload via API
+                # Create conversation if needed
                 if not self.current_conversation_id:
-                    self.toast_manager.error("Нет активного чата для загрузки bundle")
-                    return
+                    try:
+                        from uuid import UUID
+
+                        conv_result = await self.api_client.create_conversation(
+                            title=f"Документ: {doc_name}"
+                        )
+                        conv_id_str = conv_result.get("id")
+                        self.current_conversation_id = UUID(conv_id_str) if conv_id_str else None
+                        logger.info(f"Created conversation for bundle: {conv_id_str}")
+
+                        # Refresh chats list
+                        if self.chats_dock:
+                            await self.chats_dock.refresh_chats()
+
+                    except Exception as e:
+                        logger.error(f"Failed to create conversation: {e}")
+                        self.toast_manager.error(f"Ошибка создания чата: {e}")
+                        return
 
                 result = await self.api_client.upload_file(
                     file_path=str(tmp_path),
@@ -188,30 +205,46 @@ class UploadHandlersMixin:
                         client_id=self.client_id,
                     )
 
-                    # Store crop_index for context_catalog building (local mode)
-                    if gemini_file_result and crop_index and self.current_conversation_id:
-                        conv_id = str(self.current_conversation_id)
-                        if conv_id not in self._conversation_crop_indexes:
-                            self._conversation_crop_indexes[conv_id] = []
-                        self._conversation_crop_indexes[conv_id].extend(crop_index)
-                        logger.info(
-                            f"Stored {len(crop_index)} crop items for conversation {conv_id}"
-                        )
+                    # Store crop_index and gemini_file_id
+                    gemini_file_id = gemini_file_result.get("id") if gemini_file_result else None
 
-                    # Attach to conversation
-                    if self.current_conversation_id and gemini_file_result:
-                        gemini_file_id = gemini_file_result.get("id")
+                    if self.current_conversation_id:
+                        # Conversation exists - attach directly
+                        conv_id = str(self.current_conversation_id)
+
+                        # Store crop_index
+                        if crop_index:
+                            if conv_id not in self._conversation_crop_indexes:
+                                self._conversation_crop_indexes[conv_id] = []
+                            self._conversation_crop_indexes[conv_id].extend(crop_index)
+                            logger.info(
+                                f"Stored {len(crop_index)} crop items for conversation {conv_id}"
+                            )
+
+                        # Attach file to conversation
                         if gemini_file_id:
                             try:
                                 await self.supabase_repo.qa_attach_gemini_file(
-                                    conversation_id=str(self.current_conversation_id),
+                                    conversation_id=conv_id,
                                     gemini_file_id=gemini_file_id,
                                 )
-                                logger.info(
-                                    f"Bundle attached to chat {self.current_conversation_id}"
-                                )
+                                logger.info(f"Bundle attached to chat {conv_id}")
                             except Exception as e:
                                 logger.error(f"Failed to attach bundle: {e}")
+                    else:
+                        # No conversation yet - save to pending storage
+                        if crop_index:
+                            self._pending_crop_index.extend(crop_index)
+                            logger.info(
+                                f"Stored {len(crop_index)} crop items to pending "
+                                f"(total: {len(self._pending_crop_index)})"
+                            )
+
+                        if gemini_file_id:
+                            self._pending_gemini_file_ids.append(gemini_file_id)
+                            logger.info(
+                                f"Stored gemini_file_id to pending: {gemini_file_id}"
+                            )
 
             # Refresh panels
             if self.chats_dock:

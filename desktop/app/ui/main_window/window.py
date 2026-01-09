@@ -75,6 +75,11 @@ class MainWindow(
         # Dict[conversation_id: str, crop_index: list[dict]]
         self._conversation_crop_indexes: dict[str, list[dict]] = {}
 
+        # Pending files storage for files uploaded before conversation exists
+        # These will be attached when conversation is created
+        self._pending_gemini_file_ids: list[str] = []
+        self._pending_crop_index: list[dict] = []
+
         # Inspector window (singleton)
         self.inspector_window = None
 

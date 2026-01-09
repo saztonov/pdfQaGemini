@@ -123,24 +123,30 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
         # Build context_catalog from stored crop_index (priority) or DB fallback
         context_catalog_json = ""
         conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+        stored_crops = []
 
-        # First try: use stored crop_index from bundle upload
+        # First try: use stored crop_index from bundle upload (for existing conversation)
         if conv_id and conv_id in self._conversation_crop_indexes:
             stored_crops = self._conversation_crop_indexes[conv_id]
-            if stored_crops:
-                # Convert crop_index to context_catalog format
-                catalog = []
-                for crop in stored_crops:
-                    item = {
-                        "context_item_id": crop.get("context_item_id") or crop.get("crop_id"),
-                        "kind": "crop",
-                        "r2_key": crop.get("r2_key"),
-                    }
-                    if crop.get("r2_url"):
-                        item["r2_url"] = crop["r2_url"]
-                    catalog.append(item)
-                context_catalog_json = context_catalog_to_json(catalog)
-                logger.info(f"Built context_catalog from stored crops: {len(catalog)} items")
+        # Second try: use pending crop_index (for new conversation)
+        elif self._pending_crop_index:
+            stored_crops = self._pending_crop_index
+            logger.info(f"Using {len(stored_crops)} pending crop items")
+
+        if stored_crops:
+            # Convert crop_index to context_catalog format
+            catalog = []
+            for crop in stored_crops:
+                item = {
+                    "context_item_id": crop.get("context_item_id") or crop.get("crop_id"),
+                    "kind": "crop",
+                    "r2_key": crop.get("r2_key"),
+                }
+                if crop.get("r2_url"):
+                    item["r2_url"] = crop["r2_url"]
+                catalog.append(item)
+            context_catalog_json = context_catalog_to_json(catalog)
+            logger.info(f"Built context_catalog from stored crops: {len(catalog)} items")
 
         # Fallback: try to build from DB
         if not context_catalog_json and conv_id and self.supabase_repo:
@@ -178,6 +184,30 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                 conv_id_str = result.get("id")
                 self.current_conversation_id = UUID(conv_id_str) if conv_id_str else None
                 logger.info(f"Created conversation via API: {self.current_conversation_id}")
+
+                # Move pending data to the new conversation
+                if conv_id_str:
+                    # Move pending crop_index
+                    if self._pending_crop_index:
+                        self._conversation_crop_indexes[conv_id_str] = self._pending_crop_index.copy()
+                        logger.info(
+                            f"Moved {len(self._pending_crop_index)} pending crops "
+                            f"to conversation {conv_id_str}"
+                        )
+                        self._pending_crop_index.clear()
+
+                    # Attach pending gemini files
+                    if self._pending_gemini_file_ids and self.supabase_repo:
+                        for gf_id in self._pending_gemini_file_ids:
+                            try:
+                                await self.supabase_repo.qa_attach_gemini_file(
+                                    conversation_id=conv_id_str,
+                                    gemini_file_id=gf_id,
+                                )
+                                logger.info(f"Attached pending file {gf_id} to {conv_id_str}")
+                            except Exception as e:
+                                logger.error(f"Failed to attach pending file {gf_id}: {e}")
+                        self._pending_gemini_file_ids.clear()
 
                 # Refresh chats list
                 if self.chats_dock:
