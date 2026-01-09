@@ -1,5 +1,5 @@
 -- Database Schema SQL Export
--- Generated: 2026-01-09T17:37:14.603876
+-- Generated: 2026-01-10T00:07:27.030447
 -- Database: postgres
 -- Host: aws-1-eu-north-1.pooler.supabase.com
 
@@ -410,10 +410,13 @@ CREATE TABLE IF NOT EXISTS public.job_files (
     file_name text NOT NULL,
     file_size bigint DEFAULT 0,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
+    metadata jsonb DEFAULT '{}'::jsonb,
     CONSTRAINT job_files_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id),
     CONSTRAINT job_files_pkey PRIMARY KEY (id)
 );
 COMMENT ON TABLE public.job_files IS 'Файлы связанные с OCR задачами';
+COMMENT ON COLUMN public.job_files.job_id IS 'Ссылка на задачу (каскадное удаление при удалении job)';
+COMMENT ON COLUMN public.job_files.metadata IS 'Метаданные файла (для кропов: block_id, page_index, coords_norm, block_type)';
 
 -- Table: public.job_settings
 -- Description: Настройки моделей для OCR задач
@@ -636,6 +639,7 @@ CREATE TABLE IF NOT EXISTS public.qa_jobs (
     started_at timestamp with time zone,
     completed_at timestamp with time zone,
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    context_catalog text DEFAULT ''::text,
     CONSTRAINT qa_jobs_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.qa_conversations(id),
     CONSTRAINT qa_jobs_pkey PRIMARY KEY (id),
     CONSTRAINT qa_jobs_result_message_id_fkey FOREIGN KEY (result_message_id) REFERENCES public.qa_messages(id)
@@ -643,6 +647,7 @@ CREATE TABLE IF NOT EXISTS public.qa_jobs (
 COMMENT ON TABLE public.qa_jobs IS 'Tracks async LLM job processing for client-server architecture';
 COMMENT ON COLUMN public.qa_jobs.status IS 'Job status: queued, processing, completed, failed';
 COMMENT ON COLUMN public.qa_jobs.result_message_id IS 'FK to the assistant message created when job completes';
+COMMENT ON COLUMN public.qa_jobs.context_catalog IS 'JSON string with available context items (crops) for agentic requests';
 
 -- Table: public.qa_messages
 CREATE TABLE IF NOT EXISTS public.qa_messages (
@@ -4386,7 +4391,13 @@ CREATE INDEX idx_image_categories_is_default ON public.image_categories USING bt
 CREATE UNIQUE INDEX image_categories_code_key ON public.image_categories USING btree (code);
 
 -- Index on public.job_files
+CREATE INDEX idx_job_files_block_id ON public.job_files USING btree (((metadata ->> 'block_id'::text))) WHERE (file_type = 'crop'::text);
+
+-- Index on public.job_files
 CREATE INDEX idx_job_files_job_id ON public.job_files USING btree (job_id);
+
+-- Index on public.job_files
+CREATE INDEX idx_job_files_metadata ON public.job_files USING gin (metadata);
 
 -- Index on public.job_files
 CREATE INDEX idx_job_files_type ON public.job_files USING btree (file_type);

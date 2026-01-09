@@ -2247,7 +2247,7 @@
       },
       {
         "name": "job_id",
-        "comment": null,
+        "comment": "Ссылка на задачу (каскадное удаление при удалении job)",
         "default": null,
         "data_type": "uuid",
         "is_nullable": false
@@ -2286,6 +2286,13 @@
         "default": "now()",
         "data_type": "timestamp with time zone",
         "is_nullable": false
+      },
+      {
+        "name": "metadata",
+        "comment": "Метаданные файла (для кропов: block_id, page_index, coords_norm, block_type)",
+        "default": "'{}'::jsonb",
+        "data_type": "jsonb",
+        "is_nullable": true
       }
     ],
     "constraints": [
@@ -3496,6 +3503,13 @@
         "default": "now()",
         "data_type": "timestamp with time zone",
         "is_nullable": false
+      },
+      {
+        "name": "context_catalog",
+        "comment": "JSON string with available context items (crops) for agentic requests",
+        "default": "''::text",
+        "data_type": "text",
+        "is_nullable": true
       }
     ],
     "constraints": [

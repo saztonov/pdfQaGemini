@@ -463,6 +463,14 @@
     "is_primary": false,
     "sql": "CREATE UNIQUE INDEX image_categories_code_key ON public.image_categories USING btree (code)"
   },
+  "public.job_files.idx_job_files_block_id": {
+    "schema": "public",
+    "name": "idx_job_files_block_id",
+    "table_name": "job_files",
+    "is_unique": false,
+    "is_primary": false,
+    "sql": "CREATE INDEX idx_job_files_block_id ON public.job_files USING btree (((metadata ->> 'block_id'::text))) WHERE (file_type = 'crop'::text)"
+  },
   "public.job_files.idx_job_files_job_id": {
     "schema": "public",
     "name": "idx_job_files_job_id",
@@ -470,6 +478,14 @@
     "is_unique": false,
     "is_primary": false,
     "sql": "CREATE INDEX idx_job_files_job_id ON public.job_files USING btree (job_id)"
+  },
+  "public.job_files.idx_job_files_metadata": {
+    "schema": "public",
+    "name": "idx_job_files_metadata",
+    "table_name": "job_files",
+    "is_unique": false,
+    "is_primary": false,
+    "sql": "CREATE INDEX idx_job_files_metadata ON public.job_files USING gin (metadata)"
   },
   "public.job_files.idx_job_files_type": {
     "schema": "public",
