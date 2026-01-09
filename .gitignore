@@ -34,3 +34,4 @@ local_settings.py
 /.claude/settings.local.json
 .claude/settings.local.json
 desktop/cache/
+image.png

@@ -14,7 +14,14 @@ class SettingsHandlersMixin:
 
     def _on_open_settings(self):
         """Open settings dialog"""
-        dialog = SettingsDialog(self)
+        # Pass api_client if connected to enable remote settings editing
+        api_client = getattr(self, 'api_client', None)
+        dialog = SettingsDialog(self, api_client=api_client)
+
+        # Auto-load remote settings when dialog opens (if connected)
+        if api_client:
+            dialog._load_remote_settings()
+
         if dialog.exec():
             self.toast_manager.success("Настройки сохранены. Переподключение...")
             asyncio.create_task(self._on_connect())

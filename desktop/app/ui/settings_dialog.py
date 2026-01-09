@@ -41,6 +41,10 @@ class SettingsDialog(QDialog):
         self._setup_ui()
         self._load_local_settings()
 
+        # Enable remote controls if api_client is provided
+        if api_client:
+            self._update_remote_tab_state()
+
     def set_api_client(self, api_client):
         """Set API client for remote settings operations"""
         self.api_client = api_client
