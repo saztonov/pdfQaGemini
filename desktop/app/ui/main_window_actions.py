@@ -68,7 +68,17 @@ class ModelActionsHandler:
         self.toast_manager.info("Модель запрашивает выбор области...")
 
         try:
-            image_ref = getattr(action, "context_item_id", None)
+            # Use proper payload parsing (supports both flat and nested schemas)
+            payload = action.get_request_roi_payload() if hasattr(action, 'get_request_roi_payload') else None
+
+            if payload:
+                image_ref = payload.image_ref.context_item_id
+            else:
+                # Fallback to flat field
+                image_ref = getattr(action, "image_context_item_id", None)
+                if not image_ref:
+                    # Legacy fallback
+                    image_ref = getattr(action, "context_item_id", None)
 
             if not image_ref:
                 self.toast_manager.warning("Нет ссылки на изображение в запросе")
