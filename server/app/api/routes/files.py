@@ -22,11 +22,32 @@ async def upload_file(
     file: UploadFile = File(...),
     conversation_id: str = Form(...),
     source_r2_key: str = Form(default=None),
+    crop_index: str = Form(default=None),  # JSON string of crop definitions
     x_client_id: str = Header(default="default"),
 ):
-    """Upload file to Gemini Files API"""
+    """Upload file to Gemini Files API
+
+    Args:
+        crop_index: JSON string containing list of crop definitions.
+                   Each item has context_item_id, r2_key, r2_url.
+                   Used for building context_catalog in agentic requests.
+    """
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     gemini = get_gemini_client()
     repo = get_supabase_repo()
+
+    # Parse crop_index if provided
+    parsed_crop_index = None
+    if crop_index:
+        try:
+            parsed_crop_index = json.loads(crop_index)
+            logger.info(f"Received crop_index with {len(parsed_crop_index)} items")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse crop_index: {e}")
 
     # Save uploaded file to temp location
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
@@ -56,6 +77,9 @@ async def upload_file(
             source_r2_key=source_r2_key,  # For context_catalog lookup
             client_id=x_client_id,
         )
+
+        # Note: crop_index is logged but not persisted on server.
+        # The client stores crop_index and sends context_catalog with each message request.
 
         # Attach file to conversation
         if gemini_file_record and conversation_id:

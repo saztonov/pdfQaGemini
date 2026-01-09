@@ -82,6 +82,13 @@ class AgenticContext:
             return item.get("r2_key")
         return None
 
+    def get_r2_url_for_block(self, context_item_id: str) -> Optional[str]:
+        """Get full R2 URL for a block/crop by its context_item_id"""
+        item = self._catalog_lookup.get(context_item_id)
+        if item:
+            return item.get("r2_url")
+        return None
+
     def get_item_info(self, context_item_id: str) -> Optional[dict]:
         """Get full item info from catalog"""
         return self._catalog_lookup.get(context_item_id)
@@ -311,18 +318,24 @@ class AgenticProcessor:
                 logger.warning("  Item without context_item_id, skipping")
                 continue
 
-            # Look up R2 key from catalog
+            # Look up R2 URL or key from catalog
+            r2_url = ctx.get_r2_url_for_block(context_item_id)
             r2_key = ctx.get_r2_key_for_block(context_item_id)
-            if not r2_key:
-                logger.warning(f"  No r2_key found for {context_item_id}")
+
+            if not r2_url and not r2_key:
+                logger.warning(f"  No r2_url or r2_key found for {context_item_id}")
                 continue
 
             item_info = ctx.get_item_info(context_item_id)
 
             try:
-                # Download from R2
-                logger.info(f"  Downloading {context_item_id} from R2: {r2_key}")
-                data = await self.r2_client.download_bytes(r2_key)
+                # Download from R2 (prefer URL, fall back to key)
+                if r2_url:
+                    logger.info(f"  Downloading {context_item_id} from URL: {r2_url}")
+                    data = await self.r2_client.download_from_url(r2_url)
+                else:
+                    logger.info(f"  Downloading {context_item_id} from R2 key: {r2_key}")
+                    data = await self.r2_client.download_bytes(r2_key)
 
                 if not data:
                     logger.warning(f"  Empty data for {context_item_id}")
@@ -401,10 +414,12 @@ class AgenticProcessor:
             logger.warning("  request_roi without image_context_item_id")
             return None
 
-        # Get R2 key for the crop
+        # Get R2 URL or key for the crop
+        r2_url = ctx.get_r2_url_for_block(image_context_item_id)
         r2_key = ctx.get_r2_key_for_block(image_context_item_id)
-        if not r2_key:
-            logger.warning(f"  No r2_key found for {image_context_item_id}")
+
+        if not r2_url and not r2_key:
+            logger.warning(f"  No r2_url or r2_key found for {image_context_item_id}")
             return None
 
         # Get DPI (default 400)
@@ -413,9 +428,13 @@ class AgenticProcessor:
             dpi = action_dict["payload"].get("dpi") or dpi
 
         try:
-            # Download crop from R2
-            logger.info(f"  Downloading crop for ROI: {r2_key}")
-            pdf_data = await self.r2_client.download_bytes(r2_key)
+            # Download crop from R2 (prefer URL, fall back to key)
+            if r2_url:
+                logger.info(f"  Downloading crop for ROI from URL: {r2_url}")
+                pdf_data = await self.r2_client.download_from_url(r2_url)
+            else:
+                logger.info(f"  Downloading crop for ROI from R2 key: {r2_key}")
+                pdf_data = await self.r2_client.download_bytes(r2_key)
 
             if not pdf_data:
                 logger.warning(f"  Empty data for {image_context_item_id}")

@@ -120,21 +120,42 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             self.toast_manager.error("API клиент не инициализирован")
             return
 
-        # Build context_catalog from conversation files
+        # Build context_catalog from stored crop_index (priority) or DB fallback
         context_catalog_json = ""
-        if self.current_conversation_id and self.supabase_repo:
+        conv_id = str(self.current_conversation_id) if self.current_conversation_id else None
+
+        # First try: use stored crop_index from bundle upload
+        if conv_id and conv_id in self._conversation_crop_indexes:
+            stored_crops = self._conversation_crop_indexes[conv_id]
+            if stored_crops:
+                # Convert crop_index to context_catalog format
+                catalog = []
+                for crop in stored_crops:
+                    item = {
+                        "context_item_id": crop.get("context_item_id") or crop.get("crop_id"),
+                        "kind": "crop",
+                        "r2_key": crop.get("r2_key"),
+                    }
+                    if crop.get("r2_url"):
+                        item["r2_url"] = crop["r2_url"]
+                    catalog.append(item)
+                context_catalog_json = context_catalog_to_json(catalog)
+                logger.info(f"Built context_catalog from stored crops: {len(catalog)} items")
+
+        # Fallback: try to build from DB
+        if not context_catalog_json and conv_id and self.supabase_repo:
             try:
                 catalog, node_ids = await build_context_catalog_for_conversation(
                     self.supabase_repo,
-                    str(self.current_conversation_id),
+                    conv_id,
                 )
                 if catalog:
                     context_catalog_json = context_catalog_to_json(catalog)
                     logger.info(
-                        f"Built context_catalog: {len(catalog)} items from {len(node_ids)} nodes"
+                        f"Built context_catalog from DB: {len(catalog)} items from {len(node_ids)} nodes"
                     )
             except Exception as e:
-                logger.warning(f"Failed to build context_catalog: {e}")
+                logger.warning(f"Failed to build context_catalog from DB: {e}")
 
         # Save request data for tracing
         self._pending_request = {

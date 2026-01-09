@@ -131,12 +131,16 @@ class DocumentBundleBuilder:
             for item in obj[:50]:  # Limit array traversal
                 self._extract_fields(item, field_names, results, depth + 1)
 
-    def build_crop_index(self, crop_node_files: list[NodeFile]) -> list[dict]:
+    def build_crop_index(
+        self, crop_node_files: list[NodeFile], r2_public_base_url: str = ""
+    ) -> list[dict]:
         """
         Build compact crop index from crop files.
         Extracts crop_id from file_name or r2_key.
+        Includes full R2 public URL if base URL provided.
         """
         crops = []
+        base_url = r2_public_base_url.rstrip("/") if r2_public_base_url else ""
 
         for nf in crop_node_files:
             if nf.file_type != FileType.CROP.value:
@@ -144,13 +148,15 @@ class DocumentBundleBuilder:
 
             crop_id = self._extract_crop_id(nf.file_name, nf.r2_key)
             if crop_id:
-                crops.append(
-                    {
-                        "crop_id": crop_id,
-                        "context_item_id": str(nf.id),
-                        "r2_key": nf.r2_key,
-                    }
-                )
+                item = {
+                    "crop_id": crop_id,
+                    "context_item_id": str(nf.id),
+                    "r2_key": nf.r2_key,
+                }
+                # Add full URL if base URL provided
+                if base_url and nf.r2_key:
+                    item["r2_url"] = f"{base_url}/{nf.r2_key.lstrip('/')}"
+                crops.append(item)
 
         return crops
 
@@ -178,9 +184,17 @@ class DocumentBundleBuilder:
         text_file_type: Optional[str],
         crop_node_files: list[NodeFile],
         document_name: str = "document",
+        r2_public_base_url: str = "",
     ) -> tuple[bytes, list[dict]]:
         """
         Build complete bundle.
+
+        Args:
+            text_file_bytes: Text source bytes
+            text_file_type: Text source type (ocr_html, result_json, etc.)
+            crop_node_files: List of crop NodeFile objects
+            document_name: Name for the document header
+            r2_public_base_url: Base URL for R2 public access (to include full URLs in bundle)
 
         Returns:
             tuple of (bundle_text_bytes, crop_index_list)
@@ -199,13 +213,18 @@ class DocumentBundleBuilder:
         else:
             parts.append("(Текстовое содержимое недоступно)\n")
 
-        # Crop index
-        crop_index = self.build_crop_index(crop_node_files)
+        # Crop index with R2 URLs
+        crop_index = self.build_crop_index(crop_node_files, r2_public_base_url)
 
         if crop_index:
             parts.append("\n--- CROPS (изображения для детального анализа) ---\n")
+            parts.append("Для запроса изображения используй context_item_id в action request_files.\n\n")
             for crop in crop_index:
-                parts.append(f"  - {crop['crop_id']}: context_item_id={crop['context_item_id']}\n")
+                line = f"  - {crop['crop_id']}: context_item_id={crop['context_item_id']}"
+                # Include URL if available (for model to see)
+                if crop.get("r2_url"):
+                    line += f", url={crop['r2_url']}"
+                parts.append(line + "\n")
 
         bundle_text = "".join(parts)
 

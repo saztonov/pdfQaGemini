@@ -77,6 +77,14 @@ class R2AsyncClientBase:
             response.raise_for_status()
             return response.content
 
+    async def download_from_url(self, url: str) -> bytes:
+        """Download file directly from a URL (for pre-built R2 URLs)"""
+        async with self._download_semaphore:
+            client = self._get_http_client()
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.content
+
     async def upload_bytes(
         self, r2_key: str, data: bytes, content_type: str = "application/octet-stream"
     ) -> str:

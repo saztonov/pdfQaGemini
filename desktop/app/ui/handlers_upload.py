@@ -101,12 +101,19 @@ class UploadHandlersMixin:
                         first_file.file_name.rsplit(".", 1)[0] if first_file.file_name else "document"
                     )
 
-        # Build bundle
+        # Get R2 public base URL for including in bundle
+        r2_public_base_url = ""
+        if self.r2_client:
+            r2_public_base_url = getattr(self.r2_client, "public_base_url", "")
+            logger.info(f"R2 public base URL: {r2_public_base_url}")
+
+        # Build bundle with R2 URLs included
         bundle_bytes, crop_index = builder.build_bundle(
             text_file_bytes=text_bytes,
             text_file_type=text_file_type,
             crop_node_files=crop_files,
             document_name=doc_name,
+            r2_public_base_url=r2_public_base_url,
         )
 
         logger.info(f"Bundle built: {len(bundle_bytes)} bytes, {len(crop_index)} crops")
@@ -132,11 +139,23 @@ class UploadHandlersMixin:
                     conversation_id=str(self.current_conversation_id),
                     file_name=bundle_file_name,
                     mime_type="text/plain",
+                    crop_index=crop_index,  # Pass crop_index to server
                 )
                 # Server returns GeminiFileResponse with gemini_name, gemini_uri
                 gemini_name = result.get("gemini_name")
                 gemini_uri = result.get("gemini_uri", "")
                 logger.info(f"Bundle uploaded via server: {gemini_name}")
+
+                # Store crop_index for context_catalog building
+                if crop_index and self.current_conversation_id:
+                    conv_id = str(self.current_conversation_id)
+                    if conv_id not in self._conversation_crop_indexes:
+                        self._conversation_crop_indexes[conv_id] = []
+                    self._conversation_crop_indexes[conv_id].extend(crop_index)
+                    logger.info(
+                        f"Stored {len(crop_index)} crop items for conversation {conv_id}, "
+                        f"total: {len(self._conversation_crop_indexes[conv_id])}"
+                    )
             else:
                 # Local mode: upload directly
                 result = await self.gemini_client.upload_file(
@@ -169,9 +188,15 @@ class UploadHandlersMixin:
                         client_id=self.client_id,
                     )
 
-                    # Store crop_index in metadata for later use
-                    if gemini_file_result and crop_index:
-                        logger.info(f"Crop index: {len(crop_index)} items stored")
+                    # Store crop_index for context_catalog building (local mode)
+                    if gemini_file_result and crop_index and self.current_conversation_id:
+                        conv_id = str(self.current_conversation_id)
+                        if conv_id not in self._conversation_crop_indexes:
+                            self._conversation_crop_indexes[conv_id] = []
+                        self._conversation_crop_indexes[conv_id].extend(crop_index)
+                        logger.info(
+                            f"Stored {len(crop_index)} crop items for conversation {conv_id}"
+                        )
 
                     # Attach to conversation
                     if self.current_conversation_id and gemini_file_result:

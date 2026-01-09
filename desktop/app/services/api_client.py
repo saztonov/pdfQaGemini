@@ -192,8 +192,15 @@ class APIClient:
         file_name: str = None,
         mime_type: str = None,
         source_r2_key: str = None,
+        crop_index: list[dict] = None,
     ) -> dict:
-        """Upload file to Gemini via server"""
+        """Upload file to Gemini via server
+
+        Args:
+            crop_index: List of crop definitions with context_item_id, r2_key, r2_url
+                       Will be used to build context_catalog for agentic requests
+        """
+        import json
         import mimetypes
         from pathlib import Path
 
@@ -214,6 +221,8 @@ class APIClient:
             data = {"conversation_id": conversation_id}
             if source_r2_key:
                 data["source_r2_key"] = source_r2_key
+            if crop_index:
+                data["crop_index"] = json.dumps(crop_index, ensure_ascii=False)
             response = await client.post("/api/v1/files/upload", files=files, data=data)
         response.raise_for_status()
         return response.json()

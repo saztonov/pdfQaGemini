@@ -71,6 +71,10 @@ class MainWindow(
         self._pending_request: Optional[dict] = None  # For tracing in server mode
         self._active_job_id: Optional[str] = None  # For Realtime timeout tracking
 
+        # Crop index storage per conversation for context_catalog building
+        # Dict[conversation_id: str, crop_index: list[dict]]
+        self._conversation_crop_indexes: dict[str, list[dict]] = {}
+
         # Inspector window (singleton)
         self.inspector_window = None
 
