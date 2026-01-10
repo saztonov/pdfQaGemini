@@ -118,7 +118,16 @@ class AgenticHandlersMixin:
                             )
 
                         self.toast_manager.info(f"Докачиваю {len(items)} файлов...")
-                        new_refs, uploaded_file_infos = await self._fetch_and_upload_crops(items)
+                        new_refs, uploaded_file_infos, crop_urls = await self._fetch_and_upload_crops(items)
+
+                        # Show crop previews in chat
+                        if self.chat_panel and crop_urls:
+                            for crop_info in crop_urls:
+                                self.chat_panel.add_crop_preview(
+                                    crop_url=crop_info.get("url", ""),
+                                    crop_id=crop_info.get("crop_id", ""),
+                                    caption=crop_info.get("reason", ""),
+                                )
 
                         # Show success in chat
                         if self.chat_panel and new_refs:
@@ -259,13 +268,14 @@ class AgenticHandlersMixin:
 
     async def _fetch_and_upload_crops(
         self: "MainWindow", items: list[dict]
-    ) -> tuple[list[dict], list[dict]]:
-        """Fetch crops from R2 and upload to Gemini, return (file_refs, file_infos)"""
+    ) -> tuple[list[dict], list[dict], list[dict]]:
+        """Fetch crops from R2 and upload to Gemini, return (file_refs, file_infos, crop_urls)"""
         new_refs = []
         uploaded_file_infos = []
+        crop_urls = []  # For displaying previews
 
         if not self.r2_client or not self.gemini_client:
-            return new_refs, uploaded_file_infos
+            return new_refs, uploaded_file_infos, crop_urls
 
         for item in items:
             context_item_id = item.get("context_item_id")
@@ -288,6 +298,13 @@ class AgenticHandlersMixin:
                 # Download from R2
                 url = self.r2_client.build_public_url(context_item.r2_key)
                 cached_path = await self.r2_client.download_to_cache(url, context_item_id)
+
+                # Store crop URL for preview display
+                crop_urls.append({
+                    "url": url,
+                    "crop_id": context_item_id,
+                    "reason": item.get("reason", ""),
+                })
 
                 # Upload to Gemini
                 result = await self.gemini_client.upload_file(
@@ -319,7 +336,7 @@ class AgenticHandlersMixin:
             except Exception as e:
                 logger.error(f"Failed to upload crop {context_item_id}: {e}")
 
-        return new_refs, uploaded_file_infos
+        return new_refs, uploaded_file_infos, crop_urls
 
     async def _handle_roi_action_agentic(self: "MainWindow", action, payload) -> dict | None:
         """Handle ROI action in agentic mode, return file_ref or None"""

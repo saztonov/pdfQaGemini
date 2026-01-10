@@ -83,10 +83,14 @@ class RealtimeHandlersMixin:
             self.chat_panel.set_loading(False)
             self.chat_panel.set_input_enabled(True)
 
+            # Add message_id to meta for deduplication
+            msg_meta = dict(message_update.meta) if message_update.meta else {}
+            msg_meta["message_id"] = message_update.message_id
+
             self.chat_panel.add_message(
                 role="assistant",
                 content=message_update.content,
-                meta=message_update.meta,
+                meta=msg_meta,
                 timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
             )
 

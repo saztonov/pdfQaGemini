@@ -304,10 +304,15 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                         if assistant_msg and self.chat_panel:
                             self.chat_panel.set_loading(False)
                             self.chat_panel.set_input_enabled(True)
+
+                            # Add message_id to meta for deduplication
+                            msg_meta = dict(assistant_msg.get("meta", {}))
+                            msg_meta["message_id"] = assistant_msg.get("id")
+
                             self.chat_panel.add_message(
                                 role="assistant",
                                 content=assistant_msg.get("content", ""),
-                                meta=assistant_msg.get("meta", {}),
+                                meta=msg_meta,
                                 timestamp=format_time(datetime.utcnow(), "%H:%M:%S"),
                             )
                             self.toast_manager.success("✓ Ответ получен")
