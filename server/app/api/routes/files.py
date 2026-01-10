@@ -125,30 +125,24 @@ async def list_conversation_files(conversation_id: UUID):
 
 
 @router.get("", response_model=list[GeminiFileResponse])
-async def list_all_files():
-    """List all files in Gemini Files API"""
-    gemini = get_gemini_client()
-    files = await gemini.list_files()
+async def list_all_files(x_client_id: str = Header(default="default")):
+    """List all files filtered by client_id from database"""
+    repo = get_supabase_repo()
+
+    # Get files from DB filtered by client_id
+    files = await repo.qa_list_gemini_files_by_client(client_id=x_client_id)
 
     result = []
     for f in files:
-        # Convert expiration_time to ISO string if present
-        exp_time = f.get("expiration_time")
-        exp_time_str = None
-        if exp_time:
-            if hasattr(exp_time, "isoformat"):
-                exp_time_str = exp_time.isoformat()
-            else:
-                exp_time_str = str(exp_time)
-
         result.append(
             GeminiFileResponse(
-                gemini_name=f["name"],
-                gemini_uri=f["uri"],
+                id=f.get("id"),
+                gemini_name=f.get("gemini_name"),
+                gemini_uri=f.get("gemini_uri"),
                 display_name=f.get("display_name"),
-                mime_type=f["mime_type"],
+                mime_type=f.get("mime_type"),
                 size_bytes=f.get("size_bytes"),
-                expiration_time=exp_time_str,
+                token_count=f.get("token_count"),
             )
         )
     return result

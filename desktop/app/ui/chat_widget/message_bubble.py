@@ -1,6 +1,7 @@
 """Message bubble widget"""
 
 import re
+import logging
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -13,7 +14,8 @@ from PySide6.QtWidgets import (
     QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QUrl, QTimer
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QPixmap, QDesktopServices
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
 from app.ui.chat_widget.styles import (
     get_user_bubble_style,
@@ -25,6 +27,8 @@ from app.ui.chat_widget.styles import (
     get_header_style,
     get_content_style,
 )
+
+logger = logging.getLogger(__name__)
 
 
 ROLE_NAMES = {
@@ -272,3 +276,140 @@ class MessageBubble(QFrame):
             original = btn.text()
             btn.setText("✓")
             QTimer.singleShot(1000, lambda: btn.setText(original))
+
+
+class CropPreviewWidget(QFrame):
+    """Widget for displaying crop image preview in chat"""
+
+    clicked = Signal(str)  # Emits crop_url when clicked
+
+    # Shared network manager for all instances
+    _network_manager = None
+
+    def __init__(
+        self,
+        crop_url: str,
+        crop_id: str,
+        caption: str = "",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.crop_url = crop_url
+        self.crop_id = crop_id
+        self.caption = caption
+        self._setup_ui()
+        self._load_image()
+
+    @classmethod
+    def _get_network_manager(cls):
+        if cls._network_manager is None:
+            cls._network_manager = QNetworkAccessManager()
+        return cls._network_manager
+
+    def _setup_ui(self):
+        """Setup the preview widget UI"""
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #2d2d2d;
+                border: 1px solid #404040;
+                border-radius: 8px;
+                margin: 4px 60px;
+            }
+            QFrame:hover {
+                border-color: #3b82f6;
+            }
+        """)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMaximumWidth(350)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        # Header with icon and crop_id
+        header = QHBoxLayout()
+        header.setSpacing(6)
+
+        icon_label = QLabel("🖼️")
+        icon_label.setStyleSheet("font-size: 14px;")
+        header.addWidget(icon_label)
+
+        id_label = QLabel(f"Crop: {self.crop_id[:20]}..." if len(self.crop_id) > 20 else f"Crop: {self.crop_id}")
+        id_label.setStyleSheet("color: #9ca3af; font-size: 11px;")
+        header.addWidget(id_label)
+        header.addStretch()
+
+        layout.addLayout(header)
+
+        # Image preview placeholder
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setMinimumSize(200, 150)
+        self.image_label.setMaximumSize(320, 200)
+        self.image_label.setScaledContents(False)
+        self.image_label.setStyleSheet("""
+            QLabel {
+                background-color: #1a1a1a;
+                border: 1px solid #333;
+                border-radius: 4px;
+            }
+        """)
+        self.image_label.setText("Загрузка...")
+        layout.addWidget(self.image_label)
+
+        # Caption if provided
+        if self.caption:
+            caption_label = QLabel(self.caption[:100] + "..." if len(self.caption) > 100 else self.caption)
+            caption_label.setStyleSheet("color: #6b7280; font-size: 11px;")
+            caption_label.setWordWrap(True)
+            layout.addWidget(caption_label)
+
+        # Click hint
+        hint_label = QLabel("Нажмите для просмотра")
+        hint_label.setStyleSheet("color: #4b5563; font-size: 10px;")
+        hint_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint_label)
+
+    def _load_image(self):
+        """Load image from URL asynchronously"""
+        try:
+            manager = self._get_network_manager()
+            request = QNetworkRequest(QUrl(self.crop_url))
+            reply = manager.get(request)
+            reply.finished.connect(lambda: self._on_image_loaded(reply))
+        except Exception as e:
+            logger.error(f"Failed to start image load: {e}")
+            self.image_label.setText("Ошибка загрузки")
+
+    def _on_image_loaded(self, reply: QNetworkReply):
+        """Handle image load completion"""
+        try:
+            if reply.error() == QNetworkReply.NoError:
+                data = reply.readAll()
+                pixmap = QPixmap()
+                if pixmap.loadFromData(data):
+                    # Scale to fit while maintaining aspect ratio
+                    scaled = pixmap.scaled(
+                        320, 200,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    self.image_label.setPixmap(scaled)
+                else:
+                    self.image_label.setText("Формат не поддерживается")
+            else:
+                logger.warning(f"Image load error: {reply.errorString()}")
+                self.image_label.setText("Ошибка загрузки")
+        except Exception as e:
+            logger.error(f"Failed to process loaded image: {e}")
+            self.image_label.setText("Ошибка")
+        finally:
+            reply.deleteLater()
+
+    def mousePressEvent(self, event):
+        """Handle click to open image"""
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.crop_url)
+            # Try to open in browser/viewer
+            QDesktopServices.openUrl(QUrl(self.crop_url))
+        super().mousePressEvent(event)

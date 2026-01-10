@@ -273,8 +273,9 @@ class ChatsPanel(QWidget):
             conversations = await self.supabase_repo.qa_list_conversations(client_id=self.client_id)
             self._conversations = conversations
 
-            # Get all Gemini files
+            # Get all Gemini files filtered by client_id
             if self.server_mode and self.api_client:
+                # Server mode - API already filters by X-Client-ID header
                 all_files_raw = await self.api_client.list_gemini_files()
                 all_files = [
                     {
@@ -288,6 +289,14 @@ class ChatsPanel(QWidget):
                     }
                     for f in all_files_raw
                 ]
+            elif self.gemini_client and self.supabase_repo:
+                # Local mode - filter files by client_id from database
+                db_files = await self.supabase_repo.qa_list_gemini_files_by_client(self.client_id)
+                allowed_names = {f.get("gemini_name") for f in db_files if f.get("gemini_name")}
+
+                # Get all Gemini API files and filter to only show client's files
+                all_gemini_files = await self.gemini_client.list_files()
+                all_files = [f for f in all_gemini_files if f.get("name") in allowed_names]
             elif self.gemini_client:
                 all_files = await self.gemini_client.list_files()
             else:

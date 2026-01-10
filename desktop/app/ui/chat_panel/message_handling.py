@@ -162,3 +162,7 @@ class MessageHandlingMixin:
             self.tokens_status.show()
         else:
             self.tokens_status.hide()
+
+    def add_crop_preview(self, crop_url: str, crop_id: str, caption: str = ""):
+        """Add a crop image preview to the chat"""
+        self.chat_history.add_crop_preview(crop_url, crop_id, caption)

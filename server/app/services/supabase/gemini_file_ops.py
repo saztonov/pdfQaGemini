@@ -100,3 +100,19 @@ class GeminiFileOpsMixin:
                 logger.info(f"Deleted Gemini file from DB: {gemini_name}")
 
         await asyncio.to_thread(_sync_delete)
+
+    async def qa_list_gemini_files_by_client(self, client_id: str = "default") -> list[dict]:
+        """List all Gemini files for a specific client"""
+
+        def _sync_list():
+            client = self._get_client()
+            response = (
+                client.table("qa_gemini_files")
+                .select("*")
+                .eq("client_id", client_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return response.data
+
+        return await asyncio.to_thread(_sync_list)

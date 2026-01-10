@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QUrl, QTimer
 
-from app.ui.chat_widget.message_bubble import MessageBubble
+from app.ui.chat_widget.message_bubble import MessageBubble, CropPreviewWidget
 from app.ui.chat_widget.styles import get_scroll_area_style
 
 
@@ -21,6 +21,7 @@ class ChatWidget(QWidget):
         super().__init__(parent)
         self._messages: list[dict] = []
         self._bubbles: list[MessageBubble] = []
+        self._displayed_message_ids: set[str] = set()  # For deduplication
         self._setup_ui()
 
     def _setup_ui(self):
@@ -56,12 +57,21 @@ class ChatWidget(QWidget):
         timestamp: str = "",
         meta: dict = None,
     ):
-        """Add a message to the chat"""
+        """Add a message to the chat with deduplication"""
+        meta = meta or {}
+
+        # Deduplicate by message_id to prevent duplicate messages from Realtime + polling
+        msg_id = meta.get("message_id")
+        if msg_id:
+            if msg_id in self._displayed_message_ids:
+                return  # Skip duplicate
+            self._displayed_message_ids.add(msg_id)
+
         msg_data = {
             "role": role,
             "content": content,
             "timestamp": timestamp,
-            "meta": meta or {},
+            "meta": meta,
         }
         self._messages.append(msg_data)
 
@@ -82,6 +92,7 @@ class ChatWidget(QWidget):
     def clear(self):
         """Clear all messages"""
         self._messages.clear()
+        self._displayed_message_ids.clear()  # Reset deduplication tracking
         for bubble in self._bubbles:
             bubble.deleteLater()
         self._bubbles.clear()
@@ -158,3 +169,12 @@ class ChatWidget(QWidget):
     def get_messages(self) -> list[dict]:
         """Get all messages"""
         return self._messages.copy()
+
+    def add_crop_preview(self, crop_url: str, crop_id: str, caption: str = ""):
+        """Add a crop image preview to the chat"""
+        preview = CropPreviewWidget(crop_url, crop_id, caption)
+
+        count = self.messages_layout.count()
+        self.messages_layout.insertWidget(count - 1, preview)
+
+        QTimer.singleShot(50, self._scroll_to_bottom)
