@@ -8,6 +8,7 @@ from app.services.supabase.conversation_ops import ConversationOpsMixin
 from app.services.supabase.message_ops import MessageOpsMixin
 from app.services.supabase.job_ops import JobOpsMixin
 from app.services.supabase.gemini_file_ops import GeminiFileOpsMixin
+from app.services.supabase.artifacts_ops import ArtifactsOpsMixin
 from app.services.supabase.prompts_ops import PromptsOpsMixin
 from app.services.supabase.auth_ops import AuthOpsMixin
 from app.services.supabase.settings_ops import SettingsOpsMixin
@@ -20,6 +21,7 @@ class SupabaseRepo(
     MessageOpsMixin,
     JobOpsMixin,
     GeminiFileOpsMixin,
+    ArtifactsOpsMixin,
     PromptsOpsMixin,
     AuthOpsMixin,
     SettingsOpsMixin,

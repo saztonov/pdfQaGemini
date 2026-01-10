@@ -34,6 +34,19 @@ class MessageUpdate:
     meta: Optional[dict] = None
 
 
+@dataclass
+class ArtifactUpdate:
+    """New artifact inserted (preview/ROI/etc)"""
+
+    artifact_id: str
+    conversation_id: str
+    artifact_type: str
+    r2_key: str
+    file_name: str
+    mime_type: str
+    metadata: Optional[dict] = None
+
+
 class RealtimeClient(QObject):
     """
     Supabase Realtime client with Qt signals.
@@ -46,6 +59,7 @@ class RealtimeClient(QObject):
     # Signals
     jobUpdated = Signal(object)  # JobUpdate
     messageReceived = Signal(object)  # MessageUpdate
+    artifactReceived = Signal(object)  # ArtifactUpdate
     connectionStatusChanged = Signal(bool)  # is_connected
 
     def __init__(self, supabase_url: str, supabase_key: str, client_id: str = "default"):
@@ -56,6 +70,7 @@ class RealtimeClient(QObject):
         self._client = None
         self._jobs_channel = None
         self._messages_channel = None
+        self._artifacts_channel = None
         self._connected = False
         self._subscribed_conversation_ids: set[str] = set()
 
@@ -96,6 +111,16 @@ class RealtimeClient(QObject):
             )
             await self._messages_channel.subscribe()
 
+            # Subscribe to qa_artifacts table changes (INSERT events for new artifacts)
+            self._artifacts_channel = self._client.channel("qa_artifacts_changes")
+            self._artifacts_channel.on_postgres_changes(
+                event="INSERT",
+                schema="public",
+                table="qa_artifacts",
+                callback=self._on_artifact_insert,
+            )
+            await self._artifacts_channel.subscribe()
+
             # No need to call listen() - realtime-py handles it internally after subscribe()
 
             self._connected = True
@@ -126,9 +151,20 @@ class RealtimeClient(QObject):
                 await self._messages_channel.unsubscribe()
                 self._messages_channel = None
 
+            if self._artifacts_channel:
+                await self._artifacts_channel.unsubscribe()
+                self._artifacts_channel = None
+
             # Disconnect realtime
-            if self._client and self._client.realtime:
-                await self._client.realtime.disconnect()
+            if self._client and getattr(self._client, "realtime", None):
+                rt = self._client.realtime
+                # supabase-py / realtime-py APIs differ by version
+                if hasattr(rt, "disconnect"):
+                    await rt.disconnect()
+                elif hasattr(rt, "close"):
+                    await rt.close()
+                elif hasattr(rt, "aclose"):
+                    await rt.aclose()
 
             # Close client
             if self._client:
@@ -237,3 +273,34 @@ class RealtimeClient(QObject):
 
         except Exception as e:
             logger.error(f"Error handling message insert: {e}", exc_info=True)
+
+    def _on_artifact_insert(self, payload: dict):
+        """Handle new artifact inserts - called from websocket thread"""
+        try:
+            record = payload.get("record") or payload.get("new", {})
+            if not record:
+                return
+
+            conversation_id = record.get("conversation_id")
+
+            # Filter by subscribed conversations (if any)
+            if (
+                self._subscribed_conversation_ids
+                and conversation_id not in self._subscribed_conversation_ids
+            ):
+                return
+
+            artifact_update = ArtifactUpdate(
+                artifact_id=record.get("id"),
+                conversation_id=conversation_id,
+                artifact_type=record.get("artifact_type", ""),
+                r2_key=record.get("r2_key", ""),
+                file_name=record.get("file_name", ""),
+                mime_type=record.get("mime_type", ""),
+                metadata=record.get("metadata"),
+            )
+
+            QTimer.singleShot(0, lambda: self.artifactReceived.emit(artifact_update))
+
+        except Exception as e:
+            logger.error(f"Error handling artifact insert: {e}", exc_info=True)

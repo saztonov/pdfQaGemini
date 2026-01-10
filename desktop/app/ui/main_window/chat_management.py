@@ -46,6 +46,18 @@ class ChatManagementMixin:
             # Update current conversation
             self.current_conversation_id = UUID(conversation_id)
 
+            # Keep realtime subscriptions aligned with the active chat (messages/artifacts)
+            if self.realtime_client and self.realtime_client.is_connected:
+                self.realtime_client.clear_subscriptions()
+                self.realtime_client.subscribe_to_conversation(conversation_id)
+
+            # Ensure right panel file list is bound to this conversation (important for programmatic selection)
+            if self.chats_dock:
+                self.chats_dock.conversation_id = conversation_id
+                # Avoid leaking file selections across chats
+                self.chats_dock.clear_file_selection()
+                await self.chats_dock.refresh_files(conversation_id=conversation_id)
+
             # Load chat messages
             messages = await self.supabase_repo.qa_list_messages(conversation_id)
 
@@ -54,11 +66,14 @@ class ChatManagementMixin:
 
             chat_messages = []
             for msg in messages:
+                # Ensure message_id is present in meta for UI deduplication
+                meta = dict(msg.meta or {})
+                meta.setdefault("message_id", str(msg.id))
                 chat_messages.append(
                     {
                         "role": msg.role,
                         "content": msg.content,
-                        "meta": msg.meta,
+                        "meta": meta,
                         "timestamp": (
                             format_time(msg.created_at, "%H:%M:%S") if msg.created_at else ""
                         ),

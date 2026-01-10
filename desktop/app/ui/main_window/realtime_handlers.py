@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from app.services.realtime_client import JobUpdate, MessageUpdate
+from app.services.realtime_client import JobUpdate, MessageUpdate, ArtifactUpdate
 from app.services.trace import ModelTrace
 
 logger = logging.getLogger(__name__)
@@ -110,6 +110,33 @@ class RealtimeHandlersMixin:
             if message_update.meta and message_update.meta.get("actions"):
                 actions = message_update.meta["actions"]
                 asyncio.create_task(self._process_model_actions(actions))
+
+    def _on_realtime_artifact(self, artifact_update: ArtifactUpdate):
+        """Handle new artifact from realtime (crop previews / ROI)"""
+        # Only process if this is for the current conversation
+        if self.current_conversation_id and artifact_update.conversation_id != str(
+            self.current_conversation_id
+        ):
+            return
+
+        if not self.chat_panel or not self.r2_client:
+            return
+
+        if not artifact_update.r2_key:
+            return
+
+        url = self.r2_client.build_public_url(artifact_update.r2_key)
+        meta = artifact_update.metadata or {}
+        caption = (meta.get("reason") or meta.get("goal") or "").strip()
+        crop_id = meta.get("context_item_id") or artifact_update.artifact_id
+
+        # Render as an in-chat preview block
+        if artifact_update.mime_type.startswith("image/"):
+            self.chat_panel.add_crop_preview(
+                crop_url=url,
+                crop_id=crop_id,
+                caption=caption,
+            )
 
     def _create_trace_from_response(self, message_update: MessageUpdate):
         """Create a trace from server response for inspector"""

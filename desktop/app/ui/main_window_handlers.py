@@ -284,6 +284,7 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
             try:
                 job_data = await self.api_client.get_job(job_id)
                 status = job_data.get("status", "unknown")
+                result_message_id = job_data.get("result_message_id")
 
                 if status == "completed":
                     logger.info(f"Job {job_id} completed via polling")
@@ -294,12 +295,18 @@ class MainWindowHandlers(UploadHandlersMixin, AgenticHandlersMixin):
                             str(self.current_conversation_id)
                         )
 
-                        # Find the assistant message (last one with role=assistant)
+                        # Prefer the message returned by the job (avoids picking a wrong last assistant msg)
                         assistant_msg = None
-                        for msg in reversed(messages):
-                            if msg.get("role") == "assistant":
-                                assistant_msg = msg
-                                break
+                        if result_message_id:
+                            for msg in messages:
+                                if msg.get("id") == result_message_id:
+                                    assistant_msg = msg
+                                    break
+                        if assistant_msg is None:
+                            for msg in reversed(messages):
+                                if msg.get("role") == "assistant":
+                                    assistant_msg = msg
+                                    break
 
                         if assistant_msg and self.chat_panel:
                             self.chat_panel.set_loading(False)

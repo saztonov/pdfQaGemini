@@ -577,5 +577,146 @@
     "expires_at": null,
     "token_count": 19183,
     "crop_index": null
+  },
+  {
+    "id": "409b8aad-f01f-4fad-94fa-6de35cac24ba",
+    "client_id": "default",
+    "gemini_name": "files/illeliujv8et",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/illeliujv8et",
+    "display_name": "test.pdf_bundle.txt",
+    "mime_type": "text/plain",
+    "size_bytes": 68918,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": null,
+    "created_at": "2026-01-09 22:58:35.152573+00",
+    "updated_at": "2026-01-09 22:58:35.011669+00",
+    "expires_at": null,
+    "token_count": 22444,
+    "crop_index": [
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "crop_id": "7V4C-7YFQ-FVC",
+        "context_item_id": "d13268ab-85de-4350-8ab6-b5b2904724c9"
+      },
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "crop_id": "A44F-CVQQ-6L3",
+        "context_item_id": "03e16315-5465-4f45-b918-0c3a0e3a68f6"
+      }
+    ]
+  },
+  {
+    "id": "daab67c1-cd9b-475b-ada8-7f018f5a73e0",
+    "client_id": "default",
+    "gemini_name": "files/te0v1fc2g8hf",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/te0v1fc2g8hf",
+    "display_name": "test_document.md",
+    "mime_type": "text/plain",
+    "size_bytes": 58886,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/test_document.md",
+    "created_at": "2026-01-09 22:58:45.872796+00",
+    "updated_at": "2026-01-09 22:58:45.722358+00",
+    "expires_at": null,
+    "token_count": 19183,
+    "crop_index": null
+  },
+  {
+    "id": "7a812462-2efa-423e-8dc1-c96e247d1caf",
+    "client_id": "default",
+    "gemini_name": "files/yzdr8ofc34to",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/yzdr8ofc34to",
+    "display_name": "test.pdf_bundle.txt",
+    "mime_type": "text/plain",
+    "size_bytes": 68918,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": null,
+    "created_at": "2026-01-09 23:04:33.851036+00",
+    "updated_at": "2026-01-09 23:04:33.751468+00",
+    "expires_at": null,
+    "token_count": 22444,
+    "crop_index": [
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "crop_id": "7V4C-7YFQ-FVC",
+        "context_item_id": "d13268ab-85de-4350-8ab6-b5b2904724c9"
+      },
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "crop_id": "A44F-CVQQ-6L3",
+        "context_item_id": "03e16315-5465-4f45-b918-0c3a0e3a68f6"
+      }
+    ]
+  },
+  {
+    "id": "d805c5e2-e4d9-44a0-a7e1-9c74cfca14bd",
+    "client_id": "default",
+    "gemini_name": "files/lt4clw1gy6nf",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/lt4clw1gy6nf",
+    "display_name": "test_document.md",
+    "mime_type": "text/plain",
+    "size_bytes": 58886,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/test_document.md",
+    "created_at": "2026-01-09 23:04:46.161872+00",
+    "updated_at": "2026-01-09 23:04:46.012315+00",
+    "expires_at": null,
+    "token_count": 19183,
+    "crop_index": null
+  },
+  {
+    "id": "70bd2cdd-d3cf-4477-b220-198c7566cafb",
+    "client_id": "default",
+    "gemini_name": "files/k82432dcovsu",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/k82432dcovsu",
+    "display_name": "test.pdf_bundle.txt",
+    "mime_type": "text/plain",
+    "size_bytes": 68918,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": null,
+    "created_at": "2026-01-10 10:00:18.125433+00",
+    "updated_at": "2026-01-10 10:00:17.954958+00",
+    "expires_at": null,
+    "token_count": 22444,
+    "crop_index": [
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/7V4C-7YFQ-FVC.pdf",
+        "crop_id": "7V4C-7YFQ-FVC",
+        "context_item_id": "d13268ab-85de-4350-8ab6-b5b2904724c9"
+      },
+      {
+        "r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "r2_url": "https://pub-9530315f35b34246a04e8ad8144e46d5.r2.dev/tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/crops/A44F-CVQQ-6L3.pdf",
+        "crop_id": "A44F-CVQQ-6L3",
+        "context_item_id": "03e16315-5465-4f45-b918-0c3a0e3a68f6"
+      }
+    ]
+  },
+  {
+    "id": "1ff1b4ed-4393-490a-8340-e5064c5e36b9",
+    "client_id": "default",
+    "gemini_name": "files/6zi7wqhesrm6",
+    "gemini_uri": "https://generativelanguage.googleapis.com/v1beta/files/6zi7wqhesrm6",
+    "display_name": "test_document.md",
+    "mime_type": "text/plain",
+    "size_bytes": 58886,
+    "sha256": null,
+    "source_node_file_id": null,
+    "source_r2_key": "tree_docs/06db88cf-9431-46c6-8ba6-39ae74bc4bf2/test_document.md",
+    "created_at": "2026-01-10 10:00:30.62179+00",
+    "updated_at": "2026-01-10 10:00:30.423306+00",
+    "expires_at": null,
+    "token_count": 19183,
+    "crop_index": null
   }
 ]

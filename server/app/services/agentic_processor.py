@@ -27,6 +27,7 @@ if str(_server_path) not in sys.path:
 from app.services.gemini_client import GeminiClient
 from app.services.r2_async import R2AsyncClient
 from app.services.pdf_renderer import PDFRenderer
+from app.services.supabase import SupabaseRepo
 
 # Import from shared for build_user_prompt
 _project_root = Path(__file__).resolve().parents[3]
@@ -125,11 +126,13 @@ class AgenticProcessor:
         r2_client: R2AsyncClient,
         agent: "Agent",
         pdf_renderer: Optional[PDFRenderer] = None,
+        repo: Optional[SupabaseRepo] = None,
     ):
         self.gemini_client = gemini_client
         self.r2_client = r2_client
         self.agent = agent
         self.pdf_renderer = pdf_renderer or PDFRenderer()
+        self.repo = repo
 
     async def run_agentic_loop(
         self,
@@ -349,6 +352,35 @@ class AgenticProcessor:
                 # Determine mime type
                 mime_type = mimetypes.guess_type(r2_key)[0] or "application/pdf"
 
+                # Render and publish a lightweight preview to R2 so the client can show it in-chat
+                try:
+                    preview_png = self.pdf_renderer.render_page(pdf_data=data, page_num=0, dpi=150)
+                    preview_name = f"{context_item_id}_preview.png"
+                    preview_r2_key = await self.r2_client.save_artifact(
+                        conversation_id=ctx.conversation_id,
+                        artifact_type="crop_preview",
+                        file_name=preview_name,
+                        data=preview_png,
+                        content_type="image/png",
+                    )
+                    if self.repo:
+                        await self.repo.qa_add_artifact(
+                            conversation_id=ctx.conversation_id,
+                            artifact_type="crop_preview",
+                            r2_key=preview_r2_key,
+                            file_name=preview_name,
+                            mime_type="image/png",
+                            file_size=len(preview_png),
+                            metadata={
+                                "context_item_id": context_item_id,
+                                "reason": item.get("reason"),
+                                "r2_key": r2_key,
+                                "r2_url": r2_url,
+                            },
+                        )
+                except Exception as e:
+                    logger.warning(f"  Failed to publish crop preview for {context_item_id}: {e}")
+
                 # Upload to Gemini
                 logger.info(f"  Uploading {context_item_id} to Gemini ({len(data)} bytes)")
                 upload_result = await self.gemini_client.upload_bytes(
@@ -458,6 +490,36 @@ class AgenticProcessor:
             if not roi_png:
                 logger.warning("  Failed to render ROI")
                 return None
+
+            # Publish ROI PNG to R2 so the client can display it in-chat
+            try:
+                roi_name = f"roi_{image_context_item_id}_{dpi}dpi.png"
+                roi_r2_key = await self.r2_client.save_artifact(
+                    conversation_id=ctx.conversation_id,
+                    artifact_type="roi_png",
+                    file_name=roi_name,
+                    data=roi_png,
+                    content_type="image/png",
+                )
+                if self.repo:
+                    await self.repo.qa_add_artifact(
+                        conversation_id=ctx.conversation_id,
+                        artifact_type="roi_png",
+                        r2_key=roi_r2_key,
+                        file_name=roi_name,
+                        mime_type="image/png",
+                        file_size=len(roi_png),
+                        metadata={
+                            "context_item_id": image_context_item_id,
+                            "dpi": dpi,
+                            "bbox_norm": [bbox_x1, bbox_y1, bbox_x2, bbox_y2],
+                            "goal": (action_dict.get("goal") or (action_dict.get("payload") or {}).get("goal")),
+                            "r2_key": r2_key,
+                            "r2_url": r2_url,
+                        },
+                    )
+            except Exception as e:
+                logger.warning(f"  Failed to publish ROI artifact for {image_context_item_id}: {e}")
 
             # Upload ROI to Gemini
             display_name = f"roi_{image_context_item_id}_{dpi}dpi.png"

@@ -231,6 +231,7 @@ async def startup(ctx: dict) -> None:
             gemini_client=gemini_client,
             r2_client=r2_client,
             agent=agent,
+            repo=repo,
         )
         ctx["agentic_processor"] = agentic_processor
 

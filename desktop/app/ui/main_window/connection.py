@@ -96,6 +96,7 @@ class ConnectionMixin:
             # Connect realtime signals
             self.realtime_client.jobUpdated.connect(self._on_job_updated)
             self.realtime_client.messageReceived.connect(self._on_realtime_message)
+            self.realtime_client.artifactReceived.connect(self._on_realtime_artifact)
             self.realtime_client.connectionStatusChanged.connect(self._on_realtime_status)
 
             # Connect to realtime
